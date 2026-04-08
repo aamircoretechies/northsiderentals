@@ -1,9 +1,4 @@
-# Metronic 9 | All-in-One Tailwind based HTML/React/Next.js Template for Modern Web Applications
-
-## Getting Started
-
-Refer to the [Metronic Vite Documentation](https://docs.keenthemes.com/metronic-react)
-for comprehensive guidance on setting up and getting started your project with Metronic.
+# Northside Rentals Web App
 
 ## ReUI Components
 
@@ -67,9 +62,6 @@ The login implementation includes:
 - Token management
 - Protected routes
 
-### Setting Up the Demo Layout
-
-Follow the [Metronic Vite Documentation](https://docs.keenthemes.com/metronic-vite/guides/layouts) to configure and use the demo layout of your choice.
 
 ### Development
 
@@ -89,7 +81,4 @@ You can test login using:
 2. Register a new account (when implemented)
 3. Google Sign-in (requires proper OAuth setup in Supabase)
 
-### Reporting Issues
 
-If you encounter any issues or have suggestions for improvement, please contact us at [support@keenthemes.com](mailto:support@keenthemes.com).
-Include a detailed description of the issue or suggestion, and we will work to address it in the next stable release.
