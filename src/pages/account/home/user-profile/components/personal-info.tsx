@@ -5,12 +5,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { EditProfileModal } from './edit-profile-modal';
 
 const PersonalInfo = () => {
   return (
     <Card className="min-w-full">
       <CardHeader>
         <CardTitle>Personal Info</CardTitle>
+        <EditProfileModal>
+          <Button variant="ghost" mode="icon">
+            <SquarePen size={16} className="text-blue-500" />
+          </Button>
+        </EditProfileModal>
       </CardHeader>
       <CardContent className="kt-scrollable-x-auto pb-3 p-0">
         <Table className="align-middle text-sm text-muted-foreground">
@@ -30,68 +36,44 @@ const PersonalInfo = () => {
             </TableRow>
             <TableRow>
               <TableCell className="py-2 text-secondary-foreground font-normal">
-                Name
+                Full Name
               </TableCell>
               <TableCell className="py-2 text-foreground font-normaltext-sm">
                 Jason Tatum
               </TableCell>
-              <TableCell className="py-2 text-center">
-                <Button variant="ghost" mode="icon">
-                  <SquarePen size={16} className="text-blue-500" />
-                </Button>
-              </TableCell>
+
             </TableRow>
             <TableRow>
               <TableCell className="py-3 text-secondary-foreground font-normal">
-                Availability
+                Phone Number
               </TableCell>
               <TableCell className="py-3 text-foreground font-normal">
-                <Badge size="md" variant="success" appearance="light">
-                  Available now
-                </Badge>
+                +1 234 567 8901
               </TableCell>
-              <TableCell className="py-3 text-center">
-                <Button variant="ghost" mode="icon">
-                  <SquarePen size={16} className="text-blue-500" />
-                </Button>
-              </TableCell>
+
             </TableRow>
             <TableRow>
-              <TableCell className="py-3 text-secondary-foreground font-normal">
-                Birthday
+              <TableCell className="py-2 min-w-36 text-secondary-foreground font-normal">
+                Email
               </TableCell>
-              <TableCell className="py-3 text-secondary-foreground text-sm font-normal">
-                28 May 1996
+              <TableCell className="py-2 min-w-60">
+                <Link
+                  to="#"
+                  className="text-foreground font-normal text-sm hover:text-primary-active"
+                >
+                  jasontt@studio.co
+                </Link>
               </TableCell>
-              <TableCell className="py-3 text-center">
-                <Button variant="ghost" mode="icon">
-                  <SquarePen size={16} className="text-blue-500" />
-                </Button>
-              </TableCell>
+
             </TableRow>
-            <TableRow>
-              <TableCell className="py-3 text-secondary-foreground font-normal">
-                Gender
-              </TableCell>
-              <TableCell className="py-3 text-secondary-foreground text-sm font-normal">
-                Male
-              </TableCell>
-              <TableCell className="py-3 text-center">
-                <Button variant="ghost" mode="icon">
-                  <SquarePen size={16} className="text-blue-500" />
-                </Button>
-              </TableCell>
-            </TableRow>
+
+
             <TableRow>
               <TableCell className="py-3">Address</TableCell>
               <TableCell className="py-3 text-secondary-foreground text-sm font-normal">
-                You have no an address yet
+                -
               </TableCell>
-              <TableCell className="py-3 text-center">
-                <Button mode="link" underlined="dashed" asChild>
-                  <Link to="#">Add</Link>
-                </Button>
-              </TableCell>
+
             </TableRow>
           </TableBody>
         </Table>

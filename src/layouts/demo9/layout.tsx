@@ -49,59 +49,34 @@ export function Demo9Layout() {
       <Helmet>
         <title>{item?.title}</title>
       </Helmet>
-      <div className="flex grow flex-col in-data-[sticky-header=on]:pt-(--header-height)">
+      <div className="flex grow flex-col min-h-screen in-data-[sticky-header=on]:pt-(--header-height)">
         <Header />
 
         {!isMobile && <Navbar />}
 
-        <main className="flex flex-col grow bg-[#E8ECEF70]" role="content">
+        <main className="flex flex-col grow h-full bg-[#E8ECEF70]" role="content">
           {/*       {!pathname.includes('/public-profile/') && ( */}
           {true && (
             <Toolbar>
               <ToolbarHeading />
 
               <ToolbarActions>
-                {!pathname.includes('/cars/checkout/success') && !pathname.includes('/cars/checkout/payment') && (<Button variant="outline" asChild>
+                {!pathname.includes('/cars/checkout/success') && pathname !== '/' && (<Button variant="outline" asChild>
                   <a onClick={() => navigate(-1)}>
                     Go Back
                   </a>
                 </Button>)}
-                {/* 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button id="date" variant="outline">
-                      <CalendarDays />
-                      {date?.from ? (
-                        date.to ? (
-                          <span>
-                            {format(date.from, 'LLL dd, y')} -{' '}
-                            {format(date.to, 'LLL dd, y')}
-                          </span>
-                        ) : (
-                          format(date.from, 'LLL dd, y')
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                      mode="range"
-                      defaultMonth={date?.from}
-                      selected={date}
-                      onSelect={setDate}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover> */}
               </ToolbarActions>
             </Toolbar>
           )}
 
-          <Outlet />
+          <div className="flex-grow">
+            <Outlet />
+          </div>
 
-          <Footer />
+          <div className="mt-auto">
+            <Footer />
+          </div>
         </main>
       </div>
     </>

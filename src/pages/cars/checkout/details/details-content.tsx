@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { ArrowLeft, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Calendar, Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { carsService } from '@/services/cars';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function CarsCheckoutDetailsContent() {
   const navigate = useNavigate();
@@ -12,6 +13,12 @@ export function CarsCheckoutDetailsContent() {
 
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [termsData, setTermsData] = useState<{ title: string; content: string } | null>(null);
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false);
+  const [noticeData, setNoticeData] = useState<{ title: string; content: string } | null>(null);
+  const [noticeLoading, setNoticeLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -34,6 +41,52 @@ export function CarsCheckoutDetailsContent() {
   const handleChange = (e: any) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const openTermsModal = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsTermsOpen(true);
+    if (!termsData) {
+      setTermsLoading(true);
+      try {
+        const res = await fetch("https://northsiderentals.com.au/wp-json/wp/v2/pages/10078");
+        const data = await res.json();
+        setTermsData({
+          title: data.title?.rendered || 'Terms & Conditions',
+          content: data.content?.rendered || 'Content could not be loaded.'
+        });
+      } catch (err) {
+        setTermsData({
+          title: 'Terms & Conditions',
+          content: '<p>Failed to load terms and conditions.</p>'
+        });
+      } finally {
+        setTermsLoading(false);
+      }
+    }
+  };
+
+  const openNoticeModal = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsNoticeOpen(true);
+    if (!noticeData) {
+      setNoticeLoading(true);
+      try {
+        const res = await fetch("https://northsiderentals.com.au/wp-json/wp/v2/pages/10085");
+        const data = await res.json();
+        setNoticeData({
+          title: data.title?.rendered || 'Important Notice',
+          content: data.content?.rendered || 'Content could not be loaded.'
+        });
+      } catch (err) {
+        setNoticeData({
+          title: 'Important Notice',
+          content: '<p>Failed to load important notice.</p>'
+        });
+      } finally {
+        setNoticeLoading(false);
+      }
+    }
   };
 
   const handleContinue = async () => {
@@ -312,7 +365,7 @@ export function CarsCheckoutDetailsContent() {
             <p className="text-[12px] text-[#8c6b1d] leading-tight font-medium">
               Please note: your reservation is not confirmed until you receive a confirmation email from Northside Rentals confirming your vehicle reservation is now booked.
             </p>
-            <a href="#" className="text-[12px] text-[#6b5212] font-bold underline mt-2 block">
+            <a href="#" onClick={openNoticeModal} className="text-[12px] text-[#6b5212] font-bold underline mt-2 block">
               See Important Notice
             </a>
           </div>
@@ -320,7 +373,7 @@ export function CarsCheckoutDetailsContent() {
           <div className="flex items-start gap-3 px-1">
             <Checkbox id="terms" checked={agreed} onCheckedChange={(checked) => setAgreed(!!checked)} className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]" />
             <label htmlFor="terms" className="text-[13px] text-gray-700 leading-tight">
-              I have read and accept the <a href="#" className="text-[#0061e0]">Terms and Condition</a>
+              I have read and accept the <a href="#" onClick={openTermsModal} className="text-[#0061e0]">Terms and Condition</a>
             </label>
           </div>
         </div>
@@ -346,6 +399,47 @@ export function CarsCheckoutDetailsContent() {
         </div>
       </div>
 
+      {/* Terms Modal */}
+      <Dialog open={isTermsOpen} onOpenChange={setIsTermsOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[20px] font-bold text-black" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
+          </DialogHeader>
+          <div className="mt-2 text-[14px] text-gray-700">
+            {termsLoading ? (
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
+              </div>
+            ) : (
+              <div 
+                dangerouslySetInnerHTML={{ __html: termsData?.content || '' }} 
+                className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notice Modal */}
+      <Dialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[20px] font-bold text-black" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
+          </DialogHeader>
+          <div className="mt-2 text-[14px] text-gray-700">
+            {noticeLoading ? (
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
+              </div>
+            ) : (
+              <div 
+                dangerouslySetInnerHTML={{ __html: noticeData?.content || '' }} 
+                className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

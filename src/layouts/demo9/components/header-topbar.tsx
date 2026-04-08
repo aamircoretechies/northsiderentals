@@ -4,7 +4,7 @@ import { ChatSheet } from '@/partials/topbar/chat-sheet';
 import { NotificationsSheet } from '@/partials/topbar/notifications-sheet';
 import { UserDropdownMenu } from '@/partials/topbar/user-dropdown-menu';
 import { BellDot, ChevronDown, MessageCircleMore, MessageSquareDot, Siren } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 
 export function HeaderTopbar() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   return (
     <div className="flex items-center gap-2 lg:gap-3.5 lg:w-[400px] justify-end">
@@ -20,25 +21,15 @@ export function HeaderTopbar() {
       ) : (
         <>
           <div className="flex items-center gap-2 me-0.5">
-            {/* <ChatSheet
-              trigger={
-                <Button
-                  variant="ghost"
-                  mode="icon"
-                  shape="circle"
-                  className="hover:bg-transparent hover:[&_svg]:text-primary"
-                >
-                  <MessageCircleMore className="size-4.5!" />
-                </Button>
-              }
-            /> */}
+            {/* <ChatSheet ... */}
 
             <Button
               variant="ghost"
               mode="icon"
               shape="circle"
-              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30 transition-colors"
+              className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
               title="SOS / Emergency"
+              onClick={() => navigate('/help')}
             >
               <Siren className="size-[22px]!" />
             </Button>
@@ -67,7 +58,6 @@ export function HeaderTopbar() {
             />
           </div>
 
-          <div className="border-e border-border h-5"></div>
 
           {/*   <div className="flex items-center space-x-2">
             <Switch id="auto-update" size="sm" defaultChecked />

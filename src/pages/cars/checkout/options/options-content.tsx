@@ -42,6 +42,18 @@ export function CarsCheckoutOptionsContent() {
   const rDateFormatted = formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) || "08/03/2026 9:00 AM";
   const rLocationFormatted = getLocationName(searchParams?.dropoff_location_id) || "Welshpool, Perth Airport Perth - 102121";
 
+  // Compute fee summary dynamically mapped to the car if available
+  const dailyRate = carData?.discount_price ? Number(carData.discount_price) : 43.0;
+
+  const getDays = (pDate?: string, rDate?: string) => {
+    if(!pDate || !rDate) return 6;
+    const d1 = new Date(pDate);
+    const d2 = new Date(rDate);
+    const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
+    return diff > 0 ? diff : 1;
+  };
+  const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
+
   const [extras, setExtras] = useState<OptionalExtraItem[]>([]);
   const [damageOptions, setDamageOptions] = useState<DamageCoverItem[]>([]);
   const [selectedDamageOption, setSelectedDamageOption] = useState('std');
@@ -70,21 +82,33 @@ export function CarsCheckoutOptionsContent() {
         const response = await carsService.getVehicleDetails(requestData);
         if (active && response.data) {
           const fetchedExtras = response.data.optionalfees || [];
-          setExtras(fetchedExtras.map((fee: any) => ({
-            id: String(fee.id),
-            name: fee.name,
-            price: fee.rate || 0,
-            type: fee.name.toLowerCase().includes('driver') ? 'quantity' : 'toggle',
-            quantity: 0,
-            selected: false,
-          })));
+          setExtras(fetchedExtras.map((fee: any) => {
+            const feeDays = fee.numberofdays || rentalDays || 1;
+            const price = fee.type === 'Daily' ? (fee.fees || 0) * feeDays : (fee.totalfeeamount || fee.fees || 0);
+            return {
+              id: String(fee.id),
+              name: fee.name,
+              price: price,
+              type: fee.name.toLowerCase().includes('driver') ? 'quantity' : 'toggle',
+              quantity: 0,
+              selected: false,
+            };
+          }));
 
           const fetchedDamage = response.data.insuranceoptions || [];
-          const mappedDamage = fetchedDamage.map((ins: any) => ({
-            id: String(ins.id),
-            name: ins.name,
-            cost: ins.rate || 0,
-          }));
+          const mappedDamage = fetchedDamage.map((ins: any) => {
+            const insDays = ins.numberofdays || rentalDays || 1;
+            const perDay = Number(ins.fees ?? ins.price ?? 0);
+            const totalFromApi = ins.totalinsuranceamount ?? ins.total_price;
+            
+            const totalCost = totalFromApi != null ? Number(totalFromApi) : (ins.type === 'Daily' ? perDay * insDays : perDay);
+
+            return {
+              id: String(ins.id),
+              name: ins.name,
+              cost: totalCost,
+            };
+          });
           setDamageOptions(mappedDamage);
           if (mappedDamage.length > 0) {
             setSelectedDamageOption(mappedDamage[0].id);
@@ -98,7 +122,7 @@ export function CarsCheckoutOptionsContent() {
     }
     fetchDetails();
     return () => { active = false; };
-  }, [carData, searchParams]);
+  }, [carData, searchParams, rentalDays]);
 
   const toggleExtra = (id: string, select: boolean) => {
     setExtras((current) =>
@@ -112,24 +136,17 @@ export function CarsCheckoutOptionsContent() {
     );
   };
 
-  // Compute fee summary dynamically mapped to the car if available
-  const dailyRate = carData?.discount_price ? Number(carData.discount_price) : 43.0;
-  
-  const getDays = (pDate?: string, rDate?: string) => {
-    if(!pDate || !rDate) return 6;
-    const d1 = new Date(pDate);
-    const d2 = new Date(rDate);
-    const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
-    return diff > 0 ? diff : 1;
-  };
-  const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
-
   // Calculate extras cost (quantity based + selected toggle-base)
-  const totalExtras = extras.reduce((sum, e) => {
+  const totalOptionalExtras = extras.reduce((sum, e) => {
     if (e.type === 'quantity') return sum + e.price * (e.quantity || 0);
     if (e.type === 'toggle' && e.selected) return sum + e.price;
     return sum;
   }, 0);
+
+  const selectedDamageOptionData = damageOptions.find(d => d.id === selectedDamageOption);
+  const totalDamageCover = selectedDamageOptionData ? selectedDamageOptionData.cost : 0;
+  
+  const totalExtras = totalOptionalExtras + totalDamageCover;
 
   if (loadingDetails) {
     return (

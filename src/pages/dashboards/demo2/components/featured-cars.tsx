@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { toAbsoluteUrl } from '@/lib/helpers';
 
 export interface FeaturedCar {
@@ -9,13 +10,19 @@ export interface FeaturedCar {
   link?: string;
   rate_description: string;
   slug?: string;
+  transmission?: string;
+  year?: string;
+  discount_price?: string;
 }
 
 interface FeaturedCarsProps {
   cars?: FeaturedCar[];
+  locations?: any[];
+  searchParams?: any;
 }
 
-export function FeaturedCars({ cars }: FeaturedCarsProps) {
+export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProps) {
+  const navigate = useNavigate();
   console.log('Demo2 FeaturedCars received:', cars);
 
   const carsToRender: FeaturedCar[] = cars || [];
@@ -36,19 +43,51 @@ export function FeaturedCars({ cars }: FeaturedCarsProps) {
     return `$${num % 1 === 0 ? num.toFixed(0) : num.toFixed(2)}`;
   };
 
+  const handleCarClick = (car: FeaturedCar) => {
+    // Default search parameters if not provided
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 8);
+
+    const defaultSearchParams = {
+      pickup_location_id: locations?.[0]?.id || 1,
+      dropoff_location_id: locations?.[0]?.id || 1,
+      pickup_date: tomorrow.toISOString().split('T')[0],
+      pickup_time: "09:00",
+      dropoff_date: nextWeek.toISOString().split('T')[0],
+      dropoff_time: "09:00",
+      category_id: 0,
+      age_id: 3, // Default to 25+
+    };
+
+    const finalSearchParams = searchParams || defaultSearchParams;
+
+    navigate('/cars/checkout/options', {
+      state: {
+        car: {
+          ...car,
+          searchParams: finalSearchParams,
+          locations: locations || []
+        }
+      }
+    });
+  };
+
   return (
     <div className="w-full flex flex-col gap-4">
       <h2 className="text-[22px] font-extrabold text-black mb-2">Featured Cars</h2>
       <div className="flex gap-4 lg:gap-6 overflow-x-auto snap-x pb-4 no-scrollbar">
         {carsToRender.map((car) => (
           <div key={String(car.id)} className="shrink-0 snap-center sm:snap-start flex flex-col w-[280px] md:w-[320px]">
-            <div className="bg-[#f0f4f9] rounded-[24px] p-6 flex flex-col mb-4 relative hover:shadow-md transition-shadow group overflow-hidden h-full min-h-[440px]">
+            <div className="bg-white rounded-[24px] p-6 flex flex-col mb-4 relative hover:shadow-md transition-shadow group overflow-hidden h-full min-h-[440px]">
               {/* Image Section */}
               <div className="flex items-center justify-center h-[180px] mb-4 w-full relative z-10 transition-transform duration-300 group-hover:scale-105">
                 <img
                   src={car.image_url.startsWith('http') ? car.image_url : toAbsoluteUrl(car.image_url)}
                   alt={car.title}
-                  className="max-w-full max-h-full object-contain drop-shadow-md mix-blend-darken"
+                  className="max-w-full max-h-full object-contain mix-blend-darken"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     e.currentTarget.parentElement!.innerHTML = '<div class="text-gray-400 font-bold text-xl">Image</div>';
@@ -60,10 +99,10 @@ export function FeaturedCars({ cars }: FeaturedCarsProps) {
               <div className="flex flex-col flex-1 z-10">
                 <h3 className="text-[20px] font-extrabold text-[#1f2937] leading-tight group-hover:text-[#0061e0] transition-colors">{car.title}</h3>
                 <p className="text-[#6b7280] text-[15px] mt-1 mb-5 font-medium">{car.description}</p>
-                
+
                 <div className="mt-auto">
                   <div className="bg-[#ffc107] rounded-[16px] py-4 px-4 flex flex-col items-center justify-center text-black shadow-sm mb-3 hover:bg-[#ffb000] transition-colors cursor-pointer"
-                       onClick={() => { if(car.link) window.open(car.link, '_blank'); }}>
+                    onClick={() => handleCarClick(car)}>
                     <div className="flex items-baseline gap-1">
                       <span className="text-[36px] font-extrabold leading-none tracking-tight">{formatPrice(car.daily_rate)}</span>
                       <span className="text-[16px] font-bold">/ day</span>

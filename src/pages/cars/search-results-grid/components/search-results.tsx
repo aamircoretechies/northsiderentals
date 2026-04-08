@@ -26,95 +26,19 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
   const searchParams = location.state?.searchParams;
   const locations = location.state?.locations;
 
-  const dummyItems: CarCardProps[] = [
-    {
-      id: 1,
-      image_url: 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg', // Placeholder image
-      title: 'MG HS-Excite - 5 seater',
-      transmission: 'Automatic',
-      year: '2023',
-      passengers: 4,
-      bags: 2,
-      features: [
-        '24/7 Roadside Assistance',
-        'GST Included',
-        '100Km Free Per Day',
-        'Standard Damage Cover',
-      ],
-      original_price: '270',
-      discount_price: '258',
-      special_price_text: '6 day special price . $68 per day',
-      discount_percentage: 5,
-    },
-    {
-      id: 2,
-      image_url: 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg',
-      title: 'Nissan X-Trail - 5 seater',
-      transmission: 'Automatic',
-      year: '2024',
-      passengers: 5,
-      bags: 3,
-      features: [
-        '24/7 Roadside Assistance',
-        'GST Included',
-        'Unlimited Km Per Day',
-        'Standard Damage Cover',
-      ],
-      original_price: '300',
-      discount_price: '280',
-      special_price_text: '6 day special price . $75 per day',
-    },
-    {
-      id: 3,
-      image_url: 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg',
-      title: 'Toyota Corolla - 4 seater',
-      transmission: 'Automatic',
-      year: '2022',
-      passengers: 4,
-      bags: 2,
-      features: [
-        '24/7 Roadside Assistance',
-        'GST Included',
-        '100Km Free Per Day',
-        'Standard Damage Cover',
-      ],
-      original_price: '180',
-      discount_price: '160',
-      special_price_text: '3 day special price . $53 per day',
-    },
-    {
-      id: 4,
-      image_url: 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg',
-      title: 'Ford Everest - 7 seater',
-      transmission: 'Automatic',
-      year: '2023',
-      passengers: 7,
-      bags: 4,
-      features: [
-        '24/7 Roadside Assistance',
-        'GST Included',
-        '200Km Free Per Day',
-        'Premium Damage Cover',
-      ],
-      original_price: '450',
-      discount_price: '420',
-      special_price_text: '7 day special price . $60 per day',
-    },
-  ];
-
   const items: CarCardProps[] = searchData?.data?.availablecars ? searchData.data.availablecars.map((car: any) => {
     const noDays = car.numberofdays || 1;
     // Align with the provided API schema while ensuring safety across properties
     const ogPrice = car.totalrate || car.totalratebeforediscount || (car.avgrate ? car.avgrate * noDays : 0);
-    const finalPrice = (car.totalrateafterdiscount !== undefined && car.totalrateafterdiscount !== 0) 
-      ? car.totalrateafterdiscount 
+    const finalPrice = (car.totalrateafterdiscount !== undefined && car.totalrateafterdiscount !== 0)
+      ? car.totalrateafterdiscount
       : (car.totalrate || (car.discounteddailyrate ? car.discounteddailyrate * noDays : ogPrice));
-    
+
     const dailyOg = Math.round(ogPrice / noDays) || 0;
     const dailyFinal = Math.round(finalPrice / noDays) || dailyOg;
-    
+
     const isDiscounted = ogPrice > finalPrice;
-    const discountPerc = isDiscounted 
+    const discountPerc = isDiscounted
       ? Math.round(((ogPrice - finalPrice) / ogPrice) * 100)
       : (car.discountrate && car.discountrate > 0 ? car.discountrate : undefined);
 
@@ -139,11 +63,11 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
       searchParams,
       locations
     };
-  }) : dummyItems;
+  }) : [];
 
   return (
     <div className="flex flex-col items-stretch gap-7">
-      <div className="flex items-center gap-3 w-full">
+      <div className="flex items-center gap-2 w-full">
         <div className="relative flex items-center w-full mx-auto  z-1">
           <SearchIcon
             className="absolute start-4 text-muted-foreground"
@@ -172,9 +96,9 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-5 justify-between mt-3">
+      <div className="flex flex-wrap items-center gap-5 justify-between mt-0">
         <h3 className="text-sm text-mono font-medium">
-          Showing 1 - {items.length} of {items.length} results for cars
+          Showing {items.length > 0 ? 1 : 0} - {items.length} of {items.length} results for cars
         </h3>
 
         {/* <div className="flex items-center gap-2.5">
@@ -209,21 +133,35 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
         </div> */}
       </div>
 
-      <div
-        className={
-          activeTab === 'card'
-            ? 'grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4'
-            : 'grid grid-cols-1 gap-6'
-        }
-      >
-        {items.map((item, index) => {
-          return (
-            <div key={index} className={activeTab === 'list' ? 'flex flex-row max-w-4xl mx-auto' : ''}>
-              <CarCard {...item} />
-            </div>
-          );
-        })}
-      </div>
+      {!searchData ? (
+        <div className="flex flex-col items-center justify-center p-10 bg-white rounded-[16px] shadow-sm border border-gray-100 min-h-[300px]">
+          <SearchIcon className="w-12 h-12 text-[#8692a6] mb-4" />
+          <h3 className="text-[#0061e0] font-bold text-[18px]">No search data</h3>
+          <p className="text-[#8692a6] text-[14px] mt-2">Please return to the dashboard and perform a search.</p>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-10 bg-white rounded-[16px] shadow-sm border border-gray-100 min-h-[300px]">
+          <SearchIcon className="w-12 h-12 text-[#8692a6] mb-4" />
+          <h3 className="text-[#0061e0] font-bold text-[18px]">0 results found</h3>
+          <p className="text-[#8692a6] text-[14px] mt-2">Try adjusting your filters or date range to find more available cars.</p>
+        </div>
+      ) : (
+        <div
+          className={
+            activeTab === 'card'
+              ? 'grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-4'
+              : 'grid grid-cols-1 gap-6'
+          }
+        >
+          {items.map((item, index) => {
+            return (
+              <div key={index} className={activeTab === 'list' ? 'flex flex-row max-w-4xl mx-auto' : ''}>
+                <CarCard {...item} />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

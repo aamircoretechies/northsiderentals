@@ -14,15 +14,11 @@ type ICalendarAccountsItems = Array<ICalendarAccountsItem>;
 const CalendarAccounts = () => {
   const items: ICalendarAccountsItems = [
     {
-      logo: 'google-calendar.svg',
+      logo: 'google.svg',
       title: 'Google',
       email: 'jasontt@studio.co',
     },
-    {
-      logo: 'monday.svg',
-      title: 'Monday',
-      email: 'jasontatum@keenthemes.com',
-    },
+
   ];
 
   const renderItem = (item: ICalendarAccountsItem, index: number) => {
@@ -63,14 +59,9 @@ const CalendarAccounts = () => {
     <Card>
       <CardHeader>
         <CardTitle>
-          Calendar Accounts{' '}
-          <span className="text-secondary-foreground font-medium text-sm">
-            1/5
-          </span>
+          Account
         </CardTitle>
-        <Button variant="outline">
-          <CalendarCog size={16} /> Add New
-        </Button>
+
       </CardHeader>
       <CardContent>
         <div className="grid gap-2.5">

@@ -55,99 +55,15 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
             <Tabs defaultValue="all" className="w-full relative">
               <TabsList variant="line" className="w-full px-5 mb-5">
                 <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="inbox" className="relative">
-                  Inbox
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 absolute top-1 -end-1" />
-                </TabsTrigger>
-                <TabsTrigger value="team">Team</TabsTrigger>
-                <TabsTrigger value="following">Following</TabsTrigger>
-                <div className="grow flex items-center justify-end">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        mode="icon"
-                        className="mb-1"
-                      >
-                        <Settings className="size-4.5!" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      className="w-44"
-                      side="bottom"
-                      align="end"
-                    >
-                      <DropdownMenuItem asChild>
-                        <Link to="/account/members/teams">
-                          <Users /> Invite Users
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>
-                          <Settings2 />
-                          <span>Team Settings</span>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuPortal>
-                          <DropdownMenuSubContent className="w-44">
-                            <DropdownMenuItem asChild>
-                              <Link to="/account/members/import-members">
-                                <Shield />
-                                Find Members
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link to="/account/members/import-members">
-                                <Calendar /> Meetings
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link to="/account/members/import-members">
-                                <Shield /> Group Settings
-                              </Link>
-                            </DropdownMenuItem>
-                          </DropdownMenuSubContent>
-                        </DropdownMenuPortal>
-                      </DropdownMenuSub>
-                      <DropdownMenuItem asChild>
-                        <Link to="/account/security/privacy-settings">
-                          <Shield /> Group Settings
-                        </Link>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+
+
               </TabsList>
 
               {/* All Tab */}
               <TabsContent value="all" className="mt-0">
                 <div className="flex flex-col gap-5 overflow-y-auto">
-                  <Item1
-                    userName="Joe Lincoln"
-                    avatar="300-4.png"
-                    description="mentioned you in"
-                    link="Latest Trends"
-                    label="topic"
-                    time="18 mins ago"
-                    specialist="Web Design 2024"
-                    text="For an expert opinion, check out what Mike has to say on this topic!"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item2 />
-                  <div className="border-b border-b-border"></div>
-                  <Item3
-                    userName="Guy Hawkins"
-                    avatar="300-27.png"
-                    badgeColor="offline"
-                    description="requested access to"
-                    link="AirSpace"
-                    day="project"
-                    date="14 hours ago"
-                    info="Dev Team"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item4 />
-                  <div className="border-b border-b-border"></div>
+
+
                   <Item5
                     userName="Raymond Pawell"
                     avatar="300-11.png"
@@ -159,121 +75,15 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
                     info="Roadmap"
                   />
                   <div className="border-b border-b-border"></div>
-                  <Item6 />
+
                 </div>
               </TabsContent>
 
-              {/* Inbox Tab */}
-              <TabsContent value="inbox" className="mt-0">
-                <div className="flex flex-col gap-5">
-                  <Item13 />
-                  <div className="border-b border-b-border"></div>
-                  <Item14 />
-                  <div className="border-b border-b-border"></div>
-                  <Item15 />
-                  <div className="border-b border-b-border"></div>
-                  <Item16 />
-                  <div className="border-b border-b-border"></div>
-                  <Item3
-                    userName="Benjamin Harris"
-                    avatar="300-30.png"
-                    badgeColor="offline"
-                    description="requested to upgrade plan"
-                    link=""
-                    day=""
-                    date="4 days ago"
-                    info="Marketing"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item5
-                    userName="Isaac Morgan"
-                    avatar="300-24.png"
-                    badgeColor="online"
-                    description="mentioned you in"
-                    link="Data Transmission"
-                    day="topic"
-                    date="6 days ago"
-                    info="Dev Team"
-                  />
-                </div>
-              </TabsContent>
 
-              {/* Team Tab */}
-              <TabsContent value="team" className="mt-0">
-                <div className="flex flex-col gap-5">
-                  <Item10 />
-                  <div className="border-b border-b-border"></div>
-                  <Item5
-                    userName="Adrian Vale"
-                    avatar="300-6.png"
-                    badgeColor="offline"
-                    description="posted a new article"
-                    link="Marketing"
-                    day="to 13 May"
-                    date="2 days ago"
-                    info="Marketing"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item11 />
-                  <div className="border-b border-b-border"></div>
-                  <Item1
-                    userName="Selene Silverleaf"
-                    avatar="300-21.png"
-                    description="commented on"
-                    link="SiteSculpt"
-                    label=""
-                    time="4 days ago"
-                    specialist="Manager"
-                    text="This design is simply stunning! From layout to color, it's a work of art!"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item3
-                    userName="Thalia Fox"
-                    avatar="300-13.png"
-                    badgeColor="online"
-                    description="has invited you to join"
-                    link="Design Research"
-                    day=""
-                    date="4 days ago"
-                    info="Dev Team"
-                  />
-                </div>
-              </TabsContent>
 
-              {/* Following Tab */}
-              <TabsContent value="following" className="mt-0">
-                <div className="flex flex-col gap-5">
-                  <Item18 />
-                  <div className="border-b border-b-border"></div>
-                  <Item17 />
-                  <div className="border-b border-b-border"></div>
-                  <Item19 />
-                  <div className="border-b border-b-border"></div>
-                  <Item5
-                    userName="Chloe Morgan"
-                    avatar="300-34.png"
-                    badgeColor="online"
-                    description="posted a new article"
-                    link="User Experience"
-                    day=""
-                    date="1 day ago"
-                    info="Nexus"
-                  />
-                  <div className="border-b border-b-border"></div>
-                  <Item20 />
-                  <div className="border-b border-b-border"></div>
-                  <Item3
-                    userName="Thalia Fox"
-                    avatar="300-13.png"
-                    badgeColor="offline"
-                    description="has invited you to join"
-                    link="Design Research"
-                    day=""
-                    date="4 days ago"
-                    info="Dev Team"
-                  />
-                </div>
-              </TabsContent>
+
+
+
             </Tabs>
           </ScrollArea>
         </SheetBody>

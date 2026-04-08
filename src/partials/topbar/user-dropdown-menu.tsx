@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ChangePasswordModal } from './change-password-modal';
 import { useAuth } from '@/auth/context/auth-context';
 import { I18N_LANGUAGES } from '@/i18n/config';
 import { Language } from '@/i18n/types';
@@ -14,6 +15,7 @@ import {
   Shield,
   SquareCode,
   UserCircle,
+  PencilIcon,
   Users,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -74,7 +76,7 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
             />
             <div className="flex flex-col">
               <Link
-                to="/account/home/get-started"
+                to="/account/home/user-profile"
                 className="text-sm text-mono hover:text-primary font-semibold"
               >
                 {displayName}
@@ -87,9 +89,7 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
               </a>
             </div>
           </div>
-          <Badge variant="primary" appearance="light" size="sm">
-            Pro
-          </Badge>
+
         </div>
 
         <DropdownMenuSeparator />
@@ -114,8 +114,19 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
           </Link>
         </DropdownMenuItem>
 
+
+        <ChangePasswordModal>
+          <DropdownMenuItem
+            onSelect={(e) => e.preventDefault()}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <PencilIcon size={16} />
+            Change Password
+          </DropdownMenuItem>
+        </ChangePasswordModal>
+
         {/* My Account Submenu */}
-        <DropdownMenuSub>
+        {/* <DropdownMenuSub>
           <DropdownMenuSubTrigger className="flex items-center gap-2">
             <Settings />
             My Account
@@ -176,7 +187,7 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
               </Link>
             </DropdownMenuItem>
           </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        </DropdownMenuSub> */}
 
         {/*  <DropdownMenuItem asChild>
           <Link

@@ -18,7 +18,7 @@ const BasicSettings = ({ title }: IBasicSettingsProps) => {
         <CardTitle>{title}</CardTitle>
         <div className="flex items-center gap-2">
           <Label htmlFor="auto-update" className="text-sm">
-            Public Profile
+            Profile
           </Label>
           <Switch defaultChecked size="sm" />
         </div>

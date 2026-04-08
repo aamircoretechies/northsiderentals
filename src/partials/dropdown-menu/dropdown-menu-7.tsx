@@ -20,12 +20,7 @@ export function DropdownMenu7({ trigger }: { trigger: ReactNode }) {
             <span>View</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="#">
-            <FileUp />
-            <span>Export</span>
-          </Link>
-        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="#">
@@ -33,12 +28,7 @@ export function DropdownMenu7({ trigger }: { trigger: ReactNode }) {
             <span>Edit</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="#">
-            <Copy />
-            <span>Make a copy</span>
-          </Link>
-        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="#">

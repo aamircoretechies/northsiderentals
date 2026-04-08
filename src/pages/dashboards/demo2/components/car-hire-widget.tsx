@@ -91,12 +91,12 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
       };
 
       const result = await searchCars(params);
-      navigate('/cars/search-results-grid', { 
-        state: { 
+      navigate('/cars/search-results-grid', {
+        state: {
           searchData: result,
           searchParams: params,
           locations: locations
-        } 
+        }
       });
     } catch (error) {
       console.error("Failed to search cars:", error);
@@ -182,11 +182,11 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1">Pickup Date & Time</div>
-                <div className="bg-white rounded-xl flex items-center h-[64px] shadow-sm overflow-hidden">
+                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1 mb-1">Pickup Date & Time</div>
+                <div className="bg-white rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center sm:h-[64px] shadow-sm overflow-hidden border border-transparent">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="flex-1 flex items-center gap-3 px-4 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
+                      <button className="flex-1 flex items-center gap-3 px-4 py-3 sm:py-0 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
                         <CalendarIcon className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
                         <span className="font-bold text-black text-[16px] truncate">
                           {pickupDate ? format(pickupDate, "dd/MM/yyyy") : "Select Date"}
@@ -204,10 +204,10 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
                     </PopoverContent>
                   </Popover>
 
-                  <div className="w-[1px] h-[60%] bg-amber-400/30"></div>
+                  <div className="h-[1px] w-full sm:h-[60%] sm:w-[1px] bg-amber-400/30"></div>
 
                   <Select value={pickupTime} onValueChange={setPickupTime}>
-                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
+                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 py-3 sm:py-0 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
                       <Clock className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
                       <span className="font-bold text-black text-[16px] truncate">
                         <SelectValue placeholder="Time" />
@@ -225,11 +225,11 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
 
               <div>
                 {/* Return Date & Time */}
-                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1">Return Date & Time</div>
-                <div className="bg-white rounded-xl flex items-center h-[64px] shadow-sm overflow-hidden">
+                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1 mb-1">Return Date & Time</div>
+                <div className="bg-white rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center sm:h-[64px] shadow-sm overflow-hidden border border-transparent">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="flex-1 flex items-center gap-3 px-4 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
+                      <button className="flex-1 flex items-center gap-3 px-4 py-3 sm:py-0 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
                         <CalendarIcon className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
                         <span className="font-bold text-black text-[16px] truncate">
                           {returnDate ? format(returnDate, "dd/MM/yyyy") : "Select Date"}
@@ -247,10 +247,10 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
                     </PopoverContent>
                   </Popover>
 
-                  <div className="w-[1px] h-[60%] bg-amber-400/30"></div>
+                  <div className="h-[1px] w-full sm:h-[60%] sm:w-[1px] bg-amber-400/30"></div>
 
                   <Select value={returnTime} onValueChange={setReturnTime}>
-                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
+                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 py-3 sm:py-0 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
                       <Clock className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
                       <span className="font-bold text-black text-[16px] truncate">
                         <SelectValue placeholder="Time" />
@@ -279,9 +279,16 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
                 </SelectTrigger>
                 <SelectContent>
                   {driverAges.length > 0 ? (
-                    driverAges.map((age) => (
-                      <SelectItem key={String(age.id)} value={String(age.id)}>{age.driverage}</SelectItem>
-                    ))
+                    driverAges.map((age, index) => {
+                      const isLast = index === driverAges.length - 1;
+                      const ageStr = String(age.driverage);
+                      const displayAge = isLast && !ageStr.endsWith('+')
+                        ? `${ageStr}+`
+                        : ageStr;
+                      return (
+                        <SelectItem key={String(age.id)} value={String(age.id)}>{displayAge}</SelectItem>
+                      );
+                    })
                   ) : (
                     <>
                       <SelectItem value="18-20">18-20</SelectItem>

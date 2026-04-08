@@ -12,8 +12,10 @@ import {
 export function BookingDetailContent() {
   const navigate = useNavigate();
 
+
+
   return (
-    <div className="flex flex-col h-full bg-[#f4f7fa] pb-[250px] relative lg:pb-12">
+    <div className="flex flex-col h-full pb-[250px] relative lg:pb-12">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-white sticky top-0 z-10 shadow-sm border-b border-gray-100">
         <div className="flex items-center gap-4">
@@ -49,8 +51,8 @@ export function BookingDetailContent() {
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-[1200px] mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
-        
+      <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6">
+
         {/* Reservation Number (Mobile Only Top) */}
         <div className="lg:hidden col-span-1 -mb-2">
           <span className="text-[#6b7280] text-[15px]">Reservation Number: </span>
@@ -74,7 +76,7 @@ export function BookingDetailContent() {
                 <span className="text-[#ffb700] text-[14px] font-bold">Open</span>
               </div>
             </div>
-            
+
             <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm flex flex-col">
               {/* Car Info */}
               <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
@@ -113,9 +115,9 @@ export function BookingDetailContent() {
 
           {/* Desktop Summary Fixed in layout */}
           <div className="hidden lg:flex flex-col">
-             <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-5 flex flex-col">
+            <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-5 flex flex-col">
               <h3 className="text-[15px] font-bold text-[#6b7280] tracking-wide mb-4">RENTAL FEE SUMMARY</h3>
-              
+
               <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <span className="text-[15px] text-black">Daily Rate (6 days @ $43 per day)</span>
@@ -136,10 +138,15 @@ export function BookingDetailContent() {
                   <span className="text-[13px] text-[#6b7280]">(Inc. GST: $12.00)</span>
                 </div>
               </div>
-              
-              <Button className="w-full mt-6 bg-[#ffb700] hover:bg-[#e5a400] text-black font-bold h-[48px] rounded-[8px] text-[16px]">
-                Express Check-in
-              </Button>
+
+              <div className="flex flex-row gap-2">
+                <Button onClick={() => navigate("/express-checkin")} className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-extrabold h-[48px] rounded-[8px] text-[16px]">
+                  Express Check-in
+                </Button>
+                <Button onClick={() => navigate("/sign-agreements")} className="w-full mt-5 bg-[#0061e0] hover:bg-[#0061e0] text-white font-extrabold h-[48px] rounded-[8px] text-[16px]">
+                  Sign Agreement
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -162,7 +169,7 @@ export function BookingDetailContent() {
             </div>
           </div>
         </div>
-        
+
       </div>
 
       {/* Mobile Rental Fee Summary Footer */}
@@ -172,7 +179,7 @@ export function BookingDetailContent() {
         </div>
         <div className="p-5 flex flex-col">
           <h3 className="text-[14px] font-bold text-[#6b7280] tracking-wide mb-3">RENTAL FEE SUMMARY</h3>
-          
+
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
               <span className="text-[14px] text-black">Daily Rate (6 days @ $43 per day)</span>
@@ -194,9 +201,14 @@ export function BookingDetailContent() {
             </div>
           </div>
 
-          <Button className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-extrabold h-[48px] rounded-[8px] text-[16px]">
-            Express Check-in
-          </Button>
+          <div className="flex flex-row gap-2">
+            <Button onClick={() => navigate("/express-checkin")} className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-extrabold h-[48px] rounded-[8px] text-[16px]">
+              Express Check-in
+            </Button>
+            <Button onClick={() => navigate("/sign-agreements")} className="w-full mt-5 bg-[#0061e0] hover:bg-[#0061e0] text-white font-semibold h-[48px] rounded-[8px] text-[16px]">
+              Sign Agreement
+            </Button>
+          </div>
         </div>
       </div>
     </div>

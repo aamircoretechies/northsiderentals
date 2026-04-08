@@ -42,7 +42,7 @@ function ToolbarBreadcrumbs() {
 
         return (
           <Fragment key={index}>
-            {item.path ? (
+            {/* {item.path ? (
               <Link
                 to={item.path}
                 className={cn(
@@ -63,7 +63,7 @@ function ToolbarBreadcrumbs() {
                 {item.title}
               </span>
             )}
-            {!isLast && <span className="text-muted-foreground">{'>'}</span>}
+            {!isLast && <span className="text-muted-foreground">{'>'}</span>} */}
           </Fragment>
         );
       })}

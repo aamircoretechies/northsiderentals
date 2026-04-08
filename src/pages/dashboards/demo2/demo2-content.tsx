@@ -33,7 +33,7 @@ export function Demo2Content() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <div className="text-danger font-medium text-lg font-bold">Error: {error}</div>
-        <Button 
+        <Button
           className="bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold px-8 py-2 rounded-lg"
           onClick={() => window.location.reload()}
         >
@@ -45,21 +45,19 @@ export function Demo2Content() {
 
   return (
     <div className="grid gap-5 lg:gap-7.5">
-     
+
       <div className="grid lg:grid-cols-1 gap-y-5 lg:gap-7.5 items-stretch">
-        <div className="lg:col-span-1">
-          <div className="grid md:grid-cols-1 gap-5 lg:gap-7.5 h-full items-stretch">
+        <div className="lg:col-span-1 min-w-0">
+          <div className="grid md:grid-cols-1 gap-5 lg:gap-7.5 h-full items-stretch w-full max-w-full">
             <CarHireWidget locations={data?.locations} driverAges={data?.driverages} />
           </div>
         </div>
       </div>
-      <div className="grid lg:grid-cols-1 gap-5 lg:gap-7.5 items-stretch">
-        <div className="lg:col-span-1">
-          <FeaturedCars cars={data?.featuredCars} />
-        </div>
+      <div className="lg:col-span-1 min-w-0 overflow-hidden">
+        <FeaturedCars cars={data?.featuredCars} locations={data?.locations} />
       </div>
       <div className="grid lg:grid-cols-1 gap-5 lg:gap-7.5 items-stretch">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 min-w-0 overflow-hidden">
           <Promotions promotions={data?.promotions} />
         </div>
       </div>
@@ -74,7 +72,7 @@ export function Demo2Content() {
           />
         </div>
       </div> */}
-     {/*  <div className="grid lg:grid-cols-3 gap-5 lg:gap-7.5 items-stretch">
+      {/*  <div className="grid lg:grid-cols-3 gap-5 lg:gap-7.5 items-stretch">
         <div className="lg:col-span-2">
           <Teams />
         </div>

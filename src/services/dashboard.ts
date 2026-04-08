@@ -45,6 +45,9 @@ export interface FeaturedCar {
   link?: string;
   rate_description: string;
   slug?: string;
+  transmission?: string;
+  year?: string;
+  discount_price?: string;
 }
 
 export interface Promotion {
@@ -170,6 +173,9 @@ export const dashboardService = {
                 link: car.link,
                 rate_description: car.rate_description || car.description || '',
                 slug: car.slug,
+                transmission: car.transmission || car.gearbox || 'Automatic',
+                year: car.year || car.model_year || '2024',
+                discount_price: car.discount_price || car.daily_rate || car.price || '0',
               };
             })
           : [],

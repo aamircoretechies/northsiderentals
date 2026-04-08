@@ -39,7 +39,7 @@ export function DamageCoverOptions({
                   <CircleHelp size={14} className="text-[#0061e0]" strokeWidth={2} />
                 </div>
                 <span className="text-black font-extrabold text-[14px]">
-                  $ {option.cost.toFixed(2)} {!isSelected ? '/ day' : ''}
+                  $ {option.cost.toFixed(2)}
                 </span>
               </div>
               <div className="shrink-0 flex items-center justify-center">

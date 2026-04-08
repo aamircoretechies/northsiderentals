@@ -99,6 +99,10 @@ import { CarsCheckoutPaymentPage } from '@/pages/cars/checkout/payment';
 import { CarsCheckoutSuccessPage } from '@/pages/cars/checkout/success';
 import { BookingsPage } from '@/pages/bookings/bookings-page';
 import { BookingDetailPage } from '@/pages/bookings/booking-detail';
+import { ExpressCheckinPage } from '@/pages/express-checkin';
+import { SignAgreementsPage } from '@/pages/sign-agreements';
+import { HelpPage } from '@/pages/help';
+import { SupportPage } from '@/pages/support/support-page';
 import { Navigate, Route, Routes } from 'react-router';
 
 export function AppRoutingSetup() {
@@ -368,6 +372,10 @@ export function AppRoutingSetup() {
           />
           <Route path="/bookings" element={<BookingsPage />} />
           <Route path="/bookings/:id" element={<BookingDetailPage />} />
+          <Route path="/express-checkin" element={<ExpressCheckinPage />} />
+          <Route path="/sign-agreements" element={<SignAgreementsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/support" element={<SupportPage />} />
           <Route path="/store-client/home" element={<StoreClientPage />} />
           <Route
             path="/store-client/search-results-grid"

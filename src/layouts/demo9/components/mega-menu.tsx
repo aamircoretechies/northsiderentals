@@ -37,7 +37,7 @@ export function MegaMenu() {
 
   return (
     <NavigationMenu>
-      <NavigationMenuList className="gap-2">
+      <NavigationMenuList className="gap-4">
         {/* Home Item */}
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
@@ -63,6 +63,19 @@ export function MegaMenu() {
             </Link>
           </NavigationMenuLink>
         </NavigationMenuItem>
+
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
+              to="/support"
+              className={cn(linkClass)}
+              data-active={isActive('/support') || undefined}
+            >
+              Support
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+
 
         {/* Public Profiles Item */}
         {/* <NavigationMenuItem>

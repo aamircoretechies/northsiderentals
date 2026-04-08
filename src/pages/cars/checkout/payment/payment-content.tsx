@@ -11,9 +11,7 @@ export function CarsCheckoutPaymentContent() {
     <div className="flex flex-col h-full bg-white relative max-w-[600px] mx-auto min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-white sticky top-0 z-10">
-        <button className="p-2 cursor-pointer hover:bg-gray-50 rounded-full" onClick={() => navigate(-1)}>
-          <ArrowLeft size={24} className="text-black" />
-        </button>
+
         <h1 className="text-[18px] font-extrabold text-black">Verify Card</h1>
         <div className="w-10"></div> {/* Spacer for center alignment */}
       </div>

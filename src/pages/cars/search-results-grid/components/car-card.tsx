@@ -39,7 +39,7 @@ export function CarCard(props: CarCardProps) {
         <img
           src={props.image_url.startsWith('http') ? props.image_url : toAbsoluteUrl(props.image_url)}
           alt={props.title}
-          className="max-w-full max-h-[150px] object-contain drop-shadow-md mix-blend-darken"
+          className="max-w-full max-h-[150px] object-contain mix-blend-darken"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
           }}
@@ -64,21 +64,27 @@ export function CarCard(props: CarCardProps) {
 
       {/* Pricing block placed at bottom */}
       <div className="mt-auto">
-        <Link 
-          to="/cars/checkout/options" 
-          state={{ car: props }} 
-          className={`w-full bg-[#ffc107] hover:bg-[#ffb000] transition-colors rounded-[24px] py-3.5 flex items-center justify-center gap-3 mb-3 text-black relative ${props.discount_percentage ? 'mt-6' : 'mt-2'}`}
-        >
-          {props.discount_percentage ? (
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e85d04] text-white text-[13px] font-extrabold px-4 py-0.5 rounded-full whitespace-nowrap tracking-wide">
-              {props.discount_percentage}% DISCOUNT
-            </div>
-          ) : null}
-          {props.original_price && props.original_price !== props.discount_price ? (
-            <span className="text-[24px] font-bold text-[#a17a00]">${props.original_price}</span>
-          ) : null}
-          <span className="text-[28px] font-extrabold">${props.discount_price}</span>
-        </Link>
+        {!props.discount_price || parseFloat(String(props.discount_price)) === 0 ? (
+          <div className="w-full bg-gray-200 rounded-[24px] py-3.5 flex items-center justify-center gap-3 mb-3 text-gray-500 cursor-not-allowed mt-2">
+            <span className="text-[24px] font-bold">Not Available</span>
+          </div>
+        ) : (
+          <Link
+            to="/cars/checkout/options"
+            state={{ car: props }}
+            className={`w-full bg-[#ffc107] hover:bg-[#ffb000] transition-colors rounded-[24px] py-3.5 flex items-center justify-center gap-3 mb-3 text-black relative ${props.discount_percentage ? 'mt-6' : 'mt-2'}`}
+          >
+            {props.discount_percentage ? (
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#e85d04] text-white text-[13px] font-extrabold px-4 py-0.5 rounded-full whitespace-nowrap tracking-wide">
+                {props.discount_percentage}% DISCOUNT
+              </div>
+            ) : null}
+            {props.original_price && props.original_price !== props.discount_price ? (
+              <span className="text-[24px] font-bold text-[#a17a00]">${props.original_price}</span>
+            ) : null}
+            <span className="text-[28px] font-extrabold">${props.discount_price}</span>
+          </Link>
+        )}
         <p className="text-center text-[#4b5563] text-[14px] font-medium">{props.special_price_text}</p>
       </div>
     </div>
