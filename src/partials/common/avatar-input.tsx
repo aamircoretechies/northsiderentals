@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { Button } from '@/components/ui/button';
@@ -8,40 +8,99 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
 import { ImageInput, ImageInputFile } from '@/components/image-input';
 
-export function AvatarInput() {
-  const [avatar, setAvatar] = useState<ImageInputFile[]>([
-    { dataURL: toAbsoluteUrl(`/media/avatars/300-2.png`) },
-  ]);
+const DEFAULT_AVATAR: ImageInputFile[] = [
+  { dataURL: toAbsoluteUrl(`/media/avatars/300-2.png`) },
+];
+
+export type AvatarInputProps = {
+  /** When `onPickFile` is set, this URL is shown until the user picks a new file. */
+  remoteImageUrl?: string | null;
+  onPickFile?: (file: File) => Promise<void>;
+  onRemoveRemote?: () => Promise<void>;
+  busy?: boolean;
+  /** Smaller control for dense layouts (e.g. profile settings table). */
+  compact?: boolean;
+};
+
+export function AvatarInput(props: AvatarInputProps = {}) {
+  const { remoteImageUrl, onPickFile, onRemoveRemote, busy, compact } = props;
+  const isApiMode = Boolean(onPickFile);
+
+  const [standaloneAvatar, setStandaloneAvatar] =
+    useState<ImageInputFile[]>(DEFAULT_AVATAR);
+  const [localPreview, setLocalPreview] = useState<ImageInputFile[]>([]);
+
+  const apiValue: ImageInputFile[] =
+    localPreview.length > 0
+      ? localPreview
+      : remoteImageUrl
+        ? [{ dataURL: remoteImageUrl }]
+        : [];
+
+  const handleApiChange = useCallback(
+    async (files: ImageInputFile[]) => {
+      setLocalPreview(files);
+      const file = files[0]?.file;
+      if (file && onPickFile) {
+        try {
+          await onPickFile(file);
+        } finally {
+          setLocalPreview([]);
+        }
+      }
+    },
+    [onPickFile],
+  );
+
+  const value = isApiMode ? apiValue : standaloneAvatar;
+  const onChange = isApiMode
+    ? handleApiChange
+    : (files: ImageInputFile[]) => setStandaloneAvatar(files);
+
+  const showImg = value.length > 0 && Boolean(value[0]?.dataURL);
+  const showRemove = !isApiMode || Boolean(remoteImageUrl);
 
   return (
     <ImageInput
-      value={avatar}
-      onChange={(selectedAvatar) => setAvatar(selectedAvatar)}
+      value={value}
+      onChange={onChange}
+      acceptType={['jpg', 'jpeg', 'png', 'gif', 'webp']}
     >
       {({ onImageUpload }) => (
         <div
-          className="size-16 relative cursor-pointer"
+          className={`relative cursor-pointer ${compact ? 'size-10' : 'size-16'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
           onClick={onImageUpload}
         >
           <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  mode="icon"
-                  className="shadow-xs text-secondary-foreground/80 hover:text-foreground absolute z-1 size-5 -top-0.5 -end-0.5 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAvatar([]);
-                  }}
-                >
-                  <X className="size-3.25!" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Click to remove or revert</TooltipContent>
-            </Tooltip>
+            {showRemove && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    mode="icon"
+                    className={`shadow-xs text-secondary-foreground/80 hover:text-foreground absolute z-1 rounded-full ${compact ? 'size-3.5 -top-0.5 -end-0.5' : 'size-5 -top-0.5 -end-0.5'}`}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (isApiMode && remoteImageUrl && onRemoveRemote) {
+                        await onRemoveRemote();
+                        return;
+                      }
+                      if (!isApiMode) {
+                        setStandaloneAvatar([]);
+                      }
+                    }}
+                  >
+                    <X className={compact ? 'size-2.5!' : 'size-3.25!'} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isApiMode ? 'Remove profile photo' : 'Click to remove or revert'}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </TooltipProvider>
           <div
             className="relative border-2 border-green-500 rounded-full overflow-hidden"
@@ -49,12 +108,20 @@ export function AvatarInput() {
               backgroundImage: `url(${toAbsoluteUrl(`/media/avatars/blank.png`)})`,
             }}
           >
-            {avatar.length > 0 && <img src={avatar[0].dataURL} alt="avatar" />}
-            <div className="flex items-center justify-center cursor-pointer h-5 left-0 right-0 bottom-0 bg-black/25 absolute">
+            {showImg && value[0].dataURL ? (
+              <ProfileAvatarImage
+                src={value[0].dataURL}
+                alt="avatar"
+                className="size-full object-cover"
+              />
+            ) : null}
+            <div
+              className={`flex items-center justify-center cursor-pointer left-0 right-0 bottom-0 bg-black/25 absolute ${compact ? 'h-3.5' : 'h-5'}`}
+            >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="12"
+                width={compact ? 11 : 14}
+                height={compact ? 10 : 12}
                 viewBox="0 0 14 12"
                 className="fill-border opacity-80"
               >

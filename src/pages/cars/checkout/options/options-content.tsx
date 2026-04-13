@@ -9,6 +9,12 @@ import { RentalFeeSummary } from './components/rental-fee-summary';
 import { EmailQuoteModal } from './components/email-quote-modal';
 import { carsService } from '@/services/cars';
 import { ContentLoader } from '@/components/common/content-loader';
+
+function gstIncludedInTotal(total: number, taxRate: number): number {
+  if (total <= 0 || taxRate <= 0) return 0;
+  return (total * taxRate) / (1 + taxRate);
+}
+
 export function CarsCheckoutOptionsContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,13 +43,18 @@ export function CarsCheckoutOptionsContent() {
     return loc ? loc.location : undefined;
   };
 
-  const pDateFormatted = formatDateTime(searchParams?.pickup_date, searchParams?.pickup_time) || "07/03/2026 9:00 AM";
-  const pLocationFormatted = getLocationName(searchParams?.pickup_location_id) || "Welshpool, Perth Airport Perth - 102121";
-  const rDateFormatted = formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) || "08/03/2026 9:00 AM";
-  const rLocationFormatted = getLocationName(searchParams?.dropoff_location_id) || "Welshpool, Perth Airport Perth - 102121";
+  const pDateFormatted =
+    formatDateTime(searchParams?.pickup_date, searchParams?.pickup_time) ?? '—';
+  const pLocationFormatted =
+    getLocationName(searchParams?.pickup_location_id) ?? '—';
+  const rDateFormatted =
+    formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) ?? '—';
+  const rLocationFormatted =
+    getLocationName(searchParams?.dropoff_location_id) ?? '—';
 
-  // Compute fee summary dynamically mapped to the car if available
-  const dailyRate = carData?.discount_price ? Number(carData.discount_price) : 43.0;
+  const dailyRate = carData?.discount_price
+    ? Number(carData.discount_price)
+    : 0;
 
   const getDays = (pDate?: string, rDate?: string) => {
     if(!pDate || !rDate) return 6;
@@ -148,6 +159,26 @@ export function CarsCheckoutOptionsContent() {
   
   const totalExtras = totalOptionalExtras + totalDamageCover;
 
+  const currencySymbol =
+    carData?.searchMeta?.currency_symbol ??
+    carData?.currency_symbol ??
+    '$';
+  const taxRate = carData?.searchMeta?.taxrate ?? 0.1;
+  const taxInclusive = carData?.searchMeta?.taxinclusive !== false;
+  const rentalSubtotal = rentalDays * dailyRate;
+  const totalCostEstimate = rentalSubtotal + totalExtras;
+  const gstAmount =
+    taxInclusive && totalCostEstimate > 0
+      ? gstIncludedInTotal(totalCostEstimate, taxRate)
+      : 0;
+
+  const carSubtitle = [
+    carData?.transmission,
+    carData?.year ? `${carData.year} Model` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   if (loadingDetails) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
@@ -159,6 +190,10 @@ export function CarsCheckoutOptionsContent() {
   const actionButtons = (
     <div className="grid grid-cols-2 gap-4 mt-6">
       <EmailQuoteModal
+        carData={carData}
+        searchParams={searchParams}
+        extras={extras}
+        selectedDamageOption={selectedDamageOption}
         trigger={
           <Button
             variant="outline"
@@ -187,9 +222,10 @@ export function CarsCheckoutOptionsContent() {
         {/* Small Grid: Booking & Fee Summary */}
         <div className="col-span-1 flex flex-col gap-6 lg:order-last">
           <BookingOverview
-            carImage={carData?.image_url || "https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg"}
-            carTitle={carData?.title || "MG HS-Excite - 5 seater"}
-            carSubtitle={carData ? `${carData.transmission}, ${carData.year} Model` : "Automatic, 2023 Model"}
+            carImage={carData?.image_url ?? ''}
+            carTitle={carData?.title ?? 'Vehicle'}
+            carSubtitle={carSubtitle || '—'}
+            categoryBadge={carData?.subtitle}
             pickupDate={pDateFormatted}
             pickupLocation={pLocationFormatted}
             returnDate={rDateFormatted}
@@ -201,7 +237,8 @@ export function CarsCheckoutOptionsContent() {
               days={rentalDays}
               dailyRate={dailyRate}
               totalExtras={totalExtras}
-              gstAmount={12.0}
+              gstAmount={gstAmount}
+              currencySymbol={currencySymbol}
             >
               {actionButtons}
             </RentalFeeSummary>
@@ -213,7 +250,8 @@ export function CarsCheckoutOptionsContent() {
               days={rentalDays}
               dailyRate={dailyRate}
               totalExtras={totalExtras}
-              gstAmount={12.0}
+              gstAmount={gstAmount}
+              currencySymbol={currencySymbol}
             >
               {actionButtons}
             </RentalFeeSummary>

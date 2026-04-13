@@ -1,8 +1,8 @@
-import { CalendarCog, Trash2 } from 'lucide-react';
-import { Link } from 'react-router';
+import { Trash2 } from 'lucide-react';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 
 interface ICalendarAccountsItem {
   logo: string;
@@ -11,15 +11,33 @@ interface ICalendarAccountsItem {
 }
 type ICalendarAccountsItems = Array<ICalendarAccountsItem>;
 
-const CalendarAccounts = () => {
-  const items: ICalendarAccountsItems = [
+function useGoogleAccountRow(): ICalendarAccountsItems {
+  const { rcmProfile, profile } = useDashboardData();
+
+  const email = (rcmProfile?.email || profile.email || '').trim();
+  const method = rcmProfile?.method?.toLowerCase() ?? '';
+  const isGmail =
+    email.length > 0 && email.toLowerCase().endsWith('@gmail.com');
+
+  const showGoogle =
+    method === 'google' ||
+    (Boolean(rcmProfile?.is_social_login) && isGmail);
+
+  if (!showGoogle || !email) {
+    return [];
+  }
+
+  return [
     {
       logo: 'google.svg',
       title: 'Google',
-      email: 'jasontt@studio.co',
+      email,
     },
-
   ];
+}
+
+const CalendarAccounts = () => {
+  const items = useGoogleAccountRow();
 
   const renderItem = (item: ICalendarAccountsItem, index: number) => {
     return (
@@ -33,22 +51,17 @@ const CalendarAccounts = () => {
             className="size-6 shrink-0"
             alt=""
           />
-          <div className="flex flex-col">
-            <Link
-              to="#"
-              className="text-sm font-medium text-mono hover:text-primary-active mb-px"
-            >
-              {item.title}
-            </Link>
-            <Link
-              to="#"
-              className="text-sm text-secondary-foreground hover:text-primary-active"
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-medium text-mono mb-px">{item.title}</span>
+            <a
+              href={`mailto:${item.email}`}
+              className="text-sm text-secondary-foreground hover:text-primary-active truncate"
             >
               {item.email}
-            </Link>
+            </a>
           </div>
         </div>
-        <Button variant="ghost">
+        <Button variant="ghost" type="button" title="Unlink is not available" disabled>
           <Trash2 />
         </Button>
       </div>
@@ -58,16 +71,17 @@ const CalendarAccounts = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>
-          Account
-        </CardTitle>
-
+        <CardTitle>Account</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-2.5">
-          {items.map((item, index) => {
-            return renderItem(item, index);
-          })}
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-1">
+              No Google account linked for calendar, or you signed in with email and password.
+            </p>
+          ) : (
+            items.map((item, index) => renderItem(item, index))
+          )}
         </div>
       </CardContent>
     </Card>

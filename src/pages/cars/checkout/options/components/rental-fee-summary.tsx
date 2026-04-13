@@ -4,6 +4,7 @@ export interface RentalFeeSummaryProps {
   dailyRate: number;
   totalExtras: number;
   gstAmount: number;
+  currencySymbol?: string;
   children?: React.ReactNode;
 }
 
@@ -12,8 +13,10 @@ export function RentalFeeSummary({
   dailyRate,
   totalExtras,
   gstAmount,
+  currencySymbol = '$',
   children,
 }: RentalFeeSummaryProps) {
+  const sym = currencySymbol || '$';
   const baseTotal = days * dailyRate;
   const totalCost = baseTotal + totalExtras;
 
@@ -26,30 +29,35 @@ export function RentalFeeSummary({
         RENTAL FEE SUMMARY
       </h2>
 
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-black font-medium text-[14px]">
-          Daily Rate ({days} days @ ${dailyRate.toFixed(2)} per day)
+      <div className="flex justify-between items-center mb-2 gap-3">
+        <span className="text-black font-medium text-[14px] leading-snug">
+          Daily rate ({days} {days === 1 ? 'day' : 'days'} @ {sym}
+          {dailyRate.toFixed(2)} / day)
         </span>
-        <span className="text-black font-extrabold text-[15px]">
-          $ {(days * dailyRate).toFixed(2)}
+        <span className="text-black font-extrabold text-[15px] shrink-0">
+          {sym}
+          {(days * dailyRate).toFixed(2)}
         </span>
       </div>
 
       <div className="flex justify-between items-center mb-3">
-        <span className="text-black font-medium text-[14px]">Total Extras</span>
+        <span className="text-black font-medium text-[14px]">Total extras</span>
         <span className="text-black font-extrabold text-[15px]">
-          $ {totalExtras.toFixed(2)}
+          {sym}
+          {totalExtras.toFixed(2)}
         </span>
       </div>
 
-      <div className="flex justify-between items-end mb-1">
-        <span className="text-[#0061e0] font-medium text-[15px]">Total Cost</span>
+      <div className="flex justify-between items-end mb-1 gap-3">
+        <span className="text-[#0061e0] font-medium text-[15px]">Total</span>
         <div className="flex flex-col items-end">
           <span className="text-[#0061e0] font-extrabold text-[18px] leading-none mb-1">
-            $ {totalCost.toFixed(2)}
+            {sym}
+            {totalCost.toFixed(2)}
           </span>
           <span className="text-[#8692a6] text-[12px] font-medium">
-            (Inc. GST: ${gstAmount.toFixed(2)})
+            (GST included: {sym}
+            {gstAmount.toFixed(2)})
           </span>
         </div>
       </div>

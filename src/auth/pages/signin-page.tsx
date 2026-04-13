@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { SupabaseAdapter } from '@/auth/adapters/supabase-adapter';
 import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -18,13 +18,14 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Icons } from '@/components/common/icons';
+import { firebaseAuth, googleProvider } from '@/lib/firebase';
 import { getSigninSchema, SigninSchemaType } from '../forms/signin-schema';
 import { LoaderCircleIcon } from 'lucide-react';
 
 export function SignInPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogleIdToken } = useAuth();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,26 +114,25 @@ export function SignInPage() {
     }
   }
 
-  // Handle Google Sign In with Supabase OAuth
+  // Handle Google Sign In with Firebase and backend API exchange
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
       setError(null);
 
-      // Get the next path if available
-      const nextPath = searchParams.get('next');
+      const googleUserCredential = await signInWithPopup(
+        firebaseAuth,
+        googleProvider,
+      );
+      const credential =
+        GoogleAuthProvider.credentialFromResult(googleUserCredential);
+      const idToken =
+        credential?.idToken || (await googleUserCredential.user.getIdToken());
 
-      // Calculate the redirect URL
-      const redirectTo = nextPath
-        ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
-        : `${window.location.origin}/auth/callback`;
+      await loginWithGoogleIdToken(idToken);
 
-      console.log('Initiating Google sign-in with redirect:', redirectTo);
-
-      // Use our adapter to initiate the OAuth flow
-      await SupabaseAdapter.signInWithOAuth('google', { redirectTo });
-
-      // The browser will be redirected automatically
+      const nextPath = searchParams.get('next') || '/';
+      navigate(nextPath);
     } catch (err) {
       console.error('Google sign-in error:', err);
       setError(

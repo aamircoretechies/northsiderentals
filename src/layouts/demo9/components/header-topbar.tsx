@@ -5,7 +5,8 @@ import { NotificationsSheet } from '@/partials/topbar/notifications-sheet';
 import { UserDropdownMenu } from '@/partials/topbar/user-dropdown-menu';
 import { BellDot, ChevronDown, MessageCircleMore, MessageSquareDot, Siren } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { toAbsoluteUrl } from '@/lib/helpers';
+import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -13,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 export function HeaderTopbar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { profile, notificationUnreadCount } = useDashboardData();
 
   return (
     <div className="flex items-center gap-2 lg:gap-3.5 lg:w-[400px] justify-end">
@@ -40,20 +42,34 @@ export function HeaderTopbar() {
                   variant="ghost"
                   mode="icon"
                   shape="circle"
-                  className="hover:bg-transparent hover:[&_svg]:text-primary"
+                  className="relative hover:bg-transparent hover:[&_svg]:text-primary"
                 >
                   <BellDot className="size-4.5!" />
+                  {notificationUnreadCount > 0 ? (
+                    <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-white">
+                      {notificationUnreadCount > 99
+                        ? '99+'
+                        : notificationUnreadCount}
+                    </span>
+                  ) : null}
                 </Button>
               }
             />
 
             <UserDropdownMenu
               trigger={
-                <img
-                  className="ms-2.5 size-9 rounded-full border-2 border-success shrink-0 cursor-pointer"
-                  src={toAbsoluteUrl('/media/avatars/300-2.png')}
-                  alt="User Avatar"
-                />
+                <div
+                  className="ms-2.5 size-9 shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-success"
+                  title="Account menu"
+                >
+                  <ProfileAvatarImage
+                    src={profile.avatarUrl}
+                    fallbackLabel={profile.displayName}
+                    alt=""
+                    className="size-full object-cover"
+                    fallbackClassName="size-full"
+                  />
+                </div>
               }
             />
           </div>

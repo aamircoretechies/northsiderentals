@@ -1,34 +1,153 @@
-import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useState } from 'react';
+import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router';
+import { toast } from 'sonner';
 import { CollapsibleCard } from '@/pages/express-checkin/components/collapsible-card';
 import { ReservationDetails } from '@/pages/express-checkin/components/reservation-details';
-import { RentalAgreementCard } from './components/rental-agreement-card';
-import { DamageCoverCard } from './components/damage-cover-card';
-import { AuthorizeCreditCardCard } from './components/authorize-credit-card-card';
-import { TermsAndConditionsCard } from './components/terms-and-conditions-card';
+import {
+  fetchBookingByReference,
+  mapBookingDetailToView,
+  type BookingDetailView,
+} from '@/services/bookings';
+import {
+  fetchRcmSignatureList,
+  saveRcmDocumentSignature,
+  type RcmSignatureListItem,
+} from '@/services/rcm-documents';
 import { Button } from '@/components/ui/button';
+import {
+  SignatureAgreementSection,
+  displayTitleForSignatureItem,
+  signatureRowKey,
+} from './components/signature-agreement-section';
+
+function isMeaningfulPngBase64(s: string | null | undefined): boolean {
+  if (!s || !s.trim()) return false;
+  return s.trim().length > 80;
+}
 
 export function SignAgreementsContent() {
   const navigate = useNavigate();
-  
+  const [searchParams] = useSearchParams();
+  const reservationRef = (searchParams.get('reservation_ref') || '').trim();
+
   const [openCard, setOpenCard] = useState<string | null>('booking');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [bookingView, setBookingView] = useState<BookingDetailView | null>(null);
+  const [signatureItems, setSignatureItems] = useState<RcmSignatureListItem[]>(
+    [],
+  );
+  const [agreementSigned, setAgreementSigned] = useState(false);
+  const [signatures, setSignatures] = useState<Record<string, string | null>>({});
+  const [saving, setSaving] = useState(false);
 
   const toggleCard = (id: string) => {
     setOpenCard(openCard === id ? null : id);
   };
 
-  const handleSave = () => {
-    // Save action logic here
-    console.log('Saved sign agreements');
+  const handleSignatureChange = useCallback(
+    (rowKey: string, png: string | null) => {
+      setSignatures((prev) => ({ ...prev, [rowKey]: png }));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!reservationRef) {
+      setLoading(false);
+      setError('Missing reservation reference. Open this page from your booking.');
+      setBookingView(null);
+      setSignatureItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    void (async () => {
+      try {
+        const [bookingRes, sigList] = await Promise.all([
+          fetchBookingByReference(reservationRef),
+          fetchRcmSignatureList(reservationRef),
+        ]);
+
+        if (cancelled) return;
+
+        const data = bookingRes.data;
+        if (!data || typeof data !== 'object') {
+          throw new Error(bookingRes.message || 'No booking data');
+        }
+        setBookingView(mapBookingDetailToView(data as Record<string, unknown>));
+
+        setSignatureItems(sigList.items);
+        setAgreementSigned(sigList.agreement_signed);
+
+        const firstUnsigned = sigList.items.find(
+          (i) => !i.issigned && !i.overcounteronly,
+        );
+        setOpenCard(firstUnsigned ? signatureRowKey(firstUnsigned) : 'booking');
+      } catch (e) {
+        if (cancelled) return;
+        setBookingView(null);
+        setSignatureItems([]);
+        setError(e instanceof Error ? e.message : 'Failed to load agreements');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reservationRef]);
+
+  const handleSave = async () => {
+    if (!reservationRef) return;
+
+    const pending = signatureItems.filter((i) => !i.issigned && !i.overcounteronly);
+    if (pending.length === 0) {
+      toast.info('Nothing to sign here.');
+      return;
+    }
+
+    for (const item of pending) {
+      const key = signatureRowKey(item);
+      if (!isMeaningfulPngBase64(signatures[key])) {
+        toast.error(`Please add your signature for: ${displayTitleForSignatureItem(item)}`);
+        setOpenCard(key);
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+      for (const item of pending) {
+        const key = signatureRowKey(item);
+        const png = signatures[key];
+        if (!png) continue;
+        await saveRcmDocumentSignature({
+          reservation_ref: reservationRef,
+          signature_template_id: item.signaturetemplateid,
+          signature_png: png,
+        });
+      }
+      toast.success('Signatures saved');
+      navigate(-1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save signatures');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="flex flex-col h-full min-h-screen pb-[150px] lg:pb-10 relative px-4 pt-0 lg:px-0 bg-[#f8f9fa]">
-      {/* Header */}
       <div className="flex items-center mb-6 pt-2">
-        <button 
-          onClick={() => navigate(-1)} 
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
           className="p-2 -ml-2 text-black hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />
@@ -38,84 +157,106 @@ export function SignAgreementsContent() {
         </h1>
       </div>
 
-      <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
-        
-        {/* Small Grid: Booking Details (Right side on desktop, top on mobile) */}
-        <div className="col-span-1 flex flex-col lg:order-last">
-          
-          <CollapsibleCard 
-            title="BOOKING DETAILS" 
-            isOpen={openCard === 'booking'} 
-            onToggle={() => toggleCard('booking')}
-          >
-            <ReservationDetails
-              reservationNumber="1815075CA249B36"
-              carImage="https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg"
-              carTitle="MG HS-Excite - 5 seater"
-              carSubtitle="Automatic, 2023 Model"
-              pickupDate="07/03/2026 9:00 AM"
-              pickupLocation="Welshpool, Perth Airport Perth - 102121"
-              returnDate="14/03/2026 9:00 AM"
-              returnLocation="Welshpool, Perth Airport Perth - 102121"
-            />
-          </CollapsibleCard>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+          <Loader2 className="size-10 animate-spin text-[#0061e0]" />
+          <p className="text-sm">Loading agreement…</p>
+        </div>
+      ) : null}
 
-          {/* Desktop Save Button */}
-          <div className="hidden lg:flex mt-2">
-            <Button
-              className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-6 shadow-sm rounded-full"
-              onClick={handleSave}
-            >
-              Save & Continue
-            </Button>
+      {error && !loading ? (
+        <div className="mx-auto max-w-lg flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <AlertCircle className="size-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Cannot load this page</p>
+            <p className="text-destructive/90 mt-1">{error}</p>
           </div>
         </div>
+      ) : null}
 
-        {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
-        <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
-          
-          <CollapsibleCard 
-            title="RENTAL AGREEMENT" 
-            isOpen={openCard === 'rental_agreement'} 
-            onToggle={() => toggleCard('rental_agreement')}
-          >
-            <RentalAgreementCard />
-          </CollapsibleCard>
+      {!loading && !error && bookingView ? (
+        <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+          <div className="col-span-1 flex flex-col lg:order-last">
+            <CollapsibleCard
+              title="BOOKING DETAILS"
+              isOpen={openCard === 'booking'}
+              onToggle={() => toggleCard('booking')}
+            >
+              <ReservationDetails
+                reservationNumber={bookingView.confirmationLabel}
+                carImage={bookingView.carImage}
+                carTitle={bookingView.carName}
+                carSubtitle={bookingView.carSpecs}
+                pickupDate={bookingView.pickupWhen}
+                pickupLocation={[bookingView.pickupWhereName, bookingView.pickupWhereAddress]
+                  .filter(Boolean)
+                  .join(' ')}
+                returnDate={bookingView.returnWhen}
+                returnLocation={[bookingView.returnWhereName, bookingView.returnWhereAddress]
+                  .filter(Boolean)
+                  .join(' ')}
+              />
+            </CollapsibleCard>
 
-          <CollapsibleCard 
-            title="DAMAGE COVER" 
-            isOpen={openCard === 'damage_cover'} 
-            onToggle={() => toggleCard('damage_cover')}
-          >
-            <DamageCoverCard />
-          </CollapsibleCard>
+            {agreementSigned ? (
+              <p className="mt-3 text-center text-[13px] text-emerald-700 font-medium px-2">
+                Agreement signing is complete for this reservation.
+              </p>
+            ) : null}
 
-          <CollapsibleCard 
-            title="AUTHORIZE CREDIT CARD" 
-            isOpen={openCard === 'authorize_cc'} 
-            onToggle={() => toggleCard('authorize_cc')}
-          >
-            <AuthorizeCreditCardCard />
-          </CollapsibleCard>
+            <div className="hidden lg:flex mt-2">
+              <Button
+                className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-6 shadow-sm rounded-full"
+                disabled={saving || agreementSigned}
+                onClick={() => void handleSave()}
+              >
+                {saving ? 'Saving…' : 'Save & Continue'}
+              </Button>
+            </div>
+          </div>
 
-          <CollapsibleCard 
-            title="TERMS AND CONDITIONS" 
-            isOpen={openCard === 'terms'} 
-            onToggle={() => toggleCard('terms')}
-          >
-            <TermsAndConditionsCard />
-          </CollapsibleCard>
-
+          <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
+            {signatureItems.length === 0 ? (
+              <p className="text-[14px] text-[#6b7280] px-1">
+                No signature steps were returned for this booking.
+              </p>
+            ) : (
+              signatureItems.map((item) => {
+                const key = signatureRowKey(item);
+                const title = displayTitleForSignatureItem(item);
+                return (
+                  <CollapsibleCard
+                    key={key}
+                    title={title.toUpperCase()}
+                    isOpen={openCard === key}
+                    onToggle={() => toggleCard(key)}
+                  >
+                    <SignatureAgreementSection
+                      item={item}
+                      onSignatureChange={handleSignatureChange}
+                    />
+                  </CollapsibleCard>
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {/* Mobile Sticky Bottom Floating Save Button */}
+      {!loading && !error && !bookingView && reservationRef ? (
+        <p className="text-center text-[14px] text-[#6b7280]">
+          Booking details could not be loaded. You can still try again from your
+          booking list.
+        </p>
+      ) : null}
+
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#f8f9fa] pt-4 pb-6 px-4 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-gray-100">
         <Button
           className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-md"
-          onClick={handleSave}
+          disabled={saving || agreementSigned || !bookingView}
+          onClick={() => void handleSave()}
         >
-          Save & Continue
+          {saving ? 'Saving…' : 'Save & Continue'}
         </Button>
       </div>
     </div>

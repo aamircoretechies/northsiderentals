@@ -7,6 +7,7 @@ import { CheckEmail } from './pages/extended/check-email';
 import { ResetPasswordChanged } from './pages/extended/reset-password-changed';
 import { ResetPasswordCheckEmail } from './pages/extended/reset-password-check-email';
 import { TwoFactorAuth } from './pages/extended/tfa';
+import { ResetPasswordConfirmPage } from './pages/reset-password-confirm-page';
 import { ResetPasswordPage } from './pages/reset-password-page';
 import { SignInPage } from './pages/signin-page';
 import { SignUpPage } from './pages/signup-page';
@@ -32,6 +33,10 @@ export const authRoutes: RouteObject[] = [
       {
         path: 'reset-password',
         element: <ResetPasswordPage />,
+      },
+      {
+        path: 'reset-password/confirm',
+        element: <ResetPasswordConfirmPage />,
       },
       /* Extended examples */
       {
@@ -71,6 +76,10 @@ export const authRoutes: RouteObject[] = [
       {
         path: 'classic/reset-password',
         element: <ResetPasswordPage />,
+      },
+      {
+        path: 'classic/reset-password/confirm',
+        element: <ResetPasswordConfirmPage />,
       },
       /* Extended examples */
       {

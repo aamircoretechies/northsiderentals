@@ -1,9 +1,18 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { carsService } from '@/services/cars';
+import {
+  buildCreateBookingPayload,
+  mapUiExtrasToPayload,
+  parseTravellerCount,
+  licenseCountryToId,
+  formatDobForApi,
+  extractHostedPaymentUrl,
+  mergeCreateBookingForUiState,
+} from '@/services/booking-payload';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function CarsCheckoutDetailsContent() {
@@ -24,7 +33,7 @@ export function CarsCheckoutDetailsContent() {
     lastName: '',
     email: '',
     phone: '',
-    numberOfPeople: '',
+    numberOfPeople: '1',
     dob: '',
     licenseNumber: '',
     licenseCountry: 'Australia',
@@ -35,8 +44,13 @@ export function CarsCheckoutDetailsContent() {
     city: '',
     stateRegion: '',
     postCode: '',
-    note: ''
+    note: '',
+    flightin: '',
+    flightout: '',
+    arrivalpoint: '',
+    departurepoint: '',
   });
+  const [newsletter, setNewsletter] = useState(true);
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
@@ -94,65 +108,88 @@ export function CarsCheckoutDetailsContent() {
       alert("Please agree to the Terms and Conditions.");
       return;
     }
-    
-    const payload = {
-      vehicle_id: parseInt(carData?.id || '0'),
-      category_id: parseInt(searchParams?.category_id || '0'),
-      pickup_location_id: parseInt(searchParams?.pickup_location_id || '0'),
-      dropoff_location_id: parseInt(searchParams?.dropoff_location_id || '0'),
-      pickup_date: searchParams?.pickup_date || "2026-04-02",
-      pickup_time: searchParams?.pickup_time || "10:00",
-      dropoff_date: searchParams?.dropoff_date || "2026-04-09",
-      dropoff_time: searchParams?.dropoff_time || "10:00",
-      age_id: parseInt(searchParams?.age_id || '0'),
-      number_of_persons: parseInt(formData.numberOfPeople || '1'),
+
+    const missing: string[] = [];
+    if (!formData.firstName.trim()) missing.push('first name');
+    if (!formData.lastName.trim()) missing.push('last name');
+    if (!formData.email.trim()) missing.push('email');
+    if (!formData.phone.trim()) missing.push('phone');
+    if (!formData.numberOfPeople?.trim()) missing.push('number of travellers');
+    if (!formData.dob.trim()) missing.push('date of birth');
+    if (!formData.licenseNumber.trim()) missing.push('licence number');
+    if (missing.length > 0) {
+      alert(`Please complete: ${missing.join(', ')}.`);
+      return;
+    }
+
+    const sp = searchParams || {};
+    const categoryFromSearch = parseInt(String(sp.category_id ?? '0'), 10);
+    const categoryId =
+      categoryFromSearch > 0
+        ? categoryFromSearch
+        : parseInt(String(carData?.vehiclecategorytypeid ?? '0'), 10) || 0;
+
+    const insuranceId =
+      selectedDamageOption && selectedDamageOption !== 'std'
+        ? parseInt(String(selectedDamageOption), 10)
+        : 0;
+
+    const note = formData.note.trim();
+    const payload = buildCreateBookingPayload({
+      bookingType: 'Booking',
+      vehicle_id: parseInt(String(carData?.id ?? '0'), 10),
+      category_id: categoryId,
+      pickup_location_id: parseInt(String(sp.pickup_location_id ?? '0'), 10),
+      dropoff_location_id: parseInt(String(sp.dropoff_location_id ?? '0'), 10),
+      pickup_date: String(sp.pickup_date ?? ''),
+      pickup_time: String(sp.pickup_time ?? ''),
+      dropoff_date: String(sp.dropoff_date ?? ''),
+      dropoff_time: String(sp.dropoff_time ?? ''),
+      age_id: parseInt(String(sp.age_id ?? '0'), 10),
+      campaigncode: String(
+        sp.campaigncode ?? sp.promocode ?? sp.couponcode ?? '',
+      ),
       customer_details: {
-        first_name: formData.firstName || "Customer",
-        last_name: formData.lastName || "Name",
-        email: formData.email || "test@example.com",
-        phone: formData.phone || "+61400000000",
-        date_of_birth: formData.dob || "01/Jan/1990",
-        driver_license_number: formData.licenseNumber || "DLXXXX",
-        country_id: 7
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        date_of_birth: formatDobForApi(formData.dob),
+        driver_license_number: formData.licenseNumber.trim(),
+        country_id: licenseCountryToId(formData.licenseCountry),
       },
-      insurance_id: selectedDamageOption && selectedDamageOption !== 'std' ? parseInt(selectedDamageOption) : 0,
-      extrakmsid: 0,
-      transmission: 1,
-      numbertravelling: parseInt(formData.numberOfPeople || '1'),
-      emailoption: 1,
-      referralid: 0,
-      campaigncode: searchParams?.campaigncode || "",
-      agentcode: "RCMAgent",
-      agentname: "",
-      agentemail: "",
-      agentrefno: "",
-      agentcollectedamount: 1,
-      rental_source_id: 73,
-      remark: formData.note,
-      flightin: "",
-      flightout: "",
-      arrivalpoint: "",
-      departurepoint: "",
-      areaofuseid: 0,
-      newsletter: true,
-      refno: "",
-      relocationspecialid: 1,
-      packageid: 1,
-      rateperiod_typeid: 1,
-      urlid: 1,
-      extra_fees: extras?.filter((e: any) => e.type === 'quantity' ? e.quantity > 0 : e.selected).map((e: any) => ({
-        id: parseInt(e.id || '0'),
-        qty: e.type === 'quantity' ? e.quantity : 1
-      })) || [],
+      number_of_persons: parseTravellerCount(formData.numberOfPeople),
+      insurance_id: Number.isFinite(insuranceId) ? insuranceId : 0,
+      extra_fees: mapUiExtrasToPayload(extras ?? []),
       extradriver: [],
-      booking_type: "Booking",
-      comments: formData.note
-    };
+      remark: note,
+      comments: note,
+      flightin: formData.flightin.trim(),
+      flightout: formData.flightout.trim(),
+      arrivalpoint: formData.arrivalpoint.trim(),
+      departurepoint: formData.departurepoint.trim(),
+      newsletter,
+      transmission: 1,
+      rateperiod_typeid: carData?.rateperiod_typeid ?? 1,
+    });
 
     setLoading(true);
     try {
       const response = await carsService.createBooking(payload);
-      navigate('/cars/checkout/payment', { state: { booking: response, formData, carData, searchParams, locations } });
+      const paymentUrl = extractHostedPaymentUrl(response);
+      if (paymentUrl) {
+        window.location.assign(paymentUrl);
+        return;
+      }
+      navigate('/cars/checkout/success', {
+        state: {
+          booking: mergeCreateBookingForUiState(response),
+          formData,
+          carData,
+          searchParams,
+          locations,
+        },
+      });
     } catch (e: any) {
       console.error(e);
       alert(e.message || 'Failed to create booking');
@@ -205,14 +242,19 @@ export function CarsCheckoutDetailsContent() {
               placeholder="Phone (with country code)"
               className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
             />
-            <div className="relative">
-              <select name="numberOfPeople" value={formData.numberOfPeople} onChange={handleChange} className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10">
-                <option value="" disabled>Number of People Traveling</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5+">5+</option>
+            <div className="relative md:col-span-1">
+              <span className="sr-only">Number of people traveling</span>
+              <select
+                name="numberOfPeople"
+                value={formData.numberOfPeople}
+                onChange={handleChange}
+                className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+              >
+                <option value="1">1 person</option>
+                <option value="2">2 people</option>
+                <option value="3">3 people</option>
+                <option value="4">4 people</option>
+                <option value="5+">5+ people</option>
               </select>
               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
                 <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -228,22 +270,21 @@ export function CarsCheckoutDetailsContent() {
           <h2 className="text-[#6b7280] font-bold text-[13px] tracking-wide uppercase">Additional Details</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="relative">
+            <div className="relative flex flex-col gap-1">
+              <label
+                htmlFor="dob"
+                className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide"
+              >
+                Date of birth
+              </label>
               <input
-                type="text"
+                id="dob"
+                type="date"
                 name="dob"
                 value={formData.dob}
                 onChange={handleChange}
-                placeholder="Date of Birth"
-                onFocus={(e) => (e.target.type = 'date')}
-                onBlur={(e) => {
-                  if (!e.target.value) e.target.type = 'text';
-                }}
-                className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
-                <Calendar size={18} />
-              </div>
             </div>
 
             <input
@@ -270,22 +311,21 @@ export function CarsCheckoutDetailsContent() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative flex flex-col gap-1">
+              <label
+                htmlFor="licenseExpiry"
+                className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide"
+              >
+                Licence expiry (optional)
+              </label>
               <input
-                type="text"
+                id="licenseExpiry"
+                type="date"
                 name="licenseExpiry"
                 value={formData.licenseExpiry}
                 onChange={handleChange}
-                placeholder="License Expiry"
-                onFocus={(e) => (e.target.type = 'date')}
-                onBlur={(e) => {
-                  if (!e.target.value) e.target.type = 'text';
-                }}
-                className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
-                <Calendar size={18} />
-              </div>
             </div>
 
             <div className="relative">
@@ -352,11 +392,66 @@ export function CarsCheckoutDetailsContent() {
               name="note"
               value={formData.note}
               onChange={handleChange}
-              placeholder="Add a note"
+              placeholder="Comments / special requests (maps to remark & comments)"
               rows={4}
               className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none resize-none md:col-span-3"
             ></textarea>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <h2 className="text-[#6b7280] font-bold text-[13px] tracking-wide uppercase">
+            Travel details (optional)
+          </h2>
+          <p className="text-[13px] text-muted-foreground -mt-2">
+            Flight and arrival information for the booking API when you have it.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input
+              type="text"
+              name="flightin"
+              value={formData.flightin}
+              onChange={handleChange}
+              placeholder="Inbound flight (e.g. VB123)"
+              className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+            />
+            <input
+              type="text"
+              name="flightout"
+              value={formData.flightout}
+              onChange={handleChange}
+              placeholder="Outbound flight"
+              className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+            />
+            <input
+              type="text"
+              name="arrivalpoint"
+              value={formData.arrivalpoint}
+              onChange={handleChange}
+              placeholder="Arrival point"
+              className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+            />
+            <input
+              type="text"
+              name="departurepoint"
+              value={formData.departurepoint}
+              onChange={handleChange}
+              placeholder="Departure point"
+              className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 px-1">
+          <Checkbox
+            id="newsletter"
+            checked={newsletter}
+            onCheckedChange={(checked) => setNewsletter(!!checked)}
+            className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]"
+          />
+          <label htmlFor="newsletter" className="text-[13px] text-gray-700 leading-tight">
+            Email me news and offers from Northside Rentals
+          </label>
         </div>
 
         {/* Notice & Terms */}

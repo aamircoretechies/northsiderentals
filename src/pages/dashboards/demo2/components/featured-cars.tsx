@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { toAbsoluteUrl } from '@/lib/helpers';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 
 export interface FeaturedCar {
   id: number | string;
@@ -23,7 +24,7 @@ interface FeaturedCarsProps {
 
 export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProps) {
   const navigate = useNavigate();
-  console.log('Demo2 FeaturedCars received:', cars);
+  const { data: dashboardData } = useDashboardData();
 
   const carsToRender: FeaturedCar[] = cars || [];
 
@@ -51,15 +52,27 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
     const nextWeek = new Date(today);
     nextWeek.setDate(today.getDate() + 8);
 
+    const locList = locations?.length ? locations : dashboardData?.locations;
+    const defaultLoc =
+      locList?.find((l: { isdefault?: boolean }) => l.isdefault)?.id ??
+      locList?.[0]?.id;
+    const ages = dashboardData?.driverages;
+    const defaultAge =
+      ages?.find((a) => a.isdefault)?.id ?? ages?.[0]?.id ?? 0;
+
+    if (!defaultLoc || !defaultAge) {
+      return;
+    }
+
     const defaultSearchParams = {
-      pickup_location_id: locations?.[0]?.id || 1,
-      dropoff_location_id: locations?.[0]?.id || 1,
+      pickup_location_id: Number(defaultLoc),
+      dropoff_location_id: Number(defaultLoc),
       pickup_date: tomorrow.toISOString().split('T')[0],
-      pickup_time: "09:00",
+      pickup_time: '09:00',
       dropoff_date: nextWeek.toISOString().split('T')[0],
-      dropoff_time: "09:00",
+      dropoff_time: '09:00',
       category_id: 0,
-      age_id: 3, // Default to 25+
+      age_id: Number(defaultAge),
     };
 
     const finalSearchParams = searchParams || defaultSearchParams;
@@ -69,9 +82,9 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
         car: {
           ...car,
           searchParams: finalSearchParams,
-          locations: locations || []
-        }
-      }
+          locations: locList ?? [],
+        },
+      },
     });
   };
 

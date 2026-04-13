@@ -3,7 +3,12 @@ import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -23,6 +28,12 @@ import {
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isClassic = location.pathname.includes('/classic/');
+  const resetPasswordPath = isClassic
+    ? '/auth/classic/reset-password'
+    : '/auth/reset-password';
+  const signinPath = isClassic ? '/auth/classic/signin' : '/auth/signin';
   const [searchParams] = useSearchParams();
   const {} = useAuth();
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -107,7 +118,7 @@ export function ChangePasswordPage() {
 
       // Redirect to login page after a successful password reset
       setTimeout(() => {
-        navigate('/auth/signin');
+        navigate(signinPath);
       }, 2000);
     } catch (err) {
       console.error('Password reset error:', err);
@@ -134,20 +145,19 @@ export function ChangePasswordPage() {
         <div className="bg-muted/50 p-4 rounded-lg border border-border">
           <h3 className="font-medium mb-2">How to reset your password:</h3>
           <ol className="list-decimal ms-4 text-sm space-y-1 text-muted-foreground">
-            <li>Request a password reset link via email</li>
+            <li>Request a verification code via email</li>
             <li>Check your email inbox and spam folder</li>
-            <li>Click the reset link in the email you receive</li>
-            <li>Create a new password on the page that opens</li>
+            <li>Enter the code and choose a new password</li>
           </ol>
         </div>
 
         <Button asChild className="w-full">
-          <Link to="/auth/request-reset">Request a Reset Link</Link>
+          <Link to={resetPasswordPath}>Forgot password (email code)</Link>
         </Button>
 
         <div className="text-center text-sm">
           <span className="text-muted-foreground">Remember your password?</span>{' '}
-          <Link to="/auth/signin" className="text-primary hover:underline">
+          <Link to={signinPath} className="text-primary hover:underline">
             Sign In
           </Link>
         </div>
@@ -265,7 +275,7 @@ export function ChangePasswordPage() {
           </Button>
 
           <div className="text-center text-sm">
-            <Link to="/auth/signin" className="text-primary hover:underline">
+            <Link to={signinPath} className="text-primary hover:underline">
               Back to Sign In
             </Link>
           </div>

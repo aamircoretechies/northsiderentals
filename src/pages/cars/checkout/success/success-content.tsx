@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '@/components/ui/button';
+import { normalizeMediaUrl } from '@/lib/helpers';
 
 export function CarsCheckoutSuccessContent() {
   const navigate = useNavigate();
@@ -27,19 +28,24 @@ export function CarsCheckoutSuccessContent() {
     return loc ? loc.location.split(' - ')[0] : undefined; // taking first portion for cleaner view if it has a post code
   };
 
-  const pDateFormatted = formatDateTime(searchParams?.pickup_date, searchParams?.pickup_time) || "07/03/2026 9:00 AM";
-  const pLocationFormatted = getLocationName(searchParams?.pickup_location_id) || "Welshpool, Perth Airport";
-  const rDateFormatted = formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) || "08/03/2026 9:00 AM";
-  const rLocationFormatted = getLocationName(searchParams?.dropoff_location_id) || "Welshpool, Perth Airport";
+  const pDateFormatted =
+    formatDateTime(searchParams?.pickup_date, searchParams?.pickup_time) ?? '—';
+  const pLocationFormatted =
+    getLocationName(searchParams?.pickup_location_id) ?? '—';
+  const rDateFormatted =
+    formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) ?? '—';
+  const rLocationFormatted =
+    getLocationName(searchParams?.dropoff_location_id) ?? '—';
 
   const getDays = (pDate?: string, rDate?: string) => {
-    if (!pDate || !rDate) return 3; // fallback 3
+    if (!pDate || !rDate) return 1;
     const d1 = new Date(pDate);
     const d2 = new Date(rDate);
     const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
     return diff > 0 ? diff : 1;
   };
   const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
+  const carImg = normalizeMediaUrl(carData?.image_url ?? '');
 
   return (
     <div className="flex flex-col bg-white relative max-w-[600px] mx-auto  text-center justify-between">
@@ -54,7 +60,9 @@ export function CarsCheckoutSuccessContent() {
         {/* Headings */}
         <div className="flex flex-col gap-2 mt-2">
           <h1 className="text-[#0061e0] font-bold text-[22px] sm:text-[24px]">Booking Request Submitted</h1>
-          <h2 className="text-black font-extrabold text-[18px]">Booking ID: {booking?.booking_id || "1234567890"}</h2>
+          <h2 className="text-black font-extrabold text-[18px]">
+            Booking ID: {booking?.booking_id ?? '—'}
+          </h2>
         </div>
 
         {/* Description */}
@@ -66,13 +74,22 @@ export function CarsCheckoutSuccessContent() {
         <div className="bg-[#f0f4f8] rounded-[16px] p-5 flex flex-col gap-5 w-full text-left mt-4">
 
           <div className="flex items-center gap-4">
-            <img
-              src={carData?.image_url || "https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg"}
-              alt={carData?.title || "Nissan GT-R"}
-              className="w-[80px] h-[80px] object-cover rounded-[12px] shadow-sm"
-            />
+            {carImg ? (
+              <img
+                src={carImg}
+                alt={carData?.title || 'Vehicle'}
+                loading="lazy"
+                className="w-[80px] h-[80px] object-contain rounded-[12px] bg-white p-1 shadow-sm"
+              />
+            ) : (
+              <div className="w-[80px] h-[80px] rounded-[12px] bg-white flex items-center justify-center text-xs text-muted-foreground shadow-sm">
+                No image
+              </div>
+            )}
             <div className="flex flex-col">
-              <h3 className="text-black font-extrabold text-[18px]">{carData?.title || "Nissan GT-R"}</h3>
+              <h3 className="text-black font-extrabold text-[18px]">
+                {carData?.title ?? 'Vehicle'}
+              </h3>
               <span className="text-[#333] text-[14px]">Rental: {rentalDays} days</span>
             </div>
           </div>

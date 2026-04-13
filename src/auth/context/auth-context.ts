@@ -10,6 +10,7 @@ export const AuthContext = createContext<{
   user?: UserModel;
   setUser: React.Dispatch<React.SetStateAction<UserModel | undefined>>;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogleIdToken: (idToken: string) => Promise<void>;
   register: (
     email: string,
     password: string,
@@ -34,6 +35,7 @@ export const AuthContext = createContext<{
   saveAuth: () => {},
   setUser: () => {},
   login: async () => {},
+  loginWithGoogleIdToken: async () => {},
   register: async () => {},
   requestPasswordReset: async () => {},
   resetPassword: async () => {},

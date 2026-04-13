@@ -1,4 +1,4 @@
-import { toAbsoluteUrl } from '@/lib/helpers';
+import { normalizeMediaUrl } from '@/lib/helpers';
 
 export interface ReservationDetailsProps {
   reservationNumber: string;
@@ -25,11 +25,15 @@ export function ReservationDetails({
     <div className="flex flex-col relative w-full items-stretch">
       <div className="flex gap-4 mb-4">
         <div className="w-[120px] h-[80px] bg-[#f4f7fa] rounded-[12px] flex items-center justify-center p-2 shrink-0">
-          <img
-            src={toAbsoluteUrl(carImage)}
-            alt="Car"
-            className="max-w-full max-h-full object-contain mix-blend-darken"
-          />
+          {normalizeMediaUrl(carImage) ? (
+            <img
+              src={normalizeMediaUrl(carImage)}
+              alt="Car"
+              className="max-w-full max-h-full object-contain mix-blend-darken"
+            />
+          ) : (
+            <span className="text-[12px] text-[#8692a6]">No image</span>
+          )}
         </div>
         <div className="flex flex-col justify-center">
           <span className="text-[#6b7280] text-[13px] mb-0.5">Reservation Number:</span>

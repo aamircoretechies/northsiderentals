@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import {
@@ -8,7 +8,7 @@ import {
   Clock,
   User,
   Tag,
-  ChevronsRight
+  ChevronsRight,
 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -23,44 +23,78 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { format, parse } from 'date-fns';
+import { addDays, format, parse, startOfDay } from 'date-fns';
 import { useCarSearch } from '@/hooks/use-car-search';
-
-interface Location {
-  id: number | string;
-  location: string;
-}
-
-interface DriverAge {
-  id: number | string;
-  driverage: string;
-}
+import {
+  effectiveDropoffWindow,
+  effectivePickupWindow,
+  filter12hTimeOptions,
+  pickOfficeSlot,
+} from '@/lib/office-times';
+import type { DriverAge, Location, OfficeTimeRecord } from '@/services/dashboard';
 
 interface CarHireWidgetProps {
   locations?: Location[];
   driverAges?: DriverAge[];
+  officetimes?: OfficeTimeRecord[];
 }
 
-export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidgetProps) {
-  const [pickupLocation, setPickupLocation] = useState<string>(String(locations?.[0]?.id ?? ''));
-  const [returnLocation, setReturnLocation] = useState<string>(String(locations?.[0]?.id ?? ''));
-  const [selectedDriverAge, setSelectedDriverAge] = useState<string>(String(driverAges?.[0]?.id ?? ''));
+const ALL_TIME_OPTIONS = [
+  '05:00 AM',
+  '06:00 AM',
+  '07:00 AM',
+  '08:00 AM',
+  '09:00 AM',
+  '10:00 AM',
+  '11:00 AM',
+  '12:00 PM',
+  '01:00 PM',
+  '02:00 PM',
+  '03:00 PM',
+  '04:00 PM',
+  '05:00 PM',
+  '06:00 PM',
+  '07:00 PM',
+  '08:00 PM',
+  '09:00 PM',
+  '10:00 PM',
+  '11:00 PM',
+];
+
+export function CarHireWidget({
+  locations = [],
+  driverAges = [],
+  officetimes = [],
+}: CarHireWidgetProps) {
+  const [pickupLocation, setPickupLocation] = useState('');
+  const [returnLocation, setReturnLocation] = useState('');
+  const [selectedDriverAge, setSelectedDriverAge] = useState('');
 
   useEffect(() => {
-    if (locations.length > 0 && !pickupLocation) {
-      setPickupLocation(String(locations[0].id));
-      setReturnLocation(String(locations[0].id));
+    if (!locations.length) {
+      setPickupLocation('');
+      setReturnLocation('');
+      return;
     }
-  }, [locations, pickupLocation]);
+    const def = locations.find((l) => l.isdefault)?.id ?? locations[0].id;
+    const s = String(def);
+    setPickupLocation(s);
+    setReturnLocation(s);
+  }, [locations]);
 
   useEffect(() => {
-    if (driverAges.length > 0 && !selectedDriverAge) {
-      setSelectedDriverAge(String(driverAges[0].id));
+    if (!driverAges.length) {
+      setSelectedDriverAge('');
+      return;
     }
-  }, [driverAges, selectedDriverAge]);
+    const def = driverAges.find((a) => a.isdefault)?.id ?? driverAges[0].id;
+    setSelectedDriverAge(String(def));
+  }, [driverAges]);
 
-  const [pickupDate, setPickupDate] = useState<Date>();
-  const [returnDate, setReturnDate] = useState<Date>();
+  const [pickupDate, setPickupDate] = useState<Date>(() => startOfDay(new Date()));
+  const [returnDate, setReturnDate] = useState<Date>(() =>
+    addDays(startOfDay(new Date()), 2),
+  );
   const [pickupTime, setPickupTime] = useState('09:00 AM');
   const [returnTime, setReturnTime] = useState('09:00 AM');
   const [promoCode, setPromoCode] = useState('');
@@ -68,23 +102,87 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
   const navigate = useNavigate();
   const { searchCars, loading } = useCarSearch();
 
+  const pickupLoc = useMemo(
+    () => locations.find((l) => String(l.id) === pickupLocation),
+    [locations, pickupLocation],
+  );
+
+  const minPickupDate = useMemo(() => {
+    const n = pickupLoc?.noticerequired_numberofdays ?? 0;
+    return addDays(startOfDay(new Date()), n);
+  }, [pickupLoc]);
+
+  const minReturnDate = useMemo(() => {
+    const m = pickupLoc?.minimumbookingday ?? 0;
+    return addDays(startOfDay(pickupDate), m);
+  }, [pickupLoc, pickupDate]);
+
+  const pickupSlot = useMemo(() => {
+    if (!pickupLocation || !officetimes.length) return null;
+    return pickOfficeSlot(officetimes, Number(pickupLocation), pickupDate);
+  }, [officetimes, pickupLocation, pickupDate]);
+
+  const returnSlot = useMemo(() => {
+    if (!returnLocation || !officetimes.length) return null;
+    return pickOfficeSlot(officetimes, Number(returnLocation), returnDate);
+  }, [officetimes, returnLocation, returnDate]);
+
+  const pickupTimeOptions = useMemo(() => {
+    if (!pickupSlot) return ALL_TIME_OPTIONS;
+    const w = effectivePickupWindow(pickupSlot);
+    return filter12hTimeOptions(ALL_TIME_OPTIONS, w.start, w.end);
+  }, [pickupSlot]);
+
+  const returnTimeOptions = useMemo(() => {
+    if (!returnSlot) return ALL_TIME_OPTIONS;
+    const w = effectiveDropoffWindow(returnSlot);
+    return filter12hTimeOptions(ALL_TIME_OPTIONS, w.start, w.end);
+  }, [returnSlot]);
+
+  useEffect(() => {
+    if (!pickupTimeOptions.includes(pickupTime)) {
+      setPickupTime(pickupTimeOptions[0] ?? '09:00 AM');
+    }
+  }, [pickupTimeOptions, pickupTime]);
+
+  useEffect(() => {
+    if (!returnTimeOptions.includes(returnTime)) {
+      setReturnTime(returnTimeOptions[0] ?? '09:00 AM');
+    }
+  }, [returnTimeOptions, returnTime]);
+
+  useEffect(() => {
+    if (!pickupDate || !returnDate) return;
+    if (returnDate < minReturnDate) {
+      setReturnDate(minReturnDate);
+    }
+  }, [pickupDate, returnDate, minReturnDate]);
+
   const handleFindCars = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!pickupDate || !returnDate) return;
+    if (!pickupLocation || !returnLocation || !selectedDriverAge) return;
+    if (returnDate < minReturnDate) return;
 
     try {
-      const formattedPickupTime = format(parse(pickupTime, "hh:mm a", new Date()), "HH:mm");
-      const formattedReturnTime = format(parse(returnTime, "hh:mm a", new Date()), "HH:mm");
+      const formattedPickupTime = format(
+        parse(pickupTime, 'hh:mm a', new Date()),
+        'HH:mm',
+      );
+      const formattedReturnTime = format(
+        parse(returnTime, 'hh:mm a', new Date()),
+        'HH:mm',
+      );
 
       const params = {
-        pickup_location_id: parseInt(pickupLocation),
-        dropoff_location_id: parseInt(returnLocation),
-        pickup_date: format(pickupDate, "yyyy-MM-dd"),
+        pickup_location_id: parseInt(pickupLocation, 10),
+        dropoff_location_id: parseInt(returnLocation, 10),
+        pickup_date: format(pickupDate, 'yyyy-MM-dd'),
         pickup_time: formattedPickupTime,
-        dropoff_date: format(returnDate, "yyyy-MM-dd"),
+        dropoff_date: format(returnDate, 'yyyy-MM-dd'),
         dropoff_time: formattedReturnTime,
         category_id: 0,
-        age_id: parseInt(selectedDriverAge),
+        age_id: parseInt(selectedDriverAge, 10),
         campaigncode: promoCode,
         promocode: promoCode,
         couponcode: promoCode,
@@ -95,101 +193,117 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
         state: {
           searchData: result,
           searchParams: params,
-          locations: locations
-        }
+          locations,
+        },
       });
     } catch (error) {
-      console.error("Failed to search cars:", error);
+      console.error('Failed to search cars:', error);
     }
   };
 
-  const timeOptions = [
-    '05:00 AM', '06:00 AM', '07:00 AM', '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
-    '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM',
-    '06:00 PM', '07:00 PM', '08:00 PM', '09:00 PM', '10:00 PM', '11:00 PM',
-  ];
+  const canSearch =
+    Boolean(pickupLocation) &&
+    Boolean(returnLocation) &&
+    Boolean(selectedDriverAge) &&
+    Boolean(pickupDate) &&
+    Boolean(returnDate) &&
+    returnDate >= minReturnDate;
 
   return (
-    <div className="flex flex-col gap-4 font-sans mx-auto w-full">
-      <div className="bg-[#ffc107] rounded-[24px] p-6 shadow-sm text-black relative flex flex-col gap-6 w-full">
+    <div className="mx-auto flex w-full flex-col gap-4 font-sans">
+      <div className="relative flex w-full flex-col gap-6 rounded-[24px] bg-[#ffc107] p-6 text-black shadow-sm">
         <h2 className="text-[22px] font-extrabold text-black">Car Hire</h2>
 
         <div className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Pickup Location */}
-            <Select value={pickupLocation} onValueChange={setPickupLocation}>
-              <SelectTrigger className="bg-white rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer border-none shadow-none h-auto w-full focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors text-left font-sans">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="text-[#0061e0] shrink-0">
-                    <MapPin className="w-6 h-6" strokeWidth={2.5} />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <Select
+              value={pickupLocation || undefined}
+              onValueChange={setPickupLocation}
+              disabled={!locations.length}
+            >
+              <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <div className="shrink-0 text-[#0061e0]">
+                    <MapPin className="h-6 w-6" strokeWidth={2.5} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-0.5 truncate">Pickup Location</div>
-                    <div className="text-[16px] font-bold text-black truncate">
-                      <SelectValue placeholder="Select Location" />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                      Pickup Location
+                    </div>
+                    <div className="truncate text-[16px] font-bold text-black">
+                      <SelectValue
+                        placeholder={
+                          locations.length ? 'Select location' : 'No locations'
+                        }
+                      />
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" strokeWidth={2.5} />
+                <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
               </SelectTrigger>
               <SelectContent>
-                {locations.length > 0 ? (
-                  locations.map((location) => (
-                    <SelectItem key={String(location.id)} value={String(location.id)}>{location.location}</SelectItem>
-                  ))
-                ) : (
-                  <>
-                    <SelectItem value="1">Welshpool Perth Airport</SelectItem>
-                    <SelectItem value="2">Perth City</SelectItem>
-                  </>
-                )}
+                {locations.map((location) => (
+                  <SelectItem key={String(location.id)} value={String(location.id)}>
+                    {location.location}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
-            {/* Return Location */}
-            <Select value={returnLocation} onValueChange={setReturnLocation}>
-              <SelectTrigger className="bg-white rounded-xl p-4 flex items-center justify-between gap-4 cursor-pointer border-none shadow-none h-auto w-full focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors text-left font-sans">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="text-[#0061e0] shrink-0">
-                    <MapPin className="w-6 h-6" strokeWidth={2.5} />
+            <Select
+              value={returnLocation || undefined}
+              onValueChange={setReturnLocation}
+              disabled={!locations.length}
+            >
+              <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                <div className="flex min-w-0 flex-1 items-center gap-4">
+                  <div className="shrink-0 text-[#0061e0]">
+                    <MapPin className="h-6 w-6" strokeWidth={2.5} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-0.5 truncate">Return Location</div>
-                    <div className="text-[16px] font-bold text-black truncate">
-                      <SelectValue placeholder="Select Location" />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                      Return Location
+                    </div>
+                    <div className="truncate text-[16px] font-bold text-black">
+                      <SelectValue
+                        placeholder={
+                          locations.length ? 'Select location' : 'No locations'
+                        }
+                      />
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" strokeWidth={2.5} />
+                <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
               </SelectTrigger>
               <SelectContent>
-                {locations.length > 0 ? (
-                  locations.map((location) => (
-                    <SelectItem key={String(location.id)} value={String(location.id)}>{location.location}</SelectItem>
-                  ))
-                ) : (
-                  <>
-                    <SelectItem value="1">Welshpool Perth Airport</SelectItem>
-                    <SelectItem value="2">Perth City</SelectItem>
-                  </>
-                )}
+                {locations.map((location) => (
+                  <SelectItem key={String(location.id)} value={String(location.id)}>
+                    {location.location}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Pickup Date & Time */}
           <div className="flex flex-col gap-2">
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
-                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1 mb-1">Pickup Date & Time</div>
-                <div className="bg-white rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center sm:h-[64px] shadow-sm overflow-hidden border border-transparent">
+                <div className="mb-1 pl-1 text-[13px] font-bold uppercase tracking-widest text-black">
+                  Pickup Date & Time
+                </div>
+                <div className="flex flex-col items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="flex-1 flex items-center gap-3 px-4 py-3 sm:py-0 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
-                        <CalendarIcon className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
-                        <span className="font-bold text-black text-[16px] truncate">
-                          {pickupDate ? format(pickupDate, "dd/MM/yyyy") : "Select Date"}
+                      <button
+                        type="button"
+                        className="flex h-full flex-1 items-center gap-3 border-none px-4 py-3 text-left hover:bg-gray-50 focus:outline-none sm:py-0"
+                      >
+                        <CalendarIcon
+                          className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
+                          strokeWidth={2}
+                        />
+                        <span className="truncate text-[16px] font-bold text-black">
+                          {pickupDate ? format(pickupDate, 'dd/MM/yyyy') : 'Select Date'}
                         </span>
                       </button>
                     </PopoverTrigger>
@@ -197,42 +311,53 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
                       <Calendar
                         mode="single"
                         selected={pickupDate}
-                        onSelect={setPickupDate}
+                        onSelect={(d) => d && setPickupDate(startOfDay(d))}
                         initialFocus
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        disabled={(date) => startOfDay(date) < minPickupDate}
                       />
                     </PopoverContent>
                   </Popover>
 
-                  <div className="h-[1px] w-full sm:h-[60%] sm:w-[1px] bg-amber-400/30"></div>
+                  <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
                   <Select value={pickupTime} onValueChange={setPickupTime}>
-                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 py-3 sm:py-0 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
-                      <Clock className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
-                      <span className="font-bold text-black text-[16px] truncate">
+                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
+                      <Clock
+                        className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
+                        strokeWidth={2}
+                      />
+                      <span className="truncate text-[16px] font-bold text-black">
                         <SelectValue placeholder="Time" />
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      {timeOptions.map((time) => (
-                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                      {pickupTimeOptions.map((time) => (
+                        <SelectItem key={time} value={time}>
+                          {time}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-
               <div>
-                {/* Return Date & Time */}
-                <div className="text-[13px] font-bold text-black uppercase tracking-widest pl-1 mb-1">Return Date & Time</div>
-                <div className="bg-white rounded-xl flex flex-col sm:flex-row items-stretch sm:items-center sm:h-[64px] shadow-sm overflow-hidden border border-transparent">
+                <div className="mb-1 pl-1 text-[13px] font-bold uppercase tracking-widest text-black">
+                  Return Date & Time
+                </div>
+                <div className="flex flex-col items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="flex-1 flex items-center gap-3 px-4 py-3 sm:py-0 h-full hover:bg-gray-50 transition-colors text-left border-none focus:outline-none">
-                        <CalendarIcon className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
-                        <span className="font-bold text-black text-[16px] truncate">
-                          {returnDate ? format(returnDate, "dd/MM/yyyy") : "Select Date"}
+                      <button
+                        type="button"
+                        className="flex h-full flex-1 items-center gap-3 border-none px-4 py-3 text-left hover:bg-gray-50 focus:outline-none sm:py-0"
+                      >
+                        <CalendarIcon
+                          className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
+                          strokeWidth={2}
+                        />
+                        <span className="truncate text-[16px] font-bold text-black">
+                          {returnDate ? format(returnDate, 'dd/MM/yyyy') : 'Select Date'}
                         </span>
                       </button>
                     </PopoverTrigger>
@@ -240,25 +365,30 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
                       <Calendar
                         mode="single"
                         selected={returnDate}
-                        onSelect={setReturnDate}
+                        onSelect={(d) => d && setReturnDate(startOfDay(d))}
                         initialFocus
-                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                        disabled={(date) => startOfDay(date) < minReturnDate}
                       />
                     </PopoverContent>
                   </Popover>
 
-                  <div className="h-[1px] w-full sm:h-[60%] sm:w-[1px] bg-amber-400/30"></div>
+                  <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
                   <Select value={returnTime} onValueChange={setReturnTime}>
-                    <SelectTrigger className="flex-[0.8] flex items-center gap-3 px-4 py-3 sm:py-0 h-full bg-transparent border-none shadow-none focus:ring-0 [&>svg:last-child]:hidden hover:bg-gray-50 transition-colors cursor-pointer text-left font-sans rounded-none">
-                      <Clock className="w-[22px] h-[22px] text-[#0061e0] shrink-0" strokeWidth={2} />
-                      <span className="font-bold text-black text-[16px] truncate">
+                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
+                      <Clock
+                        className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
+                        strokeWidth={2}
+                      />
+                      <span className="truncate text-[16px] font-bold text-black">
                         <SelectValue placeholder="Time" />
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      {timeOptions.map((time) => (
-                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                      {returnTimeOptions.map((time) => (
+                        <SelectItem key={time} value={time}>
+                          {time}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -266,60 +396,66 @@ export function CarHireWidget({ locations = [], driverAges = [] }: CarHireWidget
               </div>
             </div>
 
-            {/* Driver's Age */}
             <div className="mt-1">
-              <Select value={selectedDriverAge} onValueChange={setSelectedDriverAge}>
-                <SelectTrigger className="bg-transparent border-none shadow-none flex items-center gap-3 w-auto p-0 focus:ring-0 hover:bg-transparent [&>svg:last-child]:hidden cursor-pointer h-auto pl-1">
-                  <User className="w-7 h-7 text-black shrink-0" strokeWidth={2} />
-                  <span className="text-[16px] text-black">Driver's Age</span>
-                  <span className="text-[18px] font-extrabold text-black ml-1">
-                    <SelectValue placeholder="25+" />
+              <Select
+                value={selectedDriverAge || undefined}
+                onValueChange={setSelectedDriverAge}
+                disabled={!driverAges.length}
+              >
+                <SelectTrigger className="h-auto w-auto cursor-pointer gap-3 border-none bg-transparent p-0 pl-1 shadow-none hover:bg-transparent focus:ring-0 [&>svg:last-child]:hidden">
+                  <User className="h-7 w-7 shrink-0 text-black" strokeWidth={2} />
+                  <span className="text-[16px] text-black">Driver&apos;s Age</span>
+                  <span className="ml-1 text-[18px] font-extrabold text-black">
+                    <SelectValue placeholder="Select" />
                   </span>
-                  <ChevronDown className="w-5 h-5 text-black shrink-0 ml-1" />
+                  <ChevronDown className="ml-1 h-5 w-5 shrink-0 text-black" />
                 </SelectTrigger>
                 <SelectContent>
-                  {driverAges.length > 0 ? (
-                    driverAges.map((age, index) => {
-                      const isLast = index === driverAges.length - 1;
-                      const ageStr = String(age.driverage);
-                      const displayAge = isLast && !ageStr.endsWith('+')
-                        ? `${ageStr}+`
-                        : ageStr;
-                      return (
-                        <SelectItem key={String(age.id)} value={String(age.id)}>{displayAge}</SelectItem>
-                      );
-                    })
-                  ) : (
-                    <>
-                      <SelectItem value="18-20">18-20</SelectItem>
-                      <SelectItem value="21-24">21-24</SelectItem>
-                      <SelectItem value="25+">25+</SelectItem>
-                    </>
-                  )}
+                  {driverAges.map((age, index) => {
+                    const isLast = index === driverAges.length - 1;
+                    const ageStr = String(age.driverage);
+                    const displayAge =
+                      isLast && !ageStr.endsWith('+') ? `${ageStr}+` : ageStr;
+                    return (
+                      <SelectItem key={String(age.id)} value={String(age.id)}>
+                        {displayAge}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Promo Code */}
-            <div className="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm h-[64px]">
-              <Tag className="w-6 h-6 text-[#0061e0] shrink-0" strokeWidth={2} />
-              <div className="flex-1 w-full">
+            <div className="flex h-[64px] items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
+              <Tag className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2} />
+              <div className="w-full flex-1">
                 <input
                   type="text"
                   placeholder="Apply Promo Code (If Any...)"
                   value={promoCode}
                   onChange={(e) => setPromoCode(e.target.value)}
-                  className="w-full bg-transparent border-none p-0 focus:outline-none focus:ring-0 text-[16px] text-black placeholder:text-gray-500 font-medium"
+                  className="w-full border-none bg-transparent p-0 text-[16px] font-medium text-black placeholder:text-gray-500 focus:outline-none focus:ring-0"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Find Cars Button */}
-        <button onClick={handleFindCars} disabled={loading || !pickupDate || !returnDate} className="w-full bg-[#0067B2] hover:bg-[#0067B2] transition-colors rounded-full py-5 flex items-center justify-center gap-2 shadow-sm font-sans mt-2 group border-none cursor-pointer disabled:opacity-100 disabled:cursor-not-allowed">
-          <span className="text-[20px] font-bold text-black">{loading ? 'Searching...' : 'Find Cars'}</span>
-          {!loading && <ChevronsRight className="w-7 h-7 text-black group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />}
+        <button
+          type="button"
+          onClick={handleFindCars}
+          disabled={loading || !canSearch}
+          className="group mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border-none bg-[#0067B2] py-5 font-sans shadow-sm transition-colors hover:bg-[#0067B2] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span className="text-[20px] font-bold text-black">
+            {loading ? 'Searching...' : 'Find Cars'}
+          </span>
+          {!loading && (
+            <ChevronsRight
+              className="h-7 w-7 text-black transition-transform group-hover:translate-x-1"
+              strokeWidth={2.5}
+            />
+          )}
         </button>
       </div>
     </div>

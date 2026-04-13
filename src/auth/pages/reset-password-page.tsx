@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Check, MoveLeft } from 'lucide-react';
+import { AlertCircle, MoveLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,12 +19,18 @@ import {
   getResetRequestSchema,
   ResetRequestSchemaType,
 } from '../forms/reset-password-schema';
+import { requestPasswordResetOtp } from '@/services/auth-reset-password';
 
 export function ResetPasswordPage() {
-  const {} = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isClassic = location.pathname.includes('/classic/');
+  const signinPath = isClassic ? '/auth/classic/signin' : '/auth/signin';
+  const confirmPathBase = isClassic
+    ? '/auth/classic/reset-password/confirm'
+    : '/auth/reset-password/confirm';
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<ResetRequestSchemaType>({
     resolver: zodResolver(getResetRequestSchema()),
@@ -40,32 +44,15 @@ export function ResetPasswordPage() {
       setIsProcessing(true);
       setError(null);
 
-      console.log('Submitting password reset for:', values.email);
-
-      // Request password reset using Supabase directly
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        values.email,
-        {
-          redirectTo: `${window.location.origin}/auth/reset-password`,
-        },
-      );
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      // Set success message
-      setSuccessMessage(
-        `Password reset link sent to ${values.email}! Please check your inbox and spam folder.`,
-      );
-
-      // Reset form
+      await requestPasswordResetOtp(values.email);
+      const trimmed = values.email.trim();
       form.reset();
+      navigate(`${confirmPathBase}?email=${encodeURIComponent(trimmed)}`);
     } catch (err) {
       console.error('Password reset request error:', err);
       setError(
         err instanceof Error
-          ? `Error: ${err.message}. Please ensure your email is correct and try again.`
+          ? err.message
           : 'An unexpected error occurred. Please try again or contact support.',
       );
     } finally {
@@ -82,7 +69,8 @@ export function ResetPasswordPage() {
               Reset Password
             </h1>
             <p className="text-sm text-muted-foreground">
-              Enter your email to receive a password reset link
+              Enter your email. We will send a verification code you can use on the
+              next step to set a new password.
             </p>
           </div>
 
@@ -92,15 +80,6 @@ export function ResetPasswordPage() {
                 <AlertCircle className="h-4 w-4" />
               </AlertIcon>
               <AlertTitle>{error}</AlertTitle>
-            </Alert>
-          )}
-
-          {successMessage && (
-            <Alert>
-              <AlertIcon>
-                <Check className="h-4 w-4 text-green-500" />
-              </AlertIcon>
-              <AlertTitle>{successMessage}</AlertTitle>
             </Alert>
           )}
 
@@ -127,17 +106,17 @@ export function ResetPasswordPage() {
             <Button type="submit" className="w-full" disabled={isProcessing}>
               {isProcessing ? (
                 <span className="flex items-center gap-2">
-                  <LoaderCircleIcon className="h-4 w-4 animate-spin" /> Sending Link...
+                  <LoaderCircleIcon className="h-4 w-4 animate-spin" /> Sending code…
                 </span>
               ) : (
-                'Send Reset Link'
+                'Send verification code'
               )}
             </Button>
           </div>
 
           <div className="text-center text-sm">
             <Link
-              to="/auth/signin"
+              to={signinPath}
               className="inline-flex items-center gap-2 text-sm font-semibold text-accent-foreground hover:underline hover:underline-offset-2"
             >
               <MoveLeft className="size-3.5 opacity-70" /> Back to Sign In

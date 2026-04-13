@@ -75,6 +75,53 @@ export function toAbsoluteUrl(pathname: string): string {
   }
 }
 
+/** CDN / API image URLs (e.g. `//host/path`) → usable absolute https URL. */
+export function normalizeMediaUrl(url: string): string {
+  const raw = url?.trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) return `https:${raw}`;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  return toAbsoluteUrl(raw);
+}
+
+/** Relative paths from the booking API (e.g. `/uploads/...`) → absolute URL using `VITE_API_BASE_URL`. */
+export function resolveApiAssetUrl(path: string): string {
+  const raw = path?.trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) return `https:${raw}`;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    '',
+  );
+  if (!base) return raw.startsWith('/') ? raw : `/${raw}`;
+  return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+}
+
+/**
+ * Public files on the RCM host (e.g. `/uploads/profile/...` → `https://host/uploads/...`).
+ * Prefers the origin derived from `VITE_API_BASE_URL` (strip `/api/v1`) so media stays on the
+ * same server as the API; falls back to `VITE_BASE_URL`, then `resolveApiAssetUrl`.
+ */
+export function resolveRcmPublicUrl(path: string): string {
+  const raw = path?.trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) return `https:${raw}`;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    '',
+  );
+  const fromApiOrigin = apiBase?.replace(/\/api\/v1\/?$/i, '') || '';
+  const envOrigin =
+    (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, '') || '';
+
+  const base = fromApiOrigin || envOrigin || '';
+  if (!base) return resolveApiAssetUrl(raw);
+  return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+}
+
 export function timeAgo(date: Date | string): string {
   const now = new Date();
   const inputDate = typeof date === 'string' ? new Date(date) : date;

@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { ChangePasswordModal } from './change-password-modal';
+import { SupportIssueModal } from './support-issue-modal';
 import { useAuth } from '@/auth/context/auth-context';
 import { I18N_LANGUAGES } from '@/i18n/config';
 import { Language } from '@/i18n/types';
@@ -10,6 +11,7 @@ import {
   FileText,
   Globe,
   IdCard,
+  LifeBuoy,
   Moon,
   Settings,
   Shield,
@@ -20,7 +22,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Link } from 'react-router';
-import { toAbsoluteUrl } from '@/lib/helpers';
+import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLanguage } from '@/providers/i18n-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,20 +42,13 @@ import {
 import { Switch } from '@/components/ui/switch';
 
 export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
+  const { profile } = useDashboardData();
   const { currenLanguage, changeLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
 
-  // Use display data from currentUser
-  const displayName =
-    user?.fullname ||
-    (user?.first_name && user?.last_name
-      ? `${user.first_name} ${user.last_name}`
-      : user?.username || 'User');
-
-  const displayEmail = user?.email || '';
-  // const displayAvatar = user?.pic || toAbsoluteUrl('/media/avatars/300-2.png');
-  const displayAvatar = toAbsoluteUrl('/media/avatars/300-2.png');
+  const displayName = profile.displayName;
+  const displayEmail = profile.email;
 
   const handleLanguage = (lang: Language) => {
     changeLanguage(lang);
@@ -69,11 +65,15 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
         {/* Header */}
         <div className="flex items-center justify-between p-3">
           <div className="flex items-center gap-2">
-            <img
-              className="size-9 rounded-full border-2 border-green-500"
-              src={displayAvatar}
-              alt="User avatar"
-            />
+            <div className="size-9 shrink-0 overflow-hidden rounded-full border-2 border-green-500">
+              <ProfileAvatarImage
+                src={profile.avatarUrl}
+                fallbackLabel={displayName}
+                alt=""
+                className="size-full object-cover"
+                fallbackClassName="size-full"
+              />
+            </div>
             <div className="flex flex-col">
               <Link
                 to="/account/home/user-profile"
@@ -124,6 +124,16 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
             Change Password
           </DropdownMenuItem>
         </ChangePasswordModal>
+
+        <SupportIssueModal>
+          <DropdownMenuItem
+            onSelect={(e) => e.preventDefault()}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <LifeBuoy size={16} />
+            Contact support
+          </DropdownMenuItem>
+        </SupportIssueModal>
 
         {/* My Account Submenu */}
         {/* <DropdownMenuSub>

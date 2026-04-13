@@ -49,6 +49,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const loginWithGoogleIdToken = async (idToken: string) => {
+    try {
+      const auth = await SupabaseAdapter.loginWithGoogleIdToken(idToken);
+      saveAuth(auth);
+      const user = await getUser();
+      setCurrentUser(user || undefined);
+    } catch (error) {
+      saveAuth(undefined);
+      throw error;
+    }
+  };
+
   const register = async (
     email: string,
     password: string,
@@ -112,6 +124,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         user: currentUser,
         setUser: setCurrentUser,
         login,
+        loginWithGoogleIdToken,
         register,
         requestPasswordReset,
         resetPassword,

@@ -1,3 +1,6 @@
+import { getAuth } from '@/auth/lib/helpers';
+import { normalizeProfilePicturePath } from '@/services/profile';
+
 export interface RegisterDeviceRequest {
   fcm_token: string;
   device_id: string;
@@ -7,16 +10,41 @@ export interface RegisterDeviceRequest {
   app_version: string;
 }
 
+export interface DashboardProfile {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  local_address: string | null;
+  postal_address: string | null;
+  profile_image_url: string | null;
+}
+
 export interface Location {
   id: number;
   location: string;
   isdefault?: boolean;
   ispickupavailable?: boolean;
   isdropoffavailable?: boolean;
+  isflightinrequired?: boolean;
+  minimumbookingday?: number;
+  noticerequired_numberofdays?: number;
+  quoteisvalid_numberofdays?: number;
+  officeopeningtime?: string;
+  officeclosingtime?: string;
+  afterhourbookingaccepted?: boolean;
+  afterhourfeeid?: number;
+  unattendeddropoffaccepted?: boolean;
+  unattendeddropofffeeid?: number;
+  minimumage?: number;
+  phone?: string;
+  email?: string;
 }
 
 export interface CategoryType {
   id: number;
+  vehiclecategorytype?: string;
+  displayorder?: string;
   category_id?: number;
   name?: string;
   value?: string;
@@ -24,16 +52,33 @@ export interface CategoryType {
 
 export interface DriverAge {
   id: number;
-  driverage: string;
+  driverage: number | string;
+  isdefault?: boolean;
   age_id?: number;
 }
 
-export interface OfficeTime {
-  // Define based on API response
+export interface OfficeTimeRecord {
+  locationid: number;
+  dayofweek: number;
+  openingtime: string;
+  closingtime: string;
+  startpickup: string;
+  endpickup: string;
+  startdropoff: string;
+  enddropoff: string;
+  startdate: string;
+  enddate: string;
 }
 
 export interface Holiday {
-  // Define based on API response
+  id: number;
+  locationid: number;
+  startdate: string;
+  enddate: string;
+  type: string;
+  weekdays: number;
+  holidayname: string;
+  closingtime: string;
 }
 
 export interface FeaturedCar {
@@ -45,9 +90,6 @@ export interface FeaturedCar {
   link?: string;
   rate_description: string;
   slug?: string;
-  transmission?: string;
-  year?: string;
-  discount_price?: string;
 }
 
 export interface Promotion {
@@ -64,13 +106,17 @@ export interface DashboardData {
   locations: Location[];
   categorytypes: CategoryType[];
   driverages: DriverAge[];
-  officetimes: OfficeTime[];
+  officetimes: OfficeTimeRecord[];
   holidays: Holiday[];
-  featuredCars?: FeaturedCar[];
-  promotions?: Promotion[];
+  featuredCars: FeaturedCar[];
+  promotions: Promotion[];
+  profile: DashboardProfile | null;
+  unreadCount: number;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com'; // Replace with actual base URL
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
+  '';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -90,110 +136,206 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-export const dashboardService = {
-  async registerDevice(data: RegisterDeviceRequest): Promise<DashboardData> {
-    console.log('Making API call to:', `${API_BASE_URL}/dashboard/register-device`);
-    console.log('Request data:', data);
+function pickArray<T>(root: Record<string, unknown>, key: string): T[] {
+  const v = root[key];
+  return Array.isArray(v) ? (v as T[]) : [];
+}
 
-    try {
-      const request = fetch(`${API_BASE_URL}/dashboard/register-device`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
+function mergeResultsBundle(data: Record<string, unknown> | null | undefined) {
+  const results = (data?.results as Record<string, unknown> | undefined) || {};
+  const pick = <T,>(k: string): T[] => {
+    const top = pickArray<T>(data as Record<string, unknown>, k);
+    if (top.length) return top;
+    return pickArray<T>(results, k);
+  };
 
-      const response = await withTimeout(request, 9000);
+  return {
+    locations: pick<Record<string, unknown>>('locations'),
+    categorytypes: pick<Record<string, unknown>>('categorytypes'),
+    driverages: pick<Record<string, unknown>>('driverages'),
+    officetimes: pick<Record<string, unknown>>('officetimes'),
+    holidays: pick<Record<string, unknown>>('holidays'),
+    featured_cars: pick<Record<string, unknown>>('featured_cars'),
+    promotions: pick<Record<string, unknown>>('promotions'),
+  };
+}
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+function assertOkEnvelope(json: Record<string, unknown>): void {
+  if (json.status !== undefined && json.status !== 1 && json.status !== '1') {
+    const msg =
+      typeof json.message === 'string' ? json.message : 'Unexpected API status';
+    throw new Error(msg);
+  }
+  const data = json.data as Record<string, unknown> | undefined;
+  const inner = data?.status;
+  if (inner !== undefined && inner !== 'OK' && inner !== 'ok') {
+    const err =
+      (data?.error as string) ||
+      (typeof data?.message === 'string' ? (data.message as string) : '') ||
+      'API returned a non-OK status';
+    if (err) throw new Error(err);
+  }
+}
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error text:', errorText);
-        throw new Error(`Failed to register device: ${response.status} ${response.statusText} - ${errorText}`);
+export function parseRegisterDevicePayload(json: Record<string, unknown>): DashboardData {
+  assertOkEnvelope(json);
+  const data = (json.data as Record<string, unknown>) || {};
+  const b = mergeResultsBundle(data);
+
+  const locations: Location[] = b.locations.map((loc) => ({
+    id: Number(loc.id),
+    location: String(loc.location || loc.name || ''),
+    isdefault: Boolean(loc.isdefault),
+    ispickupavailable: loc.ispickupavailable !== false,
+    isdropoffavailable: loc.isdropoffavailable !== false,
+    isflightinrequired: Boolean(loc.isflightinrequired),
+    minimumbookingday: Number(loc.minimumbookingday ?? 0),
+    noticerequired_numberofdays: Number(loc.noticerequired_numberofdays ?? 0),
+    quoteisvalid_numberofdays: Number(loc.quoteisvalid_numberofdays ?? 0),
+    officeopeningtime: loc.officeopeningtime
+      ? String(loc.officeopeningtime)
+      : undefined,
+    officeclosingtime: loc.officeclosingtime
+      ? String(loc.officeclosingtime)
+      : undefined,
+    afterhourbookingaccepted: Boolean(loc.afterhourbookingaccepted),
+    afterhourfeeid: Number(loc.afterhourfeeid ?? 0),
+    unattendeddropoffaccepted: Boolean(loc.unattendeddropoffaccepted),
+    unattendeddropofffeeid: Number(loc.unattendeddropofffeeid ?? 0),
+    minimumage: Number(loc.minimumage ?? 0),
+    phone: loc.phone ? String(loc.phone) : undefined,
+    email: loc.email ? String(loc.email) : undefined,
+  }));
+
+  const categorytypes: CategoryType[] = b.categorytypes.map((ct) => ({
+    id: Number(ct.id),
+    vehiclecategorytype: ct.vehiclecategorytype
+      ? String(ct.vehiclecategorytype)
+      : undefined,
+    displayorder: ct.displayorder != null ? String(ct.displayorder) : undefined,
+    name: ct.vehiclecategorytype
+      ? String(ct.vehiclecategorytype)
+      : ct.name
+        ? String(ct.name)
+        : undefined,
+    value: ct.value ? String(ct.value) : undefined,
+  }));
+
+  const driverages: DriverAge[] = b.driverages.map((age) => ({
+    id: Number(age.id ?? age.age_id),
+    driverage: age.driverage ?? age.age_id ?? '',
+    isdefault: Boolean(age.isdefault),
+    age_id: age.age_id != null ? Number(age.age_id) : undefined,
+  }));
+
+  const officetimes: OfficeTimeRecord[] = b.officetimes.map((o) => ({
+    locationid: Number(o.locationid),
+    dayofweek: Number(o.dayofweek),
+    openingtime: String(o.openingtime ?? ''),
+    closingtime: String(o.closingtime ?? ''),
+    startpickup: String(o.startpickup ?? ''),
+    endpickup: String(o.endpickup ?? ''),
+    startdropoff: String(o.startdropoff ?? ''),
+    enddropoff: String(o.enddropoff ?? ''),
+    startdate: String(o.startdate ?? ''),
+    enddate: String(o.enddate ?? ''),
+  }));
+
+  const holidays: Holiday[] = b.holidays.map((h) => ({
+    id: Number(h.id),
+    locationid: Number(h.locationid),
+    startdate: String(h.startdate ?? ''),
+    enddate: String(h.enddate ?? ''),
+    type: String(h.type ?? ''),
+    weekdays: Number(h.weekdays ?? 0),
+    holidayname: String(h.holidayname ?? ''),
+    closingtime: String(h.closingtime ?? ''),
+  }));
+
+  const featuredCars: FeaturedCar[] = b.featured_cars.map((car) => ({
+    id: car.id ?? '',
+    title: String(car.title || ''),
+    description: String(car.description || ''),
+    daily_rate:
+      car.daily_rate != null ? String(car.daily_rate) : String(car.price ?? '0'),
+    image_url: String(car.image_url || car.image || ''),
+    link: car.link ? String(car.link) : undefined,
+    rate_description: String(car.rate_description || ''),
+    slug: car.slug ? String(car.slug) : undefined,
+  }));
+
+  const promotions: Promotion[] = b.promotions.map((p) => ({
+    id: p.id ?? '',
+    title: String(p.title || ''),
+    description: String(p.description || ''),
+    coupon_code: String(p.coupon_code || ''),
+    image_url: String(p.image_url || ''),
+    link: String(p.link || ''),
+    slug: String(p.slug || ''),
+  }));
+
+  const rawProfile = data.profile as Record<string, unknown> | null | undefined;
+  const profile: DashboardProfile | null = rawProfile
+    ? {
+        first_name: (rawProfile.first_name as string) ?? null,
+        last_name: (rawProfile.last_name as string) ?? null,
+        email: (rawProfile.email as string) ?? null,
+        phone: (rawProfile.phone as string) ?? null,
+        local_address: (rawProfile.local_address as string) ?? null,
+        postal_address: (rawProfile.postal_address as string) ?? null,
+        profile_image_url: normalizeProfilePicturePath(
+          rawProfile.profile_image_url as string | null | undefined,
+        ),
       }
+    : null;
 
-      const result = await response.json();
-      console.log('Response data:', result);
+  const unreadCount = Number(data.unread_count ?? data.unreadCount ?? 0);
 
-      // Handle different possible response structures
-      const extractArray = (key1: string, key2: string) => {
-        if (Array.isArray(result?.[key1])) return result[key1];
-        if (Array.isArray(result?.[key2])) return result[key2];
-        if (Array.isArray(result?.data?.[key1])) return result.data[key1];
-        if (Array.isArray(result?.data?.[key2])) return result.data[key2];
-        if (Array.isArray(result?.data?.results?.[key1])) return result.data.results[key1];
-        if (Array.isArray(result?.data?.results?.[key2])) return result.data.results[key2];
-        return null;
-      };
+  return {
+    locations,
+    categorytypes,
+    driverages,
+    officetimes,
+    holidays,
+    featuredCars,
+    promotions,
+    profile,
+    unreadCount: Number.isFinite(unreadCount) ? unreadCount : 0,
+  };
+}
 
-      const locationsSource = extractArray('locations', 'location_list') || [];
-      const categorytypesSource = extractArray('categorytypes', 'category_types') || [];
-      const driveragesSource = extractArray('driverages', 'driver_ages') || [];
-      const featuredCarsSource = extractArray('featured_cars', 'featuredCars') || [];
-      const officetimesSource = extractArray('officetimes', 'office_times') || [];
-      const holidaysSource = extractArray('holidays', 'holiday_list') || [];
-      const promotionsSource = extractArray('promotions', 'promotion_list') || [];
-
-      console.log('Extracted featured cars:', featuredCarsSource.length);
-      console.log('Extracted promotions:', promotionsSource.length);
-
-      return {
-        locations: locationsSource.map((loc: any) => ({
-          id: loc.id,
-          location: loc.location || loc.name || 'Unknown location',
-          isdefault: loc.isdefault,
-          ispickupavailable: loc.ispickupavailable,
-          isdropoffavailable: loc.isdropoffavailable,
-        })),
-        categorytypes: categorytypesSource.map((ct: any) => ({
-          id: ct.id || ct.category_id,
-          category_id: ct.category_id,
-          name: ct.name || ct.value,
-          value: ct.value,
-        })),
-        driverages: driveragesSource.map((age: any) => ({
-          id: age.id || age.age_id,
-          driverage: age.driverage || age.age_range || `${age.age_id}`,
-          age_id: age.age_id,
-        })),
-        officetimes: officetimesSource,
-        holidays: holidaysSource,
-        featuredCars: Array.isArray(featuredCarsSource)
-          ? featuredCarsSource.map((car: any) => {
-              console.log('Processing car:', car);
-              return {
-                id: car.id || car.car_id,
-                title: car.title || car.name || car.model || 'Featured Car',
-                description: car.description || car.subtitle || car.specs || '',
-                daily_rate: car.daily_rate?.toString() || car.price?.toString() || car.rate?.toString() || '0',
-                image_url: car.image_url || car.image || car.photo || '/media/images/600x600/1.jpg',
-                link: car.link,
-                rate_description: car.rate_description || car.description || '',
-                slug: car.slug,
-                transmission: car.transmission || car.gearbox || 'Automatic',
-                year: car.year || car.model_year || '2024',
-                discount_price: car.discount_price || car.daily_rate || car.price || '0',
-              };
-            })
-          : [],
-        promotions: Array.isArray(promotionsSource)
-          ? promotionsSource.map((promo: any) => ({
-              id: promo.id,
-              title: promo.title || '',
-              description: promo.description || '',
-              coupon_code: promo.coupon_code || '',
-              image_url: promo.image_url || '',
-              link: promo.link || '',
-              slug: promo.slug || '',
-            }))
-          : [],
-      } as DashboardData;
-    } catch (error) {
-      console.error('API call failed:', error);
-      throw error;
+export const dashboardService = {
+  async registerDevice(
+    body: RegisterDeviceRequest,
+  ): Promise<DashboardData> {
+    if (!API_BASE_URL) {
+      throw new Error('VITE_API_BASE_URL is not configured');
     }
+
+    const auth = getAuth();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (auth?.access_token) {
+      headers.Authorization = `Bearer ${auth.access_token}`;
+    }
+
+    const request = fetch(`${API_BASE_URL}/dashboard/register-device`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const response = await withTimeout(request, 15000);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Failed to register device: ${response.status} ${response.statusText} — ${errorText}`,
+      );
+    }
+
+    const json = (await response.json()) as Record<string, unknown>;
+    return parseRegisterDevicePayload(json);
   },
 };

@@ -92,7 +92,7 @@ export const MENU_SIDEBAR: MenuConfig = [
     title: 'Checkout',
     icon: LayoutGrid,
     children: [
-      { title: 'Payment', path: '/cars/checkout/payment' },
+      { title: 'Confirmation', path: '/cars/checkout/success' },
     ],
   },
   {

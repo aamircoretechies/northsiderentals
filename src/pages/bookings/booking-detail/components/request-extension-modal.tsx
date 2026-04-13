@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 
@@ -29,8 +31,13 @@ export function RequestExtensionModal({ trigger }: RequestExtensionModalProps) {
           >
             <ArrowLeft size={24} className="text-black" />
           </button>
-          <h2 className="text-[18px] font-extrabold text-black tracking-tight">Request Extension</h2>
+          <DialogTitle className="text-[18px] font-extrabold text-black tracking-tight">
+            Request Extension
+          </DialogTitle>
         </div>
+        <DialogDescription className="sr-only">
+          Request a booking extension. Review the details and submit your request.
+        </DialogDescription>
 
         {/* Scrollable Content Range */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col items-center">

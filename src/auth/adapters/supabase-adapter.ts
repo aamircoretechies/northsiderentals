@@ -45,6 +45,51 @@ export const SupabaseAdapter = {
   },
 
   /**
+   * Login with Firebase Google ID token using backend API
+   */
+  async loginWithGoogleIdToken(idToken: string): Promise<AuthModel> {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+
+    if (!apiBaseUrl) {
+      throw new Error('Missing API base URL configuration');
+    }
+
+    const response = await fetch(`${apiBaseUrl}/auth/google-login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message =
+        payload?.message || payload?.error || 'Failed to login with Google';
+      throw new Error(message);
+    }
+
+    // Support both direct token response and nested data objects.
+    const tokenContainer = payload?.data ?? payload;
+    const accessToken =
+      tokenContainer?.access_token ??
+      tokenContainer?.accessToken ??
+      tokenContainer?.token;
+    const refreshToken =
+      tokenContainer?.refresh_token ?? tokenContainer?.refreshToken;
+
+    if (!accessToken) {
+      throw new Error('Google login succeeded but no access token was returned');
+    }
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  },
+
+  /**
    * Login with OAuth provider (Google, GitHub, etc.)
    */
   async signInWithOAuth(

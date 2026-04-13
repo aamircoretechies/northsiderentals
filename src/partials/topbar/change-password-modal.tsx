@@ -1,68 +1,159 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
-  DialogContent,
-  DialogTrigger,
   DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
+import { changePasswordApi } from '@/services/auth-password';
+
+const passwordInputClass =
+  'w-full bg-[#f2f4f8] border-0 rounded-[12px] pl-5 pr-12 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#8692a6] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow';
+
+/** Module-level so inputs are not remounted every render (focus loss). */
+function PasswordField({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative w-full shadow-sm rounded-[12px]">
+      <input
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete="off"
+        className={passwordInputClass}
+      />
+      <button
+        type="button"
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#5e6278] cursor-pointer hover:text-black transition-colors"
+        onClick={() => setShow((s) => !s)}
+        tabIndex={-1}
+        aria-label={show ? 'Hide password' : 'Show password'}
+      >
+        {show ? (
+          <EyeOff className="w-5 h-5 stroke-[2]" />
+        ) : (
+          <Eye className="w-5 h-5 stroke-[2]" />
+        )}
+      </button>
+    </div>
+  );
+}
 
 export function ChangePasswordModal({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const PasswordInput = ({ placeholder }: { placeholder: string }) => {
-    const [show, setShow] = useState(false);
-    return (
-      <div className="relative w-full shadow-sm rounded-[12px]">
-        <input
-          type={show ? "text" : "password"}
-          placeholder={placeholder}
-          className="w-full bg-[#f2f4f8] border-0 rounded-[12px] pl-5 pr-12 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#8692a6] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow"
-        />
-        <div 
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#5e6278] cursor-pointer hover:text-black transition-colors"
-          onClick={() => setShow(!show)}
-        >
-          {show ? <EyeOff className="w-5 h-5 stroke-[2]" /> : <Eye className="w-5 h-5 stroke-[2]" />}
-        </div>
-      </div>
-    );
+  const reset = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) reset();
+  };
+
+  const handleSubmit = async () => {
+    if (!currentPassword.trim()) {
+      toast.error('Enter your current password');
+      return;
+    }
+    if (!newPassword.trim()) {
+      toast.error('Enter a new password');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error('New password and confirmation do not match');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await changePasswordApi({
+        currentPassword: currentPassword.trim(),
+        newPassword: newPassword.trim(),
+        confirmNewPassword: confirmNewPassword.trim(),
+      });
+      toast.success('Password updated');
+      reset();
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update password');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
 
-      <DialogContent 
+      <DialogContent
         className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
         showCloseButton={false}
       >
-        {/* Header */}
         <div className="flex items-center p-4 pt-6 bg-[#f8f9fa]">
           <DialogClose className="p-2 -ml-2 text-black hover:bg-gray-200 rounded-full transition-colors flex-shrink-0 cursor-pointer">
             <ArrowLeft className="w-6 h-6" />
           </DialogClose>
-          <h1 className="flex-1 text-center font-extrabold text-[20px] text-black pr-8">
+          <DialogTitle className="flex-1 text-center font-extrabold text-[20px] text-black pr-8">
             Change Password
-          </h1>
+          </DialogTitle>
         </div>
-        
-        {/* Content */}
-        <div className="px-5 pb-8 pt-4 overflow-y-auto max-h-[85vh] flex flex-col gap-4">
-          <PasswordInput placeholder="Current Password" />
-          <PasswordInput placeholder="New Password" />
-          <PasswordInput placeholder="Confirm New Password" />
+        <DialogDescription className="sr-only">
+          Enter your current password, then your new password twice. Submit to update
+          your account password.
+        </DialogDescription>
 
-          {/* Action Button */}
+        <div className="px-5 pb-8 pt-4 overflow-y-auto max-h-[85vh] flex flex-col gap-4">
+          <PasswordField
+            placeholder="Current Password"
+            value={currentPassword}
+            onChange={setCurrentPassword}
+            disabled={submitting}
+          />
+          <PasswordField
+            placeholder="New Password"
+            value={newPassword}
+            onChange={setNewPassword}
+            disabled={submitting}
+          />
+          <PasswordField
+            placeholder="Confirm New Password"
+            value={confirmNewPassword}
+            onChange={setConfirmNewPassword}
+            disabled={submitting}
+          />
+
           <div className="mt-6 mb-2">
-            <Button 
+            <Button
+              type="button"
               className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-[0_4px_14px_rgba(0,0,0,0.1)] cursor-pointer"
-              onClick={() => setOpen(false)}
+              disabled={submitting}
+              onClick={() => void handleSubmit()}
             >
-              Update
+              {submitting ? 'Updating…' : 'Update'}
             </Button>
           </div>
         </div>
