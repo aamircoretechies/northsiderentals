@@ -64,17 +64,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const register = async (
     email: string,
     password: string,
-    password_confirmation: string,
-    firstName?: string,
-    lastName?: string,
+    country_code: string,
+    mobile: string,
   ) => {
     try {
       const auth = await SupabaseAdapter.register(
         email,
         password,
-        password_confirmation,
-        firstName,
-        lastName,
+        country_code,
+        mobile,
       );
       saveAuth(auth);
       const user = await getUser();

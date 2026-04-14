@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { useAuth } from '@/auth/context/auth-context';
+import { getAuth } from '@/auth/lib/helpers';
 import { UserModel } from '@/auth/lib/models';
 import { resolveRcmPublicUrl } from '@/lib/helpers';
 import {
@@ -61,7 +62,7 @@ function mergeProfile(
     user?.fullname?.trim() ||
     fromParts ||
     (email ? email.split('@')[0] : '') ||
-    'Account';
+    'Guest';
 
   const rawPic =
     rcm?.profile_picture?.trim() ||
@@ -124,10 +125,10 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
       setLoading(true);
       setError(null);
       const body = payload ?? defaultDevicePayload();
-      const [dashResult, profResult, notifResult] = await Promise.allSettled([
+      const token = getAuth()?.access_token?.trim();
+
+      const [dashResult] = await Promise.allSettled([
         dashboardService.registerDevice(body),
-        profileService.fetchProfile(),
-        notificationsService.list(1, 50),
       ]);
 
       if (dashResult.status === 'fulfilled') {
@@ -141,15 +142,25 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
         );
       }
 
-      if (profResult.status === 'fulfilled') {
-        setRcmProfile(profResult.value);
+      if (token) {
+        const [profResult, notifResult] = await Promise.allSettled([
+          profileService.fetchProfile(),
+          notificationsService.list(1, 50),
+        ]);
+
+        if (profResult.status === 'fulfilled') {
+          setRcmProfile(profResult.value);
+        } else {
+          setRcmProfile(null);
+        }
+
+        if (notifResult.status === 'fulfilled') {
+          setNotifications(notifResult.value);
+        } else {
+          setNotifications([]);
+        }
       } else {
         setRcmProfile(null);
-      }
-
-      if (notifResult.status === 'fulfilled') {
-        setNotifications(notifResult.value);
-      } else {
         setNotifications([]);
       }
     } catch (err) {
@@ -164,20 +175,10 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  // RCM Google login stores `auth` (API access token) but `user` comes from Supabase
-  // `getUser()` — so `user` may be undefined even when the session is valid. Drive loads
-  // from the token so register-device + /profile run after Google (or any) API login.
+  // Home / car search data: always load `register-device` (public). Profile + notifications
+  // only when logged in. `GET /bookings/list` stays gated in the bookings page.
   useEffect(() => {
     if (authLoading) return;
-    const token = auth?.access_token?.trim();
-    if (!token) {
-      setData(null);
-      setRcmProfile(null);
-      setNotifications([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
     void load();
   }, [authLoading, auth?.access_token, load]);
 

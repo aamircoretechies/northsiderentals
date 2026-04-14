@@ -65,6 +65,89 @@ export async function fetchBookingsList(
   return response.json();
 }
 
+function assertBookingEnvelopeOk(json: Record<string, unknown>): void {
+  if (
+    json.status !== undefined &&
+    json.status !== 1 &&
+    json.status !== '1'
+  ) {
+    const msg =
+      typeof json.message === 'string' ? json.message : 'Booking not found';
+    throw new Error(msg);
+  }
+}
+
+export interface FindBookingLookupResponse {
+  status?: number;
+  message?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Public lookup: `GET /bookings/find?reservation_no=&last_name=`.
+ * Works with or without a Bearer token (optional auth).
+ */
+export async function findBookingLookup(params: {
+  reservationNo: string;
+  lastName: string;
+}): Promise<FindBookingLookupResponse> {
+  const reservationNo = params.reservationNo.trim();
+  const lastName = params.lastName.trim();
+  if (!reservationNo) {
+    throw new Error('Enter your reservation or confirmation number');
+  }
+  if (!lastName) {
+    throw new Error('Enter the last name on the booking');
+  }
+
+  const url = createApiUrl('bookings/find');
+  url.searchParams.set('reservation_no', reservationNo);
+  url.searchParams.set('last_name', lastName);
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: buildAuthHeaders(),
+  });
+
+  const text = await response.text();
+  let json: Record<string, unknown> | null = null;
+  if (text.trim()) {
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      json = null;
+    }
+  }
+
+  if (!response.ok) {
+    const msg =
+      (json?.message as string) ||
+      (json?.error as string) ||
+      `Request failed: ${response.status}`;
+    throw new Error(msg);
+  }
+
+  if (!json) {
+    throw new Error('Empty response from booking lookup');
+  }
+
+  assertBookingEnvelopeOk(json);
+  return json as FindBookingLookupResponse;
+}
+
+/** RCM reference for `GET /bookings/:ref` / detail route from find-booking payload. */
+export function bookingReferenceFromFindPayload(
+  data: Record<string, unknown>,
+): string {
+  const direct = String(data.rcm_reference_key ?? '').trim();
+  if (direct) return direct;
+  const rcm = (data.rcm_booking_info as Record<string, unknown>) || {};
+  const bookingInfo = Array.isArray(rcm.bookinginfo)
+    ? (rcm.bookinginfo[0] as Record<string, unknown>)
+    : undefined;
+  return String(bookingInfo?.reservationref ?? '').trim();
+}
+
 /** Map one booking from list API → card props */
 export function mapApiBookingToCardProps(b: Record<string, unknown>) {
   const vd = (b.vehicle_details as Record<string, unknown>) || {};

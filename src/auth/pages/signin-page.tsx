@@ -315,6 +315,7 @@ export function SignInPage() {
         <div className="text-center text-sm text-muted-foreground">
           <Link
             to="/"
+            replace
             className="text-sm font-semibold text-foreground hover:text-primary"
           >
             Continue as Guest

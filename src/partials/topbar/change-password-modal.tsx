@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/context/auth-context';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -57,6 +59,8 @@ function PasswordField({
 }
 
 export function ChangePasswordModal({ children }: { children: React.ReactNode }) {
+  const { auth } = useAuth();
+  const isAuthed = Boolean(auth?.access_token);
   const [open, setOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -118,44 +122,69 @@ export function ChangePasswordModal({ children }: { children: React.ReactNode })
             <ArrowLeft className="w-6 h-6" />
           </DialogClose>
           <DialogTitle className="flex-1 text-center font-extrabold text-[20px] text-black pr-8">
-            Change Password
+            {isAuthed ? 'Change Password' : 'Password'}
           </DialogTitle>
         </div>
         <DialogDescription className="sr-only">
-          Enter your current password, then your new password twice. Submit to update
-          your account password.
+          {isAuthed
+            ? 'Enter your current password, then your new password twice. Submit to update your account password.'
+            : 'Sign in to change password from account settings, or reset password with email.'}
         </DialogDescription>
 
         <div className="px-5 pb-8 pt-4 overflow-y-auto max-h-[85vh] flex flex-col gap-4">
-          <PasswordField
-            placeholder="Current Password"
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            disabled={submitting}
-          />
-          <PasswordField
-            placeholder="New Password"
-            value={newPassword}
-            onChange={setNewPassword}
-            disabled={submitting}
-          />
-          <PasswordField
-            placeholder="Confirm New Password"
-            value={confirmNewPassword}
-            onChange={setConfirmNewPassword}
-            disabled={submitting}
-          />
+          {isAuthed ? (
+            <>
+              <PasswordField
+                placeholder="Current Password"
+                value={currentPassword}
+                onChange={setCurrentPassword}
+                disabled={submitting}
+              />
+              <PasswordField
+                placeholder="New Password"
+                value={newPassword}
+                onChange={setNewPassword}
+                disabled={submitting}
+              />
+              <PasswordField
+                placeholder="Confirm New Password"
+                value={confirmNewPassword}
+                onChange={setConfirmNewPassword}
+                disabled={submitting}
+              />
 
-          <div className="mt-6 mb-2">
-            <Button
-              type="button"
-              className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-[0_4px_14px_rgba(0,0,0,0.1)] cursor-pointer"
-              disabled={submitting}
-              onClick={() => void handleSubmit()}
-            >
-              {submitting ? 'Updating…' : 'Update'}
-            </Button>
-          </div>
+              <div className="mt-6 mb-2">
+                <Button
+                  type="button"
+                  className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-[0_4px_14px_rgba(0,0,0,0.1)] cursor-pointer"
+                  disabled={submitting}
+                  onClick={() => void handleSubmit()}
+                >
+                  {submitting ? 'Updating…' : 'Update'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4 text-center text-sm text-muted-foreground">
+              <p className="text-foreground">
+                Sign in to change your password while you are logged in, or use email
+                reset if you forgot it.
+              </p>
+              <Button
+                asChild
+                className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full"
+              >
+                <Link to="/auth/signin" onClick={() => setOpen(false)}>
+                  Sign in
+                </Link>
+              </Button>
+              <Button variant="outline" className="w-full" asChild>
+                <Link to="/auth/reset-password" onClick={() => setOpen(false)}>
+                  Forgot password — reset by email
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

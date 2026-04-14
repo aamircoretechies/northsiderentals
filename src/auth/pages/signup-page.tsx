@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -32,11 +31,10 @@ export function SignUpPage() {
     resolver: zodResolver(getSignupSchema()),
     defaultValues: {
       email: '',
+      country_code: '+61',
+      mobile: '',
       password: '',
       confirmPassword: '',
-      firstName: '',
-      lastName: '',
-      terms: false,
     },
   });
 
@@ -46,23 +44,11 @@ export function SignUpPage() {
       setError(null);
 
       // Register the user with Supabase
-      await register(
-        values.email,
-        values.password,
-        values.confirmPassword,
-        values.firstName,
-        values.lastName,
-      );
+      await register(values.email, values.password, values.country_code, values.mobile);
 
-      // Set success message and metadata
       setSuccessMessage(
         'Registration successful! Please check your email to confirm your account.',
       );
-
-      // After successful registration, you might want to update the user profile
-      // with additional metadata (firstName, lastName, etc.)
-
-      // Optionally redirect to login page after a delay
       setTimeout(() => {
         navigate('/auth/signin');
       }, 3000);
@@ -115,34 +101,6 @@ export function SignUpPage() {
 
         <FormField
           control={form.control}
-          name="firstName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>First Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter your first name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="lastName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Last Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter your last name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
           name="email"
           render={({ field }) => (
             <FormItem>
@@ -151,6 +109,42 @@ export function SignUpPage() {
                 <Input
                   placeholder="Your email address"
                   type="email"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="country_code"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country Code</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="+61"
+                  autoComplete="tel-country-code"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="mobile"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Mobile</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="9035168029"
+                  autoComplete="tel"
                   {...field}
                 />
               </FormControl>
@@ -219,33 +213,6 @@ export function SignUpPage() {
                 </Button>
               </div>
               <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="terms"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-0.5 space-y-0 rounded-md">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel className="text-sm text-muted-foreground">
-                  I agree to the and{' '}
-                  <Link
-                    to="#"
-                    className="text-sm font-semibold text-foreground hover:text-primary"
-                  >
-                    Privacy Policy
-                  </Link>
-                </FormLabel>
-                <FormMessage />
-              </div>
             </FormItem>
           )}
         />

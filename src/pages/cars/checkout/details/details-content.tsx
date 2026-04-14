@@ -176,14 +176,22 @@ export function CarsCheckoutDetailsContent() {
     setLoading(true);
     try {
       const response = await carsService.createBooking(payload);
-      const paymentUrl = extractHostedPaymentUrl(response);
+      const booking = mergeCreateBookingForUiState(response);
+      let paymentUrl = extractHostedPaymentUrl(response);
+      const bookingId = String(booking.booking_id ?? '').trim();
+
+      if (!paymentUrl && bookingId) {
+        const paymentSession = await carsService.createPaymentSession(bookingId);
+        paymentUrl = extractHostedPaymentUrl(paymentSession);
+      }
+
       if (paymentUrl) {
         window.location.assign(paymentUrl);
         return;
       }
       navigate('/cars/checkout/success', {
         state: {
-          booking: mergeCreateBookingForUiState(response),
+          booking,
           formData,
           carData,
           searchParams,

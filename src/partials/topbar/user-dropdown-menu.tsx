@@ -42,7 +42,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 
 export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, auth } = useAuth();
+  const isAuthed = Boolean(auth?.access_token);
   const { profile } = useDashboardData();
   const { currenLanguage, changeLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -81,12 +82,18 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
               >
                 {displayName}
               </Link>
-              <a
-                href={`mailto:${displayEmail}`}
-                className="text-xs text-muted-foreground hover:text-primary"
-              >
-                {displayEmail}
-              </a>
+              {displayEmail.trim() ? (
+                <a
+                  href={`mailto:${displayEmail}`}
+                  className="text-xs text-muted-foreground hover:text-primary"
+                >
+                  {displayEmail}
+                </a>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {isAuthed ? 'No email on file' : 'Browsing as guest'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -274,14 +281,20 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
           </div>
         </DropdownMenuItem> */}
         <div className="p-2 mt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={logout}
-          >
-            Logout
-          </Button>
+          {isAuthed ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={logout}
+            >
+              Logout
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <Link to="/auth/signin">Sign in</Link>
+            </Button>
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

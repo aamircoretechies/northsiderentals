@@ -1,3 +1,5 @@
+import { getAuth } from '@/auth/lib/helpers';
+
 export interface RentalSource {
   id: string;
   name: string;
@@ -29,12 +31,38 @@ export interface CarGetDetailsRequest {
   age_id: number;
 }
 
+export interface CreatePaymentSessionResponse {
+  status?: number;
+  message?: string;
+  data?: {
+    payment_url?: string;
+    booking_id?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
+
+function headersJsonOptionalAuth(): Record<string, string> {
+  const h: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+  const auth = getAuth();
+  if (auth?.access_token) {
+    h.Authorization = `Bearer ${auth.access_token}`;
+  }
+  return h;
+}
 
 export const carsService = {
   async getDetails(): Promise<{ rentalsource: RentalSource[] }> {
+    const h = headersJsonOptionalAuth();
+    delete h['Content-Type'];
     const response = await fetch(`${API_BASE_URL}/cars/get-details`, {
       method: 'GET',
+      headers: h,
     });
 
     if (!response.ok) {
@@ -47,9 +75,7 @@ export const carsService = {
   async searchCars(data: CarSearchRequest): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/cars/search`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headersJsonOptionalAuth(),
       body: JSON.stringify(data),
     });
 
@@ -63,9 +89,7 @@ export const carsService = {
   async getVehicleDetails(data: CarGetDetailsRequest): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/cars/get-details`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headersJsonOptionalAuth(),
       body: JSON.stringify(data),
     });
 
@@ -79,9 +103,7 @@ export const carsService = {
   async createBooking(data: any): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/bookings/create`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: headersJsonOptionalAuth(),
       body: JSON.stringify(data),
     });
 
@@ -95,5 +117,49 @@ export const carsService = {
     }
 
     return response.json();
-  }
+  },
+
+  async createPaymentSession(booking_id: string): Promise<CreatePaymentSessionResponse> {
+    const bookingId = booking_id.trim();
+    if (!bookingId) {
+      throw new Error('Booking ID is required to create payment');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/payments/create`, {
+      method: 'POST',
+      headers: headersJsonOptionalAuth(),
+      body: JSON.stringify({ booking_id: bookingId }),
+    });
+
+    const text = await response.text();
+    let json: Record<string, unknown> | null = null;
+    if (text.trim()) {
+      try {
+        json = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        json = null;
+      }
+    }
+
+    if (!response.ok) {
+      const msg =
+        (json?.message as string) ||
+        (json?.error as string) ||
+        `Failed to initiate payment: ${response.statusText}`;
+      throw new Error(msg);
+    }
+
+    if (
+      json &&
+      json.status !== undefined &&
+      json.status !== 1 &&
+      json.status !== '1'
+    ) {
+      throw new Error(
+        (json.message as string) || 'Could not create payment session',
+      );
+    }
+
+    return (json || {}) as CreatePaymentSessionResponse;
+  },
 };

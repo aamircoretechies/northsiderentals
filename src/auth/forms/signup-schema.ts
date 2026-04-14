@@ -7,6 +7,14 @@ export const getSignupSchema = () => {
         .string()
         .email({ message: 'Please enter a valid email address.' })
         .min(1, { message: 'Email is required.' }),
+      country_code: z
+        .string()
+        .min(1, { message: 'Country code is required.' })
+        .max(8, { message: 'Country code is too long.' }),
+      mobile: z
+        .string()
+        .min(6, { message: 'Mobile number is required.' })
+        .max(20, { message: 'Mobile number is too long.' }),
       password: z
         .string()
         .min(6, { message: 'Password must be at least 6 characters.' })
@@ -19,14 +27,9 @@ export const getSignupSchema = () => {
       confirmPassword: z
         .string()
         .min(1, { message: 'Please confirm your password.' }),
-      firstName: z.string().min(1, { message: 'First name is required.' }),
-      lastName: z.string().min(1, { message: 'Last name is required.' }),
-      terms: z.boolean().refine((val) => val === true, {
-        message: 'You must agree to the terms and conditions.',
-      }),
     })
     .refine((data) => data.password === data.confirmPassword, {
-      message: "Passwords don't match",
+      message: 'Passwords do not match',
       path: ['confirmPassword'],
     });
 };

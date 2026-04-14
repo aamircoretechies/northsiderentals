@@ -1,5 +1,7 @@
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router';
 import { AvatarInput } from '@/partials/common/avatar-input';
+import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
 import { SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +16,9 @@ function dash(value: string | null | undefined) {
 }
 
 const PersonalInfo = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, auth } = useAuth();
+  const canEditProfile = Boolean(auth?.access_token);
   const {
     profile,
     apiProfile,
@@ -38,11 +42,27 @@ const PersonalInfo = () => {
     <Card className="min-w-full">
       <CardHeader>
         <CardTitle>Personal Info</CardTitle>
-        <EditProfileModal>
-          <Button variant="ghost" mode="icon">
-            <SquarePen size={16} className="text-blue-500" />
+        {canEditProfile ? (
+          <EditProfileModal>
+            <Button variant="ghost" mode="icon">
+              <SquarePen size={16} className="text-blue-500" />
+            </Button>
+          </EditProfileModal>
+        ) : (
+          <Button
+            variant="ghost"
+            mode="icon"
+            title="Sign in to edit your profile"
+            onClick={() => {
+              toast.info('Sign in to edit your profile');
+              navigate(
+                `/auth/signin?next=${encodeURIComponent('/account/home/user-profile')}`,
+              );
+            }}
+          >
+            <SquarePen size={16} className="text-blue-500 opacity-50" />
           </Button>
-        </EditProfileModal>
+        )}
       </CardHeader>
       <CardContent className="kt-scrollable-x-auto p-0 pb-3">
         <Table className="align-middle text-sm text-muted-foreground">
@@ -56,35 +76,47 @@ const PersonalInfo = () => {
               </TableCell>
               <TableCell className="py-2 text-center">
                 <div className="flex items-center justify-center">
-                  <AvatarInput
-                    compact
-                    remoteImageUrl={profile.avatarUrl}
-                    onPickFile={async (file) => {
-                      try {
-                        await uploadProfilePicture(file);
-                        toast.success('Photo updated');
-                      } catch (e) {
-                        toast.error(
-                          e instanceof Error ? e.message : 'Upload failed',
-                        );
-                      }
-                    }}
-                    onRemoveRemote={
-                      profile.avatarUrl
-                        ? async () => {
-                            try {
-                              await deleteProfilePicture();
-                              toast.success('Photo removed');
-                            } catch (e) {
-                              toast.error(
-                                e instanceof Error ? e.message : 'Remove failed',
-                              );
+                  {canEditProfile ? (
+                    <AvatarInput
+                      compact
+                      remoteImageUrl={profile.avatarUrl}
+                      onPickFile={async (file) => {
+                        try {
+                          await uploadProfilePicture(file);
+                          toast.success('Photo updated');
+                        } catch (e) {
+                          toast.error(
+                            e instanceof Error ? e.message : 'Upload failed',
+                          );
+                        }
+                      }}
+                      onRemoveRemote={
+                        profile.avatarUrl
+                          ? async () => {
+                              try {
+                                await deleteProfilePicture();
+                                toast.success('Photo removed');
+                              } catch (e) {
+                                toast.error(
+                                  e instanceof Error ? e.message : 'Remove failed',
+                                );
+                              }
                             }
-                          }
-                        : undefined
-                    }
-                    busy={profileBusy}
-                  />
+                          : undefined
+                      }
+                      busy={profileBusy}
+                    />
+                  ) : (
+                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500">
+                      <ProfileAvatarImage
+                        src={profile.avatarUrl}
+                        fallbackLabel={fullName}
+                        alt=""
+                        className="size-full object-cover"
+                        fallbackClassName="size-full"
+                      />
+                    </div>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

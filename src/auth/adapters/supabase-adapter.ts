@@ -140,24 +140,18 @@ export const SupabaseAdapter = {
   async register(
     email: string,
     password: string,
-    password_confirmation: string,
-    firstName?: string,
-    lastName?: string,
+    country_code: string,
+    mobile: string,
   ): Promise<AuthModel> {
-    if (password !== password_confirmation) {
-      throw new Error('Passwords do not match');
-    }
-
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           username: email.split('@')[0], // Default username from email
-          first_name: firstName || '',
-          last_name: lastName || '',
-          fullname:
-            firstName && lastName ? `${firstName} ${lastName}`.trim() : '',
+          country_code: country_code.trim(),
+          mobile: mobile.trim(),
+          phone: `${country_code.trim()}${mobile.trim()}`,
           created_at: new Date().toISOString(),
         },
       },
