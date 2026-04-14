@@ -11,6 +11,7 @@ import { ResetPasswordConfirmPage } from './pages/reset-password-confirm-page';
 import { ResetPasswordPage } from './pages/reset-password-page';
 import { SignInPage } from './pages/signin-page';
 import { SignUpPage } from './pages/signup-page';
+import { SignupVerifyOtpPage } from './pages/signup-verify-otp-page';
 
 // Define the auth routes
 export const authRoutes: RouteObject[] = [
@@ -25,6 +26,10 @@ export const authRoutes: RouteObject[] = [
       {
         path: 'signup',
         element: <SignUpPage />,
+      },
+      {
+        path: 'signup/verify',
+        element: <SignupVerifyOtpPage />,
       },
       {
         path: 'change-password',
@@ -68,6 +73,10 @@ export const authRoutes: RouteObject[] = [
       {
         path: 'classic/signup',
         element: <SignUpPage />,
+      },
+      {
+        path: 'classic/signup/verify',
+        element: <SignupVerifyOtpPage />,
       },
       {
         path: 'classic/change-password',

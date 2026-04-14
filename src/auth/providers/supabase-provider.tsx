@@ -22,7 +22,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const user = await getUser();
         setCurrentUser(user || undefined);
       } catch {
-        saveAuth(undefined);
         setCurrentUser(undefined);
       }
     }
@@ -41,8 +40,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const auth = await SupabaseAdapter.login(email, password);
       saveAuth(auth);
-      const user = await getUser();
-      setCurrentUser(user || undefined);
+      try {
+        const user = await getUser();
+        setCurrentUser(user || undefined);
+      } catch {
+        // Backend-token sessions may not have a Supabase user; keep auth token.
+        setCurrentUser(undefined);
+      }
     } catch (error) {
       saveAuth(undefined);
       throw error;
@@ -53,8 +57,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const auth = await SupabaseAdapter.loginWithGoogleIdToken(idToken);
       saveAuth(auth);
-      const user = await getUser();
-      setCurrentUser(user || undefined);
+      try {
+        const user = await getUser();
+        setCurrentUser(user || undefined);
+      } catch {
+        setCurrentUser(undefined);
+      }
     } catch (error) {
       saveAuth(undefined);
       throw error;
@@ -68,19 +76,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     mobile: string,
   ) => {
     try {
-      const auth = await SupabaseAdapter.register(
-        email,
-        password,
-        country_code,
-        mobile,
-      );
-      saveAuth(auth);
-      const user = await getUser();
-      setCurrentUser(user || undefined);
+      await SupabaseAdapter.register(email, password, country_code, mobile);
     } catch (error) {
-      saveAuth(undefined);
       throw error;
     }
+  };
+
+  const verifySignupOtp = async (email: string, otp: string) => {
+    await SupabaseAdapter.verifySignupOtp(email, otp);
+  };
+
+  const resendSignupOtp = async (email: string) => {
+    await SupabaseAdapter.resendSignupOtp(email);
   };
 
   const requestPasswordReset = async (email: string) => {
@@ -124,6 +131,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         login,
         loginWithGoogleIdToken,
         register,
+        verifySignupOtp,
+        resendSignupOtp,
         requestPasswordReset,
         resetPassword,
         resendVerificationEmail,

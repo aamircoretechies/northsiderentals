@@ -3,7 +3,7 @@ import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,10 @@ import { getSignupSchema, SignupSchemaType } from '../forms/signup-schema';
 
 export function SignUpPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register } = useAuth();
+  const isClassic = location.pathname.includes('/classic/');
+  const verifyPath = isClassic ? '/auth/classic/signup/verify' : '/auth/signup/verify';
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -45,13 +48,10 @@ export function SignUpPage() {
 
       // Register the user with Supabase
       await register(values.email, values.password, values.country_code, values.mobile);
-
-      setSuccessMessage(
-        'Registration successful! Please check your email to confirm your account.',
-      );
+      setSuccessMessage('OTP sent successfully. Please verify to complete signup.');
       setTimeout(() => {
-        navigate('/auth/signin');
-      }, 3000);
+        navigate(`${verifyPath}?email=${encodeURIComponent(values.email.trim())}`);
+      }, 500);
     } catch (err) {
       console.error('Registration error:', err);
       setError(

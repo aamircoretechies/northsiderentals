@@ -17,6 +17,8 @@ export const AuthContext = createContext<{
     country_code: string,
     mobile: string,
   ) => Promise<void>;
+  verifySignupOtp: (email: string, otp: string) => Promise<void>;
+  resendSignupOtp: (email: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (
     password: string,
@@ -36,6 +38,8 @@ export const AuthContext = createContext<{
   login: async () => {},
   loginWithGoogleIdToken: async () => {},
   register: async () => {},
+  verifySignupOtp: async () => {},
+  resendSignupOtp: async () => {},
   requestPasswordReset: async () => {},
   resetPassword: async () => {},
   resendVerificationEmail: async () => {},

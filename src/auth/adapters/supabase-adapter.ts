@@ -1,5 +1,10 @@
 import { AuthModel, UserModel } from '@/auth/lib/models';
 import { supabase } from '@/lib/supabase';
+import {
+  requestSignupOtp,
+  resendSignupOtp,
+  verifySignupOtp,
+} from '@/services/auth-signup';
 
 /**
  * Supabase adapter that maintains the same interface as the existing auth flow
@@ -10,38 +15,73 @@ export const SupabaseAdapter = {
    * Login with email and password
    */
   async login(email: string, password: string): Promise<AuthModel> {
-    console.log('SupabaseAdapter: Attempting login with email:', email);
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+      /\/$/,
+      '',
+    );
+    if (!apiBaseUrl) {
+      throw new Error('Missing API base URL configuration');
+    }
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+    const body = JSON.stringify({
+      email: email.trim(),
+      password,
+    });
+
+    // Support common backend auth route names across environments.
+    const candidatePaths = ['/auth/login', '/auth/signin'];
+    let lastError = 'Invalid login credentials';
+
+    for (const path of candidatePaths) {
+      const response = await fetch(`${apiBaseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body,
       });
 
-      if (error) {
-        console.error('SupabaseAdapter: Login error from Supabase:', error);
-        throw new Error(error.message);
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 404) {
+        continue;
       }
 
-      console.log(
-        'SupabaseAdapter: Login successful, session:',
-        data.session
-          ? {
-              access_token_length: data.session.access_token?.length,
-              refresh_token_length: data.session.refresh_token?.length,
-            }
-          : 'No session data',
-      );
+      if (!response.ok) {
+        lastError =
+          payload?.message ||
+          payload?.error ||
+          `Login failed: ${response.status}`;
+        throw new Error(lastError);
+      }
 
-      // Transform Supabase session to AuthModel
+      if (
+        payload?.status !== undefined &&
+        payload.status !== 1 &&
+        payload.status !== '1'
+      ) {
+        throw new Error(payload?.message || 'Invalid login credentials');
+      }
+
+      const tokenContainer = payload?.data ?? payload;
+      const accessToken =
+        tokenContainer?.access_token ??
+        tokenContainer?.accessToken ??
+        tokenContainer?.token;
+      const refreshToken =
+        tokenContainer?.refresh_token ?? tokenContainer?.refreshToken;
+
+      if (!accessToken) {
+        throw new Error('Login succeeded but no access token was returned');
+      }
+
       return {
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
+        access_token: accessToken,
+        refresh_token: refreshToken,
       };
-    } catch (error) {
-      console.error('SupabaseAdapter: Unexpected login error:', error);
-      throw error;
     }
+
+    throw new Error(lastError);
   },
 
   /**
@@ -142,36 +182,21 @@ export const SupabaseAdapter = {
     password: string,
     country_code: string,
     mobile: string,
-  ): Promise<AuthModel> {
-    const { data, error } = await supabase.auth.signUp({
+  ): Promise<void> {
+    await requestSignupOtp({
       email,
+      country_code,
+      mobile,
       password,
-      options: {
-        data: {
-          username: email.split('@')[0], // Default username from email
-          country_code: country_code.trim(),
-          mobile: mobile.trim(),
-          phone: `${country_code.trim()}${mobile.trim()}`,
-          created_at: new Date().toISOString(),
-        },
-      },
     });
+  },
 
-    if (error) throw new Error(error.message);
+  async verifySignupOtp(email: string, otp: string): Promise<void> {
+    await verifySignupOtp({ email, otp });
+  },
 
-    // Return empty tokens if email confirmation is required
-    if (!data.session) {
-      return {
-        access_token: '',
-        refresh_token: '',
-      };
-    }
-
-    // Transform Supabase session to AuthModel
-    return {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    };
+  async resendSignupOtp(email: string): Promise<void> {
+    await resendSignupOtp(email);
   },
 
   /**
@@ -238,10 +263,13 @@ export const SupabaseAdapter = {
    * Get current user from the session
    */
   async getCurrentUser(): Promise<UserModel | null> {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return null;
-
-    return this.getUserProfile();
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return null;
+      return this.getUserProfile();
+    } catch {
+      return null;
+    }
   },
 
   /**

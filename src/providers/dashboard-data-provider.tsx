@@ -27,10 +27,33 @@ import {
   UpdateProfilePayload,
 } from '@/services/profile';
 
+const DEVICE_ID_STORAGE_KEY = `${import.meta.env.VITE_APP_NAME || 'app'}-device-id`;
+
+function createLocalDeviceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `web-${Date.now().toString(36)}-${rand}`;
+}
+
+function getOrCreateDeviceId(): string {
+  if (typeof window === 'undefined') return 'web-client';
+  try {
+    const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY)?.trim();
+    if (existing) return existing;
+    const next = createLocalDeviceId();
+    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, next);
+    return next;
+  } catch {
+    return createLocalDeviceId();
+  }
+}
+
 const defaultDevicePayload = (): RegisterDeviceRequest => ({
   fcm_token: 'web-fcm-token',
-  device_id:
-    typeof navigator !== 'undefined' ? navigator.userAgent : 'web-client',
+  // Stable per-browser-install ID avoids backend unique collisions on device_id.
+  device_id: getOrCreateDeviceId(),
   device_type: 'web',
   device_name:
     typeof navigator !== 'undefined' ? navigator.userAgent : 'web-client',
