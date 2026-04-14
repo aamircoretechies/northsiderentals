@@ -41,6 +41,7 @@ export function SignAgreementsContent() {
   const [agreementSigned, setAgreementSigned] = useState(false);
   const [signatures, setSignatures] = useState<Record<string, string | null>>({});
   const [saving, setSaving] = useState(false);
+  const [signingOneKey, setSigningOneKey] = useState<string | null>(null);
 
   const toggleCard = (id: string) => {
     setOpenCard(openCard === id ? null : id);
@@ -142,6 +143,47 @@ export function SignAgreementsContent() {
     }
   };
 
+  const handleSignSingle = async (item: RcmSignatureListItem) => {
+    if (!reservationRef) return;
+    const key = signatureRowKey(item);
+    const png = signatures[key];
+    if (!isMeaningfulPngBase64(png)) {
+      toast.error(`Please add your signature for: ${displayTitleForSignatureItem(item)}`);
+      setOpenCard(key);
+      return;
+    }
+
+    try {
+      setSigningOneKey(key);
+      await saveRcmDocumentSignature({
+        reservation_ref: reservationRef,
+        signature_template_id: item.signaturetemplateid,
+        signature_png: png!,
+      });
+      setSignatureItems((prev) => {
+        const next = prev.map((x) =>
+          signatureRowKey(x) === key ? { ...x, issigned: true } : x,
+        );
+        const allDone = next.every((x) => x.issigned || x.overcounteronly);
+        if (allDone) setAgreementSigned(true);
+        return next;
+      });
+      setSignatures((prev) => ({ ...prev, [key]: null }));
+      toast.success(`${displayTitleForSignatureItem(item)} signed`);
+
+      const nextUnsigned = signatureItems.find(
+        (x) => !x.issigned && !x.overcounteronly && signatureRowKey(x) !== key,
+      );
+      if (nextUnsigned) {
+        setOpenCard(signatureRowKey(nextUnsigned));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save signature');
+    } finally {
+      setSigningOneKey(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full min-h-screen pb-[150px] lg:pb-10 relative px-4 pt-0 lg:px-0 bg-[#f8f9fa]">
       <div className="flex items-center mb-6 pt-2">
@@ -235,6 +277,18 @@ export function SignAgreementsContent() {
                       item={item}
                       onSignatureChange={handleSignatureChange}
                     />
+                    {!item.issigned && !item.overcounteronly ? (
+                      <div className="mt-4">
+                        <Button
+                          type="button"
+                          className="bg-[#0061e0] hover:bg-[#0052cc] text-white"
+                          disabled={saving || signingOneKey === key}
+                          onClick={() => void handleSignSingle(item)}
+                        >
+                          {signingOneKey === key ? 'Signing…' : 'Sign this document'}
+                        </Button>
+                      </div>
+                    ) : null}
                   </CollapsibleCard>
                 );
               })

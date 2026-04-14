@@ -42,6 +42,11 @@ export interface CreatePaymentSessionResponse {
   [key: string]: unknown;
 }
 
+export interface CreatePaymentSessionRequest {
+  reservationref?: string;
+  reservation_ref?: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
 
 function headersJsonOptionalAuth(): Record<string, string> {
@@ -119,16 +124,34 @@ export const carsService = {
     return response.json();
   },
 
-  async createPaymentSession(booking_id: string): Promise<CreatePaymentSessionResponse> {
-    const bookingId = booking_id.trim();
-    if (!bookingId) {
-      throw new Error('Booking ID is required to create payment');
+  async createPaymentSession(
+    params: CreatePaymentSessionRequest,
+  ): Promise<CreatePaymentSessionResponse> {
+    const reservationRef = String(
+      params.reservationref ?? params.reservation_ref ?? '',
+    ).trim();
+    if (!reservationRef) {
+      throw new Error('Reservation reference is required to create payment');
     }
+    const body: Record<string, string> = {};
+    body.reservationref = reservationRef;
+    body.reservation_ref = reservationRef;
+    const bookingPath = `/bookings/${encodeURIComponent(reservationRef)}`;
+    const fallbackReturnUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}${bookingPath}`
+        : bookingPath;
+    // Send multiple common key variants to maximize backend compatibility.
+    body.return_url = fallbackReturnUrl;
+    body.success_url = fallbackReturnUrl;
+    body.cancel_url = fallbackReturnUrl;
+    body.failure_url = fallbackReturnUrl;
+    body.redirect_url = fallbackReturnUrl;
 
     const response = await fetch(`${API_BASE_URL}/payments/create`, {
       method: 'POST',
       headers: headersJsonOptionalAuth(),
-      body: JSON.stringify({ booking_id: bookingId }),
+      body: JSON.stringify(body),
     });
 
     const text = await response.text();

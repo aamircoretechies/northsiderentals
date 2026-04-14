@@ -50,6 +50,27 @@ function getOrCreateDeviceId(): string {
   }
 }
 
+function rotateDeviceId(): string {
+  const next = createLocalDeviceId();
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, next);
+    } catch {
+      // ignore storage write errors; still return a new in-memory id for this request
+    }
+  }
+  return next;
+}
+
+function isDeviceIdConflictError(error: unknown): boolean {
+  const msg =
+    error instanceof Error ? error.message : String(error ?? '');
+  return (
+    msg.toLowerCase().includes('device_id') &&
+    msg.toLowerCase().includes('unique')
+  );
+}
+
 const defaultDevicePayload = (): RegisterDeviceRequest => ({
   fcm_token: 'web-fcm-token',
   // Stable per-browser-install ID avoids backend unique collisions on device_id.
@@ -147,20 +168,32 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     try {
       setLoading(true);
       setError(null);
-      const body = payload ?? defaultDevicePayload();
+      let body = payload ?? defaultDevicePayload();
       const token = getAuth()?.access_token?.trim();
 
-      const [dashResult] = await Promise.allSettled([
+      let dashResult = await Promise.allSettled([
         dashboardService.registerDevice(body),
       ]);
 
-      if (dashResult.status === 'fulfilled') {
-        setData(dashResult.value);
+      // Legacy/bad device IDs can collide in backend unique(device_id).
+      // Rotate local ID and retry once transparently.
+      if (
+        dashResult[0].status === 'rejected' &&
+        isDeviceIdConflictError(dashResult[0].reason)
+      ) {
+        body = { ...body, device_id: rotateDeviceId() };
+        dashResult = await Promise.allSettled([
+          dashboardService.registerDevice(body),
+        ]);
+      }
+
+      if (dashResult[0].status === 'fulfilled') {
+        setData(dashResult[0].value);
       } else {
         setData(null);
         setError(
-          dashResult.reason instanceof Error
-            ? dashResult.reason.message
+          dashResult[0].reason instanceof Error
+            ? dashResult[0].reason.message
             : 'Failed to load home data',
         );
       }

@@ -305,6 +305,10 @@ export function BookingDetailContent() {
             returnLocation: [view.returnWhereName, view.returnWhereAddress]
               .filter(Boolean)
               .join(' '),
+            pickupLocationId: view.pickupLocationId,
+            bookingType: view.bookingType,
+            transmission: view.transmission,
+            customerId: view.customerId,
           },
           customerSnapshot: {
             firstName: view.customerFirstName,

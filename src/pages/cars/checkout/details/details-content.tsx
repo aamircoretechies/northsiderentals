@@ -178,10 +178,14 @@ export function CarsCheckoutDetailsContent() {
       const response = await carsService.createBooking(payload);
       const booking = mergeCreateBookingForUiState(response);
       let paymentUrl = extractHostedPaymentUrl(response);
-      const bookingId = String(booking.booking_id ?? '').trim();
+      const reservationRef = String(
+        booking.rcm_reference_key ?? booking.reservation_ref ?? booking.reservationref ?? '',
+      ).trim();
 
-      if (!paymentUrl && bookingId) {
-        const paymentSession = await carsService.createPaymentSession(bookingId);
+      if (!paymentUrl && reservationRef) {
+        const paymentSession = await carsService.createPaymentSession({
+          reservationref: reservationRef,
+        });
         paymentUrl = extractHostedPaymentUrl(paymentSession);
       }
 

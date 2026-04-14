@@ -11,6 +11,58 @@ function stripDataUrlPrefix(dataUrl: string): string {
   return dataUrl.startsWith(prefix) ? dataUrl.slice(prefix.length) : dataUrl;
 }
 
+function exportOptimizedSignatureBase64(
+  source: HTMLCanvasElement,
+): string | null {
+  const srcCtx = source.getContext('2d');
+  if (!srcCtx) return null;
+
+  const w = source.width;
+  const h = source.height;
+  const data = srcCtx.getImageData(0, 0, w, h).data;
+
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+
+  // Find non-transparent bounds (drawn ink).
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const alpha = data[(y * w + x) * 4 + 3];
+      if (alpha > 10) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+
+  const pad = 8;
+  const cropX = Math.max(0, minX - pad);
+  const cropY = Math.max(0, minY - pad);
+  const cropW = Math.min(w - cropX, maxX - minX + 1 + pad * 2);
+  const cropH = Math.min(h - cropY, maxY - minY + 1 + pad * 2);
+
+  const maxOutW = 700;
+  const maxOutH = 220;
+  const scale = Math.min(1, maxOutW / cropW, maxOutH / cropH);
+  const outW = Math.max(1, Math.floor(cropW * scale));
+  const outH = Math.max(1, Math.floor(cropH * scale));
+
+  const out = document.createElement('canvas');
+  out.width = outW;
+  out.height = outH;
+  const outCtx = out.getContext('2d');
+  if (!outCtx) return null;
+  outCtx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+
+  return stripDataUrlPrefix(out.toDataURL('image/png'));
+}
+
 export function SignaturePad({ disabled, onChange }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -55,7 +107,7 @@ export function SignaturePad({ disabled, onChange }: SignaturePadProps) {
   const emit = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !onChange) return;
-    onChange(stripDataUrlPrefix(canvas.toDataURL('image/png')));
+    onChange(exportOptimizedSignatureBase64(canvas));
   }, [onChange]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {

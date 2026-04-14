@@ -21,6 +21,26 @@ function buildAuthHeaders(): HeadersInit {
   return headers;
 }
 
+function assertApiSuccess(
+  json: Record<string, unknown>,
+  fallbackMessage: string,
+): void {
+  if (
+    json.status !== undefined &&
+    json.status !== 1 &&
+    json.status !== '1'
+  ) {
+    const msg =
+      typeof json.message === 'string' ? json.message : fallbackMessage;
+    throw new Error(msg);
+  }
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** Raw API response wrapper */
 export interface BookingsListResponse {
   status?: number;
@@ -300,7 +320,9 @@ export async function fetchWorkflowChecklist(
     throw new Error(msg || 'Failed to load express check-in workflow');
   }
 
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  assertApiSuccess(json, 'Failed to load express check-in workflow');
+  return json as WorkflowChecklistResponse;
 }
 
 /**
@@ -394,17 +416,85 @@ export function extractWorkflowChecklistArrays(
 }
 
 export interface EditBookingBasicsPayload {
-  booking_id: string;
-  reservation_ref: string;
-  customer_details: Record<string, unknown>;
-  insurance_id: number;
-  number_of_persons: number;
+  booking_id?: string;
+  reservation_ref?: string;
+  reservationref?: string;
+  customer_details?: Record<string, unknown>;
+  customer?: Record<string, unknown>;
+  insurance_id?: number | string;
+  insuranceid?: number | string;
+  extrakms_id?: number | string;
+  extrakmsid?: number | string;
+  number_of_persons?: number;
+  numbertravelling?: number | string;
+  booking_type?: number | string;
+  bookingtype?: number | string;
+  referralid?: number | string;
+  remark?: string;
+  flightin?: string;
+  flightout?: string;
+  arrivalpoint?: string;
+  departurepoint?: string;
+  areaofuseid?: number | string;
+  newsletter?: boolean;
+  agentcode?: string;
+  agentname?: string;
+  agentemail?: string;
+  agentrefno?: string;
+  agentcollectedrecalcmode?: string;
+  optionalfees?: Array<{ id: number | string; qty: number | string }>;
+  pickuplocationid?: number | string;
+  transmission?: number | string;
+  id?: number | string;
 }
 
-export async function editBookingBasics(
-  payload: EditBookingBasicsPayload,
-): Promise<{ status?: number; message?: string; data?: unknown }> {
-  const url = `${API_BASE_URL.replace(/\/$/, '')}/bookings/edit`;
+export interface UpdateBookingPayload {
+  reservation_ref: string;
+  bookingtype: number;
+  pickuplocationid: number;
+  pickupdatetime: string;
+  dropofflocationid: number;
+  dropoffdatetime: string;
+  vehiclecategoryid: number;
+  driverageid: number;
+  insuranceid: number;
+  extrakmsid: number;
+  transmission: number;
+  customer: {
+    firstname: string;
+    lastname: string;
+    dateofbirth: string;
+    licenseno: string;
+    email: string;
+    state: string;
+    city: string;
+    postcode: string;
+    address: string;
+  };
+  referralid: number;
+  remark: string;
+  numbertravelling: number;
+  flightin: string;
+  flightout: string;
+  arrivalpoint: string;
+  departurepoint: string;
+  areaofuseid: number;
+  newsletter: boolean;
+  agentcode: string;
+  agentname: string;
+  agentemail: string;
+  agentrefno: string;
+  agentcollectedrecalcmode: string;
+  optionalfees: Array<{ id: number; qty: number }>;
+}
+
+export async function updateBooking(
+  payload: UpdateBookingPayload,
+): Promise<{ success?: boolean; status?: number; message?: string; data?: unknown }> {
+  const url = `${API_BASE_URL.replace(/\/$/, '')}/bookings/update-booking`;
+  const reservationRef = String(payload.reservation_ref ?? '').trim();
+  if (!reservationRef) throw new Error('Missing reservation reference');
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -422,10 +512,150 @@ export async function editBookingBasics(
     } catch {
       /* ignore */
     }
+    throw new Error(msg || 'Failed to update booking');
+  }
+
+  const json = (await response.json()) as Record<string, unknown>;
+  const okBySuccess = json.success === true;
+  const okByStatus =
+    json.status === 1 || json.status === '1' || json.status === undefined;
+  if (!okBySuccess && !okByStatus) {
+    const msg =
+      typeof json.message === 'string' ? json.message : 'Failed to update booking';
+    throw new Error(msg);
+  }
+  return json as { success?: boolean; status?: number; message?: string; data?: unknown };
+}
+
+export async function editBookingBasics(
+  payload: EditBookingBasicsPayload,
+): Promise<{
+  success?: boolean;
+  status?: number;
+  message?: string;
+  data?: unknown;
+}> {
+  const url = `${API_BASE_URL.replace(/\/$/, '')}/bookings/edit`;
+  const bookingId = String(payload.booking_id ?? '').trim();
+  const reservationRef = String(
+    payload.reservation_ref ?? payload.reservationref ?? '',
+  ).trim();
+  if (!bookingId && !reservationRef) {
+    throw new Error(
+      'Missing booking identifier. Provide booking_id or reservation_ref.',
+    );
+  }
+
+  const requestPayload: Record<string, unknown> = {
+    customer_details: { ...(payload.customer_details ?? payload.customer ?? {}) },
+  };
+  if (reservationRef) requestPayload.reservation_ref = reservationRef;
+  if (bookingId) requestPayload.booking_id = bookingId;
+  if (payload.insurance_id != null) requestPayload.insurance_id = payload.insurance_id;
+  else if (payload.insuranceid != null) requestPayload.insurance_id = payload.insuranceid;
+  if (payload.extrakms_id != null) requestPayload.extrakms_id = payload.extrakms_id;
+  else if (payload.extrakmsid != null) requestPayload.extrakms_id = payload.extrakmsid;
+  if (payload.number_of_persons != null) {
+    requestPayload.number_of_persons = toFiniteNumber(payload.number_of_persons, 0);
+  } else if (payload.numbertravelling != null) {
+    requestPayload.number_of_persons = toFiniteNumber(payload.numbertravelling, 0);
+  }
+  if (payload.bookingtype != null) {
+    const bt = toFiniteNumber(payload.bookingtype, 2);
+    requestPayload.bookingtype = bt;
+    requestPayload.booking_type = bt;
+  } else if (payload.booking_type != null) {
+    const bt = toFiniteNumber(payload.booking_type, 2);
+    requestPayload.bookingtype = bt;
+    requestPayload.booking_type = bt;
+  }
+  if (payload.pickuplocationid != null) {
+    const pickupLocationId = toFiniteNumber(payload.pickuplocationid, 0);
+    requestPayload.pickuplocationid = pickupLocationId;
+    requestPayload.pickup_location_id = pickupLocationId;
+  }
+  if (payload.transmission != null) {
+    const transmission = toFiniteNumber(payload.transmission, 0);
+    requestPayload.transmission = transmission;
+    requestPayload.transmissionid = transmission;
+    requestPayload.transmission_id = transmission;
+  }
+  if (payload.id != null) {
+    const customerId = toFiniteNumber(payload.id, 0);
+    requestPayload.id = customerId;
+    const customerDetails = requestPayload.customer_details as Record<string, unknown>;
+    // Legacy RCM path expects customer id inside customer_details.
+    if (customerId > 0 && (customerDetails.id == null || customerDetails.id === '')) {
+      customerDetails.id = customerId;
+    }
+  }
+  if (requestPayload.booking_type == null) {
+    requestPayload.bookingtype = 2;
+    requestPayload.booking_type = 2;
+  }
+  if (payload.referralid != null) {
+    requestPayload.referralid = toFiniteNumber(payload.referralid, 0);
+  }
+  if (payload.remark != null) requestPayload.remark = String(payload.remark);
+  if (payload.flightin != null) requestPayload.flightin = String(payload.flightin);
+  if (payload.flightout != null) requestPayload.flightout = String(payload.flightout);
+  if (payload.arrivalpoint != null) requestPayload.arrivalpoint = String(payload.arrivalpoint);
+  if (payload.departurepoint != null) requestPayload.departurepoint = String(payload.departurepoint);
+  if (payload.areaofuseid != null) {
+    requestPayload.areaofuseid = toFiniteNumber(payload.areaofuseid, 0);
+  }
+  if (payload.newsletter != null) requestPayload.newsletter = Boolean(payload.newsletter);
+  if (payload.agentcode != null) requestPayload.agentcode = String(payload.agentcode);
+  if (payload.agentname != null) requestPayload.agentname = String(payload.agentname);
+  if (payload.agentemail != null) requestPayload.agentemail = String(payload.agentemail);
+  if (payload.agentrefno != null) requestPayload.agentrefno = String(payload.agentrefno);
+  if (payload.agentcollectedrecalcmode != null) {
+    requestPayload.agentcollectedrecalcmode = String(payload.agentcollectedrecalcmode);
+  }
+  if (Array.isArray(payload.optionalfees)) {
+    requestPayload.optionalfees = payload.optionalfees.map((x) => ({
+      id: toFiniteNumber(x.id, 0),
+      qty: Math.max(0, toFiniteNumber(x.qty, 0)),
+    }));
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestPayload),
+  });
+
+  if (!response.ok) {
+    let msg = response.statusText;
+    try {
+      const err = await response.json();
+      msg = err.message || msg;
+    } catch {
+      /* ignore */
+    }
     throw new Error(msg || 'Failed to update booking details');
   }
 
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  const okBySuccess = json.success === true;
+  const okByStatus =
+    json.status === 1 || json.status === '1' || json.status === undefined;
+  if (!okBySuccess && !okByStatus) {
+    const msg =
+      typeof json.message === 'string'
+        ? json.message
+        : 'Failed to update booking details';
+    throw new Error(msg);
+  }
+  return json as {
+    success?: boolean;
+    status?: number;
+    message?: string;
+    data?: unknown;
+  };
 }
 
 export interface AddExtraDriverPayload {
@@ -468,7 +698,9 @@ export async function addExtraDriver(
     throw new Error(msg || 'Failed to add extra driver');
   }
 
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  assertApiSuccess(json, 'Failed to add extra driver');
+  return json as { status?: number; message?: string; data?: unknown };
 }
 
 export interface RcmDocumentItem {
@@ -517,7 +749,9 @@ export async function listRcmDocuments(
     }
     throw new Error(msg || 'Failed to load required documents');
   }
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  assertApiSuccess(json, 'Failed to load required documents');
+  return json as ListRcmDocumentsResponse;
 }
 
 export async function uploadRcmDocumentFile(
@@ -583,7 +817,9 @@ export async function storeRcmDocument(
     }
     throw new Error(msg || 'Failed to store uploaded document');
   }
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  assertApiSuccess(json, 'Failed to store uploaded document');
+  return json as { status?: number; message?: string; data?: unknown };
 }
 
 export async function deleteRcmDocument(payload: {
@@ -609,7 +845,9 @@ export async function deleteRcmDocument(payload: {
     }
     throw new Error(msg || 'Failed to delete document');
   }
-  return response.json();
+  const json = (await response.json()) as Record<string, unknown>;
+  assertApiSuccess(json, 'Failed to delete document');
+  return json as { status?: number; message?: string; data?: unknown };
 }
 
 /** Turn relative API paths (e.g. receipt) into absolute URLs */
@@ -825,6 +1063,10 @@ export interface BookingDetailView {
   customerPostcode: string;
   /** From bookinginfo.numbertravelling */
   numberTravelling: string;
+  pickupLocationId: number;
+  bookingType: number;
+  transmission: number;
+  customerId: number;
 }
 
 function pickNonEmpty(...vals: unknown[]): string {
@@ -1039,5 +1281,19 @@ export function mapBookingDetailToView(
       customerInfo?.postcode,
     ),
     numberTravelling: pickNonEmpty(bookingInfo?.numbertravelling),
+    pickupLocationId: num(
+      bookingInfo?.pickuplocationid ?? bookingInfo?.pickup_location_id,
+    ),
+    bookingType: num(
+      bookingInfo?.bookingtype ??
+        bookingInfo?.booking_type ??
+        bookingInfo?.reservationtype,
+    ),
+    transmission: num(
+      bookingInfo?.transmission ??
+        bookingInfo?.transmissionid ??
+        bookingInfo?.transmission_preference,
+    ),
+    customerId: num(customerInfo?.id ?? customerInfo?.customerid ?? data.customer_id),
   };
 }
