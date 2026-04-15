@@ -135,11 +135,24 @@ export function SignInPage() {
       navigate(nextPath);
     } catch (err) {
       console.error('Google sign-in error:', err);
+      const errorCode =
+        err && typeof err === 'object' && 'code' in err
+          ? String((err as { code?: unknown }).code ?? '')
+          : '';
+      if (errorCode === 'auth/popup-closed-by-user') {
+        setError('Sign-in was cancelled. Please try again.');
+        return;
+      }
+      if (errorCode === 'auth/popup-blocked') {
+        setError('Popup was blocked by your browser. Please allow popups and try again.');
+        return;
+      }
       setError(
         err instanceof Error
           ? err.message
           : 'Failed to sign in with Google. Please try again.',
       );
+    } finally {
       setIsGoogleLoading(false);
     }
   };

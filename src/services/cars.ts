@@ -112,16 +112,36 @@ export const carsService = {
       body: JSON.stringify(data),
     });
 
-    if (!response.ok) {
+    const text = await response.text();
+    let json: Record<string, unknown> | null = null;
+    if (text.trim()) {
       try {
-        const errJson = await response.json();
-        throw new Error(errJson.message || `Failed to create booking: ${response.statusText}`);
-      } catch (e) {
-        throw new Error(`Failed to create booking: ${response.statusText}`);
+        json = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        json = null;
       }
     }
 
-    return response.json();
+    if (!response.ok) {
+      const msg =
+        (json?.message as string) ||
+        (json?.error as string) ||
+        `Failed to create booking: ${response.statusText}`;
+      throw new Error(msg);
+    }
+
+    if (
+      json &&
+      json.status !== undefined &&
+      json.status !== 1 &&
+      json.status !== '1'
+    ) {
+      throw new Error(
+        (json.message as string) || 'Could not create booking',
+      );
+    }
+
+    return (json || {}) as Record<string, unknown>;
   },
 
   async createPaymentSession(

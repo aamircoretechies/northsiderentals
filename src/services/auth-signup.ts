@@ -41,8 +41,8 @@ export async function requestSignupOtp(payload: {
     password: payload.password,
   });
 
-  // Some environments expose signup as /auth/register instead of /auth/signup.
-  const candidatePaths = ['/auth/signup', '/auth/register'];
+  // Register endpoint for signup OTP creation.
+  const candidatePaths = ['/auth/register'];
   let lastErrorMessage = 'Signup failed';
 
   for (const path of candidatePaths) {

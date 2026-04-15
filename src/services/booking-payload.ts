@@ -138,6 +138,11 @@ export function buildCreateBookingPayload(
     refno = '',
   } = input;
 
+  const nonEmpty = (v: string, fallback: string) => {
+    const t = String(v ?? '').trim();
+    return t || fallback;
+  };
+
   return {
     vehicle_id: parsePositiveInt(vehicle_id, 0),
     category_id: parsePositiveInt(category_id, 0),
@@ -156,21 +161,21 @@ export function buildCreateBookingPayload(
     numbertravelling: parsePositiveInt(number_of_persons, 1),
     emailoption: 1,
     referralid: 0,
-    campaigncode: campaigncode || '',
+    campaigncode: nonEmpty(campaigncode, 'N/A'),
     agentcode: 'RCMAgent',
-    agentname,
-    agentemail,
-    agentrefno,
+    agentname: nonEmpty(agentname, 'N/A'),
+    agentemail: nonEmpty(agentemail, 'na@example.com'),
+    agentrefno: nonEmpty(agentrefno, 'N/A'),
     agentcollectedamount: 1,
     rental_source_id: 73,
-    remark,
-    flightin,
-    flightout,
-    arrivalpoint,
-    departurepoint,
+    remark: nonEmpty(remark, 'N/A'),
+    flightin: nonEmpty(flightin, 'N/A'),
+    flightout: nonEmpty(flightout, 'N/A'),
+    arrivalpoint: nonEmpty(arrivalpoint, 'N/A'),
+    departurepoint: nonEmpty(departurepoint, 'N/A'),
     areaofuseid: 0,
     newsletter: Boolean(newsletter),
-    refno,
+    refno: nonEmpty(refno, 'N/A'),
     relocationspecialid: 1,
     packageid: 1,
     rateperiod_typeid: parsePositiveInt(rateperiod_typeid, 1),
