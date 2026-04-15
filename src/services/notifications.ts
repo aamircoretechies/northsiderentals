@@ -163,17 +163,16 @@ export const notificationsService = {
     return n != null ? Number(n) : 0;
   },
 
-  /** `DELETE /notifications/delete?notification_id=` */
+  /** `DELETE /notifications/delete` — body must include `notification_id` */
   async remove(notificationId: string): Promise<void> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
+    const id = String(notificationId ?? '').trim();
+    if (!id) throw new Error('notification_id is required');
 
-    const headers = { ...authJsonHeaders() } as Record<string, string>;
-    delete headers['Content-Type'];
-
-    const qs = new URLSearchParams({ notification_id: notificationId });
-    const res = await fetch(`${API_BASE}/notifications/delete?${qs.toString()}`, {
+    const res = await fetch(`${API_BASE}/notifications/delete`, {
       method: 'DELETE',
-      headers,
+      headers: authJsonHeaders(),
+      body: JSON.stringify({ notification_id: id }),
     });
 
     const text = await res.text();
