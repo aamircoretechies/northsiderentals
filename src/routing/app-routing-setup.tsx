@@ -42,7 +42,7 @@ import {
   AuthAccountDeactivatedPage,
   AuthWelcomeMessagePage,
 } from '@/pages/auth';
-import { DefaultPage, Demo1DarkSidebarPage } from '@/pages/dashboards';
+import { Demo1DarkSidebarPage } from '@/pages/dashboards';
 import {
   NetworkAppRosterPage,
   NetworkAuthorPage,
@@ -92,6 +92,7 @@ import {
   StoreClientPage,
   WishlistPage,
 } from '@/pages/store-client';
+import { RootHomeEntry } from '@/routing/root-home-entry';
 import { CarsSearchResultsGridPage } from '@/pages/cars/search-results-grid';
 import { CarsCheckoutOptionsPage } from '@/pages/cars/checkout/options';
 import { CarsCheckoutDetailsPage } from '@/pages/cars/checkout/details';
@@ -110,7 +111,7 @@ export function AppRoutingSetup() {
     <Routes>
       <Route element={<RequireAuth />}>
         <Route element={<Demo9Layout />}>
-          <Route path="/" element={<DefaultPage />} />
+          <Route path="/" element={<RootHomeEntry />} />
           <Route path="/dark-sidebar" element={<Demo1DarkSidebarPage />} />
           <Route
             path="/public-profile/profiles/default/"

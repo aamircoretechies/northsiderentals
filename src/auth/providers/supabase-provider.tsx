@@ -117,6 +117,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     SupabaseAdapter.logout();
     saveAuth(undefined);
     setCurrentUser(undefined);
+    const base = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
+    window.location.assign(`${base}auth/signin`);
   };
 
   return (

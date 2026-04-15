@@ -96,6 +96,26 @@ export const notificationsService = {
     return [];
   },
 
+  /** `PUT /notifications/mark-all-read` — marks every notification read for the user */
+  async markAllRead(): Promise<void> {
+    if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
+
+    const res = await fetch(`${API_BASE}/notifications/mark-all-read`, {
+      method: 'PUT',
+      headers: authJsonHeaders(),
+      body: JSON.stringify({}),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`Mark all read failed: ${res.status} ${text}`);
+    }
+
+    if (!text.trim()) return;
+    const json = JSON.parse(text) as Record<string, unknown>;
+    assertEnvelope(json);
+  },
+
   /** `POST /notifications/mark-read` */
   async markRead(notificationId: string): Promise<RcmNotification> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
@@ -118,14 +138,16 @@ export const notificationsService = {
     return parseNotification(row);
   },
 
-  /** `POST /notifications/clear-all` — returns deleted count when present */
+  /** `DELETE /notifications/clear-all` — returns deleted count when present */
   async clearAll(): Promise<number> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
+    const headers = { ...authJsonHeaders() } as Record<string, string>;
+    delete headers['Content-Type'];
+
     const res = await fetch(`${API_BASE}/notifications/clear-all`, {
-      method: 'POST',
-      headers: authJsonHeaders(),
-      body: JSON.stringify({}),
+      method: 'DELETE',
+      headers,
     });
 
     const text = await res.text();
@@ -141,14 +163,17 @@ export const notificationsService = {
     return n != null ? Number(n) : 0;
   },
 
-  /** `POST /notifications/delete` */
+  /** `DELETE /notifications/delete?notification_id=` */
   async remove(notificationId: string): Promise<void> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const res = await fetch(`${API_BASE}/notifications/delete`, {
-      method: 'POST',
-      headers: authJsonHeaders(),
-      body: JSON.stringify({ notification_id: notificationId }),
+    const headers = { ...authJsonHeaders() } as Record<string, string>;
+    delete headers['Content-Type'];
+
+    const qs = new URLSearchParams({ notification_id: notificationId });
+    const res = await fetch(`${API_BASE}/notifications/delete?${qs.toString()}`, {
+      method: 'DELETE',
+      headers,
     });
 
     const text = await res.text();

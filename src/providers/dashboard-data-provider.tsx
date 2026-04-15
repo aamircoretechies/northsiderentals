@@ -300,12 +300,9 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   }, []);
 
   const markAllNotificationsRead = useCallback(async () => {
-    const unread = notifications.filter((n) => !n.is_read);
-    await Promise.all(
-      unread.map((n) => notificationsService.markRead(n.notification_id)),
-    );
+    await notificationsService.markAllRead();
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  }, [notifications]);
+  }, []);
 
   const clearAllNotifications = useCallback(async () => {
     await notificationsService.clearAll();

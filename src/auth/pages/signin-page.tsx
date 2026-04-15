@@ -314,7 +314,7 @@ export function SignInPage() {
         </div>
         <div className="text-center text-sm text-muted-foreground">
           <Link
-            to="/"
+            to="/cars/search-results-grid"
             replace
             className="text-sm font-semibold text-foreground hover:text-primary"
           >
