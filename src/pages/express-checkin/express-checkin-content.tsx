@@ -572,6 +572,33 @@ export function ExpressCheckinContent() {
   const legacyEditFieldsRef = useRef<LegacyEditFields | null>(null);
 
   // Re-hydrate when booking context OR fetched workflow payload changes.
+  const customerHydrationSnapshot = [
+    firstText(customerInfo?.firstname),
+    firstText(customerInfo?.lastname),
+    firstText(customerInfo?.email),
+    firstText(customerInfo?.mobile, customerInfo?.phone),
+    firstText(customerInfo?.dateofbirth),
+    firstText(customerInfo?.licenseno),
+    firstText(customerInfo?.licenseissued),
+    firstText(customerInfo?.licenseexpires),
+    firstText(customerInfo?.address),
+    firstText(customerInfo?.city),
+    firstText(customerInfo?.state),
+    firstText(customerInfo?.postcode),
+    firstText(customerInfo?.country),
+  ].join('|');
+  const bookingHydrationSnapshot = [
+    firstText(bookingInfo?.reservationref),
+    firstText(bookingInfo?.numbertravelling),
+    firstText(bookingInfo?.pickuplocationid),
+    firstText(bookingInfo?.dropofflocationid),
+    firstText(bookingInfo?.pickupdate),
+    firstText(bookingInfo?.dropoffdate),
+    firstText(bookingInfo?.vehiclecategoryid),
+    firstText(bookingInfo?.customerid),
+    firstText(bookingInfo?.transmission),
+    firstText(bookingInfo?.customerremark),
+  ].join('|');
   const hydrationKey = [
     firstText(reservationRef, bookingInfo?.reservationref),
     firstText(snapshot?.bookingId),
@@ -581,6 +608,8 @@ export function ExpressCheckinContent() {
     String(normalizedWorkflow.optionalfees.length),
     String(normalizedWorkflow.insuranceoptions.length),
     String(extraFeesRaw.length),
+    customerHydrationSnapshot,
+    bookingHydrationSnapshot,
     String(normalizedWorkflow.extradrivers.length),
     extraDriversHydrationKey,
     String(normalizedWorkflow.documentlinkdata.length),

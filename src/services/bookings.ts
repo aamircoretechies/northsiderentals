@@ -884,12 +884,31 @@ const RECEIPT_URL_KEYS = [
   'href',
 ] as const;
 
+function scoreInvoiceCandidate(raw: string): number {
+  const s = raw.trim().toLowerCase();
+  if (!s) return 0;
+  let score = 1;
+  if (s.includes('/uploads/invoice/')) score += 100;
+  if (s.includes('customerinvoice')) score += 80;
+  if (s.includes('invoice')) score += 60;
+  if (s.endsWith('.pdf') || s.includes('.pdf?')) score += 50;
+  if (s.includes('receipt')) score += 15;
+  if (s.includes('agreement.aspx')) score -= 80;
+  return score;
+}
+
 function pickInvoicePathFromRecord(r: Record<string, unknown>): string | null {
+  let best: { value: string; score: number } | null = null;
   for (const k of RECEIPT_URL_KEYS) {
     const v = r[k];
-    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+    if (typeof v !== 'string' || v.trim().length === 0) continue;
+    const value = v.trim();
+    const score = scoreInvoiceCandidate(value);
+    if (!best || score > best.score) {
+      best = { value, score };
+    }
   }
-  return null;
+  return best?.value ?? null;
 }
 
 /** Parse JSON receipt API body for a document URL or path */
@@ -928,6 +947,13 @@ function resolveInvoiceTargetUrl(
   const s = pathOrUrl.trim();
   if (!s) return '';
   if (/^https?:\/\//i.test(s)) return s;
+  // Invoices are served from API/base uploads path, not RCM agreement/documents origin.
+  if (
+    /^\/?uploads\/invoice\//i.test(s) ||
+    /^\/?api\/v1\/uploads\/invoice\//i.test(s)
+  ) {
+    return resolveApiAssetUrl(s.startsWith('/') ? s : `/${s}`);
+  }
   const base = documentsBaseUrl?.replace(/\/$/, '') ?? '';
   if (base && !s.startsWith('/api')) {
     return `${base}/${s.replace(/^\//, '')}`;
