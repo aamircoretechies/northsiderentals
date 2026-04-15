@@ -156,17 +156,21 @@ export const carsService = {
     const body: Record<string, string> = {};
     body.reservationref = reservationRef;
     body.reservation_ref = reservationRef;
-    const bookingPath = `/bookings/${encodeURIComponent(reservationRef)}`;
     const fallbackReturnUrl =
       typeof window !== 'undefined'
-        ? `${window.location.origin}${bookingPath}`
-        : bookingPath;
+        ? `${window.location.origin}/bookings`
+        : '/bookings';
     // Send multiple common key variants to maximize backend compatibility.
     body.return_url = fallbackReturnUrl;
     body.success_url = fallbackReturnUrl;
     body.cancel_url = fallbackReturnUrl;
     body.failure_url = fallbackReturnUrl;
     body.redirect_url = fallbackReturnUrl;
+    body.returnUrl = fallbackReturnUrl;
+    body.successUrl = fallbackReturnUrl;
+    body.cancelUrl = fallbackReturnUrl;
+    body.failureUrl = fallbackReturnUrl;
+    body.redirectUrl = fallbackReturnUrl;
 
     const response = await fetch(`${API_BASE_URL}/payments/create`, {
       method: 'POST',
