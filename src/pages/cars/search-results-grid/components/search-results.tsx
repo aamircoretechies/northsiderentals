@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { CarCard, CarCardProps, CarSearchMeta } from './car-card';
-import { CarsFiltersSheet } from './cars-filters-sheet';
+import { CarsFiltersSheet, type CarsSearchFilters } from './cars-filters-sheet';
 
 type SearchResultsType = 'card' | 'list';
 
@@ -344,6 +344,11 @@ function mapApiCarToCard(
 export function SearchResults({ mode }: { mode: SearchResultsType }) {
   const [searchInput, setSearchInput] = useState('');
   const [activeTab, setActiveTab] = useState<SearchResultsType>(mode);
+  const [filters, setFilters] = useState<CarsSearchFilters>({
+    activeType: 'All',
+    maxPricePerDay: 100,
+    showAvailable: true,
+  });
 
   const location = useLocation();
   const searchData = location.state?.searchData;
@@ -400,28 +405,58 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
       ),
   );
 
-  const filterText = searchInput.trim().toLowerCase();
-  const items = filterText
-    ? bookableItems.filter(
-        (it) =>
-          it.title.toLowerCase().includes(filterText) ||
-          (it.subtitle?.toLowerCase().includes(filterText) ?? false),
-      )
-    : bookableItems;
+  const matchesVehicleType = (item: CarCardProps): boolean => {
+    if (filters.activeType === 'All') return true;
+    const hay = `${item.subtitle ?? ''} ${item.title}`.toLowerCase();
+    const type = filters.activeType.toLowerCase();
+    if (type.includes('small to mid')) {
+      return (
+        hay.includes('small') ||
+        hay.includes('mid') ||
+        hay.includes('compact') ||
+        hay.includes('sedan') ||
+        hay.includes('hatch')
+      );
+    }
+    if (type.includes('large/suv')) {
+      return hay.includes('large') || hay.includes('suv') || hay.includes('4wd');
+    }
+    if (type.includes('people movers')) {
+      return hay.includes('people') || hay.includes('mover') || hay.includes('minivan');
+    }
+    if (type.includes('light trucks')) return hay.includes('truck');
+    if (type.includes('utes/vans')) return hay.includes('ute') || hay.includes('van');
+    return hay.includes(type);
+  };
 
-  const filteredSoldOut = filterText
-    ? soldOutItems.filter(
-        (it) =>
-          it.title.toLowerCase().includes(filterText) ||
-          (it.subtitle?.toLowerCase().includes(filterText) ?? false),
-      )
-    : soldOutItems;
+  const withinPrice = (item: CarCardProps): boolean => {
+    const perDay = Number(item.discount_price) || 0;
+    return perDay <= filters.maxPricePerDay;
+  };
+
+  const filterText = searchInput.trim().toLowerCase();
+  const matchSearch = (it: CarCardProps) =>
+    it.title.toLowerCase().includes(filterText) ||
+    (it.subtitle?.toLowerCase().includes(filterText) ?? false);
+  const items = bookableItems.filter((it) => {
+    if (filterText && !matchSearch(it)) return false;
+    if (!matchesVehicleType(it)) return false;
+    if (!withinPrice(it)) return false;
+    return true;
+  });
+
+  const filteredSoldOut = soldOutItems.filter((it) => {
+    if (filterText && !matchSearch(it)) return false;
+    if (!matchesVehicleType(it)) return false;
+    if (!withinPrice(it)) return false;
+    return true;
+  });
 
   /** At least one bookable vehicle from API (before search box filter). */
   const hasBookableFromApi = bookableItems.length > 0;
   /** Show sold-out cards only when user can still book something (comparison). */
   const showSoldOutSection =
-    hasBookableFromApi && filteredSoldOut.length > 0;
+    !filters.showAvailable && hasBookableFromApi && filteredSoldOut.length > 0;
 
   return (
     <div className="flex flex-col items-stretch gap-7">
@@ -446,6 +481,15 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
         </div>
 
         <CarsFiltersSheet
+          value={filters}
+          onApply={setFilters}
+          onReset={() =>
+            setFilters({
+              activeType: 'All',
+              maxPricePerDay: 100,
+              showAvailable: true,
+            })
+          }
           trigger={
             <Button>
               <Funnel /> Filter

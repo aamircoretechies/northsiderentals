@@ -1,3 +1,6 @@
+import { CircleHelp } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
 export interface BookingDetailsForm {
   selectedInsurance: string;
   selectedOptionalFees: string[];
@@ -13,12 +16,32 @@ export function BookingDetailsCard({
 }: {
   value: BookingDetailsForm;
   onChange: (patch: Partial<BookingDetailsForm>) => void;
-  optionalFees: Array<{ id: string; label: string; qtyEnabled?: boolean; maxQty?: number }>;
-  insuranceOptions: Array<{ id: string; label: string }>;
+  optionalFees: Array<{
+    id: string;
+    label: string;
+    qtyEnabled?: boolean;
+    maxQty?: number;
+    description?: string;
+  }>;
+  insuranceOptions: Array<{ id: string; label: string; description?: string }>;
 }) {
   const selectedOptionalFees = value.selectedOptionalFees ?? [];
   const optionalFeeQuantities = value.optionalFeeQuantities ?? {};
   const notes = value.notes ?? '';
+
+  const InfoIcon = ({ description }: { description?: string }) =>
+    description ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="inline-flex items-center align-middle ms-1">
+            <CircleHelp size={13} className="text-[#0061e0]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs whitespace-pre-wrap text-[12px] leading-relaxed">
+          {description}
+        </TooltipContent>
+      </Tooltip>
+    ) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -54,7 +77,10 @@ export function BookingDetailsCard({
                   className="flex flex-wrap items-center gap-3 p-3 bg-white border border-[#e2e8f0] rounded-[10px]"
                 >
                   <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <span className="text-[14px] text-black font-medium">{f.label}</span>
+                    <span className="text-[14px] text-black font-medium">
+                      {f.label}
+                      <InfoIcon description={f.description} />
+                    </span>
                     <span className="text-[12px] text-gray-500">Quantity for this rental</span>
                   </div>
                   <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -102,7 +128,10 @@ export function BookingDetailsCard({
                     onChange({ selectedOptionalFees: next, optionalFeeQuantities: nextQty });
                   }}
                 />
-                <span className="text-[14px] text-black">{f.label}</span>
+                <span className="text-[14px] text-black">
+                  {f.label}
+                  <InfoIcon description={f.description} />
+                </span>
               </div>
             );
           })}
@@ -128,7 +157,10 @@ export function BookingDetailsCard({
                 checked={(value.selectedInsurance ?? '') === opt.id}
                 onChange={() => onChange({ selectedInsurance: opt.id })}
               />
-              <span className="text-[14px] text-black">{opt.label}</span>
+              <span className="text-[14px] text-black">
+                {opt.label}
+                <InfoIcon description={opt.description} />
+              </span>
             </label>
           ))}
         </div>

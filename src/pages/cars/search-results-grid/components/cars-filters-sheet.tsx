@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Slider } from '@/components/ui/slider';
@@ -22,13 +22,38 @@ const vehicleTypes = [
   'Utes/Vans',
 ];
 
-export function CarsFiltersSheet({ trigger }: { trigger: ReactNode }) {
-  const [activeType, setActiveType] = useState('All');
-  const [priceRange, setPriceRange] = useState([40]);
-  const [showAvailable, setShowAvailable] = useState(true);
+export interface CarsSearchFilters {
+  activeType: string;
+  maxPricePerDay: number;
+  showAvailable: boolean;
+}
+
+export function CarsFiltersSheet({
+  trigger,
+  value,
+  onApply,
+  onReset,
+}: {
+  trigger: ReactNode;
+  value: CarsSearchFilters;
+  onApply: (next: CarsSearchFilters) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeType, setActiveType] = useState(value.activeType);
+  const [priceRange, setPriceRange] = useState([value.maxPricePerDay]);
+  const [showAvailable, setShowAvailable] = useState(value.showAvailable);
+
+  useEffect(() => {
+    if (!open) {
+      setActiveType(value.activeType);
+      setPriceRange([value.maxPricePerDay]);
+      setShowAvailable(value.showAvailable);
+    }
+  }, [value, open]);
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <SheetContent className="w-full sm:w-[400px] sm:max-w-none inset-0 sm:inset-5 start-auto h-full sm:h-auto rounded-none sm:rounded-[24px] p-0 bg-white [&_[data-slot=sheet-close]]:top-5 [&_[data-slot=sheet-close]]:end-5 [&_[data-slot=sheet-close]]:bg-[#f4f7fa] [&_[data-slot=sheet-close]]:rounded-full [&_[data-slot=sheet-close]]:p-2 flex flex-col items-stretch">
         <SheetHeader className="py-5 px-6 border-b-0">
@@ -104,15 +129,22 @@ export function CarsFiltersSheet({ trigger }: { trigger: ReactNode }) {
         <SheetFooter className="px-6 pb-8 pt-4 flex flex-col gap-4 border-t-0 justify-end">
           <Button 
             className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[18px] py-7 rounded-full shadow-md"
+            onClick={() => {
+              onApply({
+                activeType,
+                maxPricePerDay: priceRange[0],
+                showAvailable,
+              });
+              setOpen(false);
+            }}
           >
             Apply Filter
           </Button>
           <button 
             className="w-full text-center text-[#8692a6] font-medium text-[16px] hover:text-[#4b5563] py-2"
             onClick={() => {
-              setActiveType('All');
-              setPriceRange([40]);
-              setShowAvailable(true);
+              onReset();
+              setOpen(false);
             }}
           >
             Reset Filters

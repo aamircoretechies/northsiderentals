@@ -228,6 +228,18 @@ function workflowInsuranceOptionLabel(f: Record<string, unknown>): string {
   return typ ? `${name} (${typ})` : name;
 }
 
+function workflowFeeDescription(row: Record<string, unknown>): string {
+  const fields = [
+    row.feedescription,
+    row.feedescription1,
+    row.feedescription2,
+    row.feedescription3,
+  ]
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(fields)).join('\n\n');
+}
+
 export function ExpressCheckinContent() {
   const location = useLocation();
   const searchParams = useMemo(
@@ -366,6 +378,7 @@ export function ExpressCheckinContent() {
         label: workflowOptionalExtraLabel(f),
         qtyEnabled: Boolean(f.qtyapply),
         maxQty: Number(f.maxqty ?? 10) || 10,
+        description: workflowFeeDescription(f as Record<string, unknown>),
       })),
     [optionalFeesRaw],
   );
@@ -375,6 +388,7 @@ export function ExpressCheckinContent() {
       insuranceOptionsRaw.map((f, i) => ({
         id: workflowInsuranceOptionId(f, i),
         label: workflowInsuranceOptionLabel(f),
+        description: workflowFeeDescription(f as Record<string, unknown>),
       })),
     [insuranceOptionsRaw],
   );

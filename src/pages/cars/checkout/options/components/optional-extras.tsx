@@ -1,5 +1,6 @@
 import { CircleHelp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface OptionalExtraItem {
   id: string;
@@ -8,6 +9,7 @@ export interface OptionalExtraItem {
   type: 'quantity' | 'toggle';
   quantity?: number;
   selected?: boolean;
+  description?: string;
 }
 
 export interface OptionalExtrasProps {
@@ -31,7 +33,20 @@ export function OptionalExtras({ extras, onUpdateQuantity, onToggle }: OptionalE
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <span className="text-[#0061e0] font-medium text-[14px]">{extra.name}</span>
-                <CircleHelp size={14} className="text-[#8692a6]" />
+                {extra.description ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="inline-flex items-center">
+                        <CircleHelp size={14} className="text-[#8692a6]" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs whitespace-pre-wrap text-[12px] leading-relaxed">
+                      {extra.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <CircleHelp size={14} className="text-[#8692a6]" />
+                )}
               </div>
               <span className="text-black font-extrabold text-[14px]">
                 $ {extra.price.toFixed(2)}

@@ -15,6 +15,18 @@ function gstIncludedInTotal(total: number, taxRate: number): number {
   return (total * taxRate) / (1 + taxRate);
 }
 
+function concatFeeDescription(row: Record<string, unknown>): string {
+  const parts = [
+    row.feedescription,
+    row.feedescription1,
+    row.feedescription2,
+    row.feedescription3,
+  ]
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).join('\n\n');
+}
+
 export function CarsCheckoutOptionsContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,6 +115,7 @@ export function CarsCheckoutOptionsContent() {
               type: fee.name.toLowerCase().includes('driver') ? 'quantity' : 'toggle',
               quantity: 0,
               selected: false,
+              description: concatFeeDescription(fee as Record<string, unknown>),
             };
           }));
 
@@ -118,6 +131,7 @@ export function CarsCheckoutOptionsContent() {
               id: String(ins.id),
               name: ins.name,
               cost: totalCost,
+              description: concatFeeDescription(ins as Record<string, unknown>),
             };
           });
           setDamageOptions(mappedDamage);
