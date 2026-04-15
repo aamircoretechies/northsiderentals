@@ -42,7 +42,7 @@ import {
   AuthAccountDeactivatedPage,
   AuthWelcomeMessagePage,
 } from '@/pages/auth';
-import { Demo1DarkSidebarPage } from '@/pages/dashboards';
+import { Demo1DarkSidebarPage, Demo2Page } from '@/pages/dashboards';
 import {
   NetworkAppRosterPage,
   NetworkAuthorPage,
@@ -112,6 +112,7 @@ export function AppRoutingSetup() {
       <Route element={<RequireAuth />}>
         <Route element={<Demo9Layout />}>
           <Route path="/" element={<RootHomeEntry />} />
+          <Route path='/home' element={<Demo2Page />} />
           <Route path="/dark-sidebar" element={<Demo1DarkSidebarPage />} />
           <Route
             path="/public-profile/profiles/default/"

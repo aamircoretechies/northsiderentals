@@ -25,23 +25,7 @@ export function HeaderLogo() {
 
   return (
     <div className="flex items-center gap-1 lg:w-[400px] grow lg:grow-0">
-      <div className="flex items-center gap-2 shrink-0">
-        <Link to="/">
-          <img
-            src={toAbsoluteUrl('/media/app/logo-nsr.svg')}
-            className="shrink-0 dark:hidden min-h-[34px] max-h-[40px]"
-            alt="logo"
-          />
-          <img
-            src={toAbsoluteUrl('/media/app/logo-nsr.svg')}
-            className="shrink-0 hidden dark:inline-block min-h-[34px]"
-            alt="logo"
-          />
-        </Link>
-        {/* <h3 className="text-mono text-lg font-medium hidden md:block">
-          Metronic
-        </h3> */}
-      </div>
+
 
       {isMobile && (
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -62,6 +46,20 @@ export function HeaderLogo() {
           </SheetContent>
         </Sheet>
       )}
+
+      <div className="flex items-center gap-2 shrink-0">
+        <Link to="/home">
+          <img
+            src={toAbsoluteUrl('/media/app/logo-nsr.svg')}
+            className="shrink-0 dark:hidden h-[34px] sm:h-[40px] w-auto object-contain"
+            alt="logo"
+          />
+
+        </Link>
+        {/* <h3 className="text-mono text-lg font-medium hidden md:block">
+          Metronic
+        </h3> */}
+      </div>
     </div>
   );
 }

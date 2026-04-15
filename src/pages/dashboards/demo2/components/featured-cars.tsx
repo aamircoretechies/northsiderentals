@@ -115,7 +115,8 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
 
                 <div className="mt-auto">
                   <div className="bg-[#ffc107] rounded-[16px] py-4 px-4 flex flex-col items-center justify-center text-black shadow-sm mb-3 hover:bg-[#ffb000] transition-colors cursor-pointer"
-                    onClick={() => handleCarClick(car)}>
+                  /* onClick={() => handleCarClick(car)} */
+                  >
                     <div className="flex items-baseline gap-1">
                       <span className="text-[36px] font-extrabold leading-none tracking-tight">{formatPrice(car.daily_rate)}</span>
                       <span className="text-[16px] font-bold">/ day</span>

@@ -88,6 +88,8 @@ export function CarCard(props: CarCardProps) {
         <h3 className="text-[21px] font-bold text-foreground leading-tight flex-1 min-w-0">
           {props.title}
         </h3>
+      </div>
+      <div className="flex flex-wrap items-start gap-2 mb-2">
         {props.subtitle ? (
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[#0061e0] bg-[#0061e0]/10 px-2.5 py-1 rounded-full shrink-0">
             {props.subtitle}
@@ -96,7 +98,7 @@ export function CarCard(props: CarCardProps) {
       </div>
 
       {detailParts.length > 0 ? (
-        <p className="text-muted-foreground text-[15px] font-medium mb-4">
+        <p className="text-muted-foreground text-[13px] font-normal mb-4">
           {detailParts.join(', ')}
         </p>
       ) : (
@@ -136,9 +138,8 @@ export function CarCard(props: CarCardProps) {
           <Link
             to="/cars/checkout/options"
             state={{ car: props }}
-            className={`group/btn relative flex w-full items-center justify-center gap-2 rounded-[22px] bg-[#ffc107] py-4 font-bold text-black shadow-sm transition-all duration-200 hover:bg-[#ffb300] hover:shadow-md active:scale-[0.99] ${
-              props.discount_percentage ? 'mt-1' : ''
-            }`}
+            className={`group/btn relative flex w-full items-center justify-center gap-2 rounded-[22px] bg-[#ffc107] py-4 font-bold text-black shadow-sm transition-all duration-200 hover:bg-[#ffb300] hover:shadow-md active:scale-[0.99] ${props.discount_percentage ? 'mt-1' : ''
+              }`}
           >
             {props.discount_percentage ? (
               <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#e85d04] px-3.5 py-0.5 text-[12px] font-extrabold tracking-wide text-white whitespace-nowrap shadow">
@@ -146,7 +147,7 @@ export function CarCard(props: CarCardProps) {
               </span>
             ) : null}
             {props.original_price &&
-            props.original_price !== props.discount_price ? (
+              props.original_price !== props.discount_price ? (
               <span className="text-[22px] font-bold text-[#8a6910] line-through decoration-2 opacity-90">
                 {sym}
                 {props.original_price}
@@ -168,9 +169,8 @@ export function CarCard(props: CarCardProps) {
 
   return (
     <div
-      className={`group flex h-full flex-col rounded-[24px] border bg-card p-5 shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-[#0061e0]/20 ${
-        props.unavailable ? 'opacity-90 saturate-[0.85]' : ''
-      }`}
+      className={`group flex h-full flex-col rounded-[24px] border bg-card p-5 shadow-sm transition-all duration-300 ease-out hover:shadow-lg hover:border-[#0061e0]/20 ${props.unavailable ? 'opacity-90 saturate-[0.85]' : ''
+        }`}
     >
       {cardInner}
     </div>

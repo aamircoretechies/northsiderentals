@@ -170,7 +170,7 @@ export function MegaMenuMobile() {
             type="single"
             collapsible
             parentValue={item.path || `child-${level}-${index}`}
-            className={cn('ps-4', !item.collapse && 'relative')}
+            className={cn('ps-4 ', !item.collapse && 'relative')}
           >
             <AccordionMenuGroup>
               {buildMenuItemChildren(
@@ -186,7 +186,7 @@ export function MegaMenuMobile() {
         <AccordionMenuItem
           key={index}
           value={item.path || ''}
-          className="text-[13px]"
+          className="text-[13px] "
         >
           <Link to={item.path || '#'}>
             {item.icon && <item.icon data-slot="accordion-menu-icon" />}

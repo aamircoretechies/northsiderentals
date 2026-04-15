@@ -4,8 +4,8 @@ import { CheckoutStepper } from '@/components/common/checkout-stepper';
 
 export function CarsCheckoutOptionsPage() {
   return (
-    <Container className="p-0">
-      <div className="pt-6">
+    <Container>
+      <div>
         <CheckoutStepper currentStep={3} />
       </div>
       <CarsCheckoutOptionsContent />
