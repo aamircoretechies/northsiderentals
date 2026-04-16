@@ -15,7 +15,7 @@ export function BrandedLayout() {
           }
         `}
       </style>
-      <div className="grid lg:grid-cols-1 grow bg-top xxl:bg-center xl:bg-cover bg-no-repeat branded-bg">
+      <div className="grid lg:grid-cols-1 grow bg-top xxl:bg-center xl:bg-cover bg-no-repeat branded-bg min-h-screen">
         <div className="flex justify-center items-center p-8 lg:p-10 order-2 lg:order-1">
           <Card className="w-full max-w-[400px]">
             <CardContent className="p-6">

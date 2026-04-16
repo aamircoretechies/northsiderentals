@@ -21,7 +21,7 @@ export interface OptionalExtrasProps {
 export function OptionalExtras({ extras, onUpdateQuantity, onToggle }: OptionalExtrasProps) {
   return (
     <div className="flex flex-col mb-4">
-      <h2 className="text-[#8692a6] font-bold text-[13px] uppercase tracking-wide mb-3 mt-4">
+      <h2 className="text-[#8692a6] font-bold text-[13px] uppercase tracking-wide mb-3 mt-0">
         OPTIONAL EXTRAS
       </h2>
       <div className="flex flex-col gap-3">

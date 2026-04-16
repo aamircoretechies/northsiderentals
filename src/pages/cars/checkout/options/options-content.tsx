@@ -69,7 +69,7 @@ export function CarsCheckoutOptionsContent() {
     : 0;
 
   const getDays = (pDate?: string, rDate?: string) => {
-    if(!pDate || !rDate) return 6;
+    if (!pDate || !rDate) return 6;
     const d1 = new Date(pDate);
     const d2 = new Date(rDate);
     const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
@@ -124,7 +124,7 @@ export function CarsCheckoutOptionsContent() {
             const insDays = ins.numberofdays || rentalDays || 1;
             const perDay = Number(ins.fees ?? ins.price ?? 0);
             const totalFromApi = ins.totalinsuranceamount ?? ins.total_price;
-            
+
             const totalCost = totalFromApi != null ? Number(totalFromApi) : (ins.type === 'Daily' ? perDay * insDays : perDay);
 
             return {
@@ -170,7 +170,7 @@ export function CarsCheckoutOptionsContent() {
 
   const selectedDamageOptionData = damageOptions.find(d => d.id === selectedDamageOption);
   const totalDamageCover = selectedDamageOptionData ? selectedDamageOptionData.cost : 0;
-  
+
   const totalExtras = totalOptionalExtras + totalDamageCover;
 
   const currencySymbol =
@@ -234,7 +234,7 @@ export function CarsCheckoutOptionsContent() {
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Small Grid: Booking & Fee Summary */}
-        <div className="col-span-1 flex flex-col gap-6 lg:order-last">
+        <div className="col-span-1 flex flex-col lg:order-last">
           <BookingOverview
             carImage={carData?.image_url ?? ''}
             carTitle={carData?.title ?? 'Vehicle'}
@@ -273,7 +273,7 @@ export function CarsCheckoutOptionsContent() {
         </div>
 
         {/* Large Grid: Options & Buttons */}
-        <div className="col-span-1 lg:col-span-2 flex flex-col gap-6">
+        <div className="col-span-1 lg:col-span-2 flex flex-col ">
           <OptionalExtras
             extras={extras}
             onToggle={toggleExtra}

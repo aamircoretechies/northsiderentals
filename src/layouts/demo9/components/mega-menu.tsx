@@ -67,6 +67,18 @@ export function MegaMenu() {
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
             <Link
+              to="/help"
+              className={cn(linkClass)}
+              data-active={isActive('/help') || undefined}
+            >
+              Help
+            </Link>
+          </NavigationMenuLink>
+        </NavigationMenuItem>
+
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
               to="/support"
               className={cn(linkClass)}
               data-active={isActive('/support') || undefined}

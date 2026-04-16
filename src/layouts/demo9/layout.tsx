@@ -49,19 +49,19 @@ export function Demo9Layout() {
       <Helmet>
         <title>{item?.title}</title>
       </Helmet>
-      <div className="flex grow flex-col min-h-screen in-data-[sticky-header=on]:pt-(--header-height)">
+      <div className="flex grow flex-col min-h-screen min-h-full  in-data-[sticky-header=on]:pt-(--header-height)">
         <Header />
 
         {!isMobile && <Navbar />}
 
-        <main className="flex flex-col grow h-full bg-[#E8ECEF70]" role="content">
+        <main className="flex flex-col grow  h-full min-h-full bg-[#E8ECEF70]" role="content">
           {/*       {!pathname.includes('/public-profile/') && ( */}
           {true && (
             <Toolbar>
               <ToolbarHeading />
 
               <ToolbarActions>
-                {!pathname.includes('/cars/checkout/success') && pathname !== '/' && (<Button variant="outline" asChild>
+                {!pathname.includes('/cars/checkout/success') && pathname !== '/home' && pathname !== '/' && (<Button variant="outline" asChild>
                   <a onClick={() => navigate(-1)}>
                     Go Back
                   </a>

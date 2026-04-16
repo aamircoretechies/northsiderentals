@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Funnel, LayoutGrid, List, Search as SearchIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -256,12 +256,12 @@ function mapApiCarToCard(
     (Number(car.avgrate) ? Number(car.avgrate) * noDays : 0);
   const finalPrice =
     car.totalrateafterdiscount !== undefined &&
-    Number(car.totalrateafterdiscount) !== 0
+      Number(car.totalrateafterdiscount) !== 0
       ? Number(car.totalrateafterdiscount)
       : Number(car.totalrate) ||
-        (Number(car.discounteddailyrate)
-          ? Number(car.discounteddailyrate) * noDays
-          : ogPrice);
+      (Number(car.discounteddailyrate)
+        ? Number(car.discounteddailyrate) * noDays
+        : ogPrice);
 
   const dailyOg = Math.round(ogPrice / noDays) || 0;
   const dailyFinal = Math.round(finalPrice / noDays) || dailyOg;
@@ -354,6 +354,8 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
   const searchData = location.state?.searchData;
   const searchParams = location.state?.searchParams;
   const locations = location.state?.locations;
+
+  const navigate = useNavigate();
 
   const apiPayload = searchData as Record<string, unknown> | undefined;
   const nestedData = apiPayload?.data;
@@ -587,6 +589,7 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
               ) : null}
             </>
           )}
+          <Button className='bg-[#0061e0] mt-4' onClick={() => navigate('/home')}>Go Back</Button>
         </div>
       ) : (
         <div className="flex flex-col gap-10">

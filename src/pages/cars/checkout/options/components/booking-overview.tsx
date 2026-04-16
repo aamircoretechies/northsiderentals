@@ -24,7 +24,7 @@ export function BookingOverview({
   const imgSrc = normalizeMediaUrl(carImage);
 
   return (
-    <div className="flex flex-col mb-4">
+    <div className="flex flex-col mb-4 mt-4">
       <h2 className="text-[#8692a6] font-bold text-[13px] uppercase tracking-wide mb-3">BOOKING OVERVIEW</h2>
       <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 flex flex-col relative w-full items-stretch">
         <div className="flex gap-4 mb-4">
@@ -64,7 +64,7 @@ export function BookingOverview({
             <span className="text-[#8692a6] text-[12px] sm:text-[13px] leading-tight">{pickupLocation}</span>
           </div>
           <div className="flex flex-col">
-          <span className="text-[#6b7280] text-[12px] mb-1">Return:</span>
+            <span className="text-[#6b7280] text-[12px] mb-1">Return:</span>
             <span className="text-black font-extrabold text-[13px] sm:text-[14px] leading-tight mb-1">{returnDate}</span>
             <span className="text-[#8692a6] text-[12px] sm:text-[13px] leading-tight">{returnLocation}</span>
           </div>

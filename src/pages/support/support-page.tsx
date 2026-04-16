@@ -4,14 +4,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router';
+import { Container } from '@/components/common/container';
 
 export function SupportPage() {
+  const navigate = useNavigate();
   return (
     <>
       <Helmet>
         <title>Support Request</title>
       </Helmet>
-      <div className="container max-w-2xl mt-8 mb-12 mx-auto">
+      <Container>
+
+        <Button className="mb-4 w-full" onClick={() => navigate('/help')}>Need Quick Help?</Button>
         <Card>
           <CardHeader className='py-4'>
             <CardTitle className="text-2xl font-bold">Support</CardTitle>
@@ -56,7 +61,7 @@ export function SupportPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
+      </Container>
     </>
   );
 }

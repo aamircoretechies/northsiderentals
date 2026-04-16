@@ -80,12 +80,16 @@ function RentalFeeSummaryBlock({
   onExpressCheckin,
   onSignAgreement,
   isLaunchingCheckin,
+  isExpanded,
+  isMobile,
 }: {
   view: BookingDetailView;
   compact?: boolean;
   onExpressCheckin: () => void;
   onSignAgreement: () => void;
   isLaunchingCheckin?: boolean;
+  isExpanded?: boolean;
+  isMobile?: boolean;
 }) {
   const textSize = compact ? 'text-[14px]' : 'text-[15px]';
   const titleSize = compact ? 'text-[14px]' : 'text-[15px]';
@@ -93,13 +97,13 @@ function RentalFeeSummaryBlock({
 
   return (
     <>
-      <h3
-        className={`${titleSize} font-bold text-[#6b7280] tracking-wide ${compact ? 'mb-3' : 'mb-4'}`}
-      >
-        RENTAL FEE SUMMARY
-      </h3>
+      <div className={`${isMobile && !isExpanded ? 'hidden' : 'flex flex-col'} ${compact ? 'gap-2' : 'gap-3'}`}>
+        <h3
+          className={`${titleSize} font-bold text-[#6b7280] tracking-wide ${compact ? 'mb-3' : 'mb-4'}`}
+        >
+          RENTAL FEE SUMMARY
+        </h3>
 
-      <div className={`flex flex-col ${compact ? 'gap-2' : 'gap-3'}`}>
         {view.summaryLines.length ? (
           view.summaryLines.map((line, i) => (
             <div
@@ -240,6 +244,7 @@ export function BookingDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [launchingCheckin, setLaunchingCheckin] = useState(false);
   const [checkinError, setCheckinError] = useState<string | null>(null);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
 
   useEffect(() => {
     if (!reference.trim()) {
@@ -607,14 +612,21 @@ export function BookingDetailContent() {
       ) : null}
 
       {!loading && !error && view ? (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-[24px] z-20">
-          <div className="flex justify-center pt-3 pb-1">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-[24px] z-20 transition-all duration-300 ease-in-out">
+          <div 
+            className="flex justify-center pt-3 pb-2 cursor-pointer active:opacity-70 transition-opacity"
+            onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+            role="button"
+            aria-expanded={isSummaryExpanded}
+          >
             <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
           </div>
-          <div className="p-5 flex flex-col">
+          <div className="p-5 pt-2 flex flex-col">
             <RentalFeeSummaryBlock
               view={view}
               compact
+              isExpanded={isSummaryExpanded}
+              isMobile={true}
               onExpressCheckin={handleExpressCheckin}
               onSignAgreement={() =>
                 navigate(
