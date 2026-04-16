@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
 import { Container } from '@/components/common/container';
+import { ArrowLeft, Phone, Mail } from 'lucide-react';
 
 export function SupportPage() {
   const navigate = useNavigate();
@@ -16,7 +17,18 @@ export function SupportPage() {
       </Helmet>
       <Container>
 
-        <Button className="mb-4 w-full" onClick={() => navigate('/help')}>Need Quick Help?</Button>
+        <div className='max-w-3xl mx-auto mb-4'>
+          <Button onClick={() => navigate('/help')} className="w-full bg-[#0061e0] hover:bg-[#0051ba] text-white font-semibold text-[16px] py-7 rounded-full shadow-sm mb-4 cursor-pointer">
+            <div className="flex items-center justify-center gap-2">
+              <div className="bg-[#ffc107] p-1 rounded-full text-[#0061e0]">
+                <Phone className="w-4 h-4 fill-current text-white" />
+              </div>
+              Need Quick Help?
+            </div>
+          </Button>
+        </div>
+
+        {/* <Button className="mb-4 w-full mx-auto max-w-[]" onClick={() => navigate('/help')}>Need Quick Help?</Button> */}
         <Card>
           <CardHeader className='py-4'>
             <CardTitle className="text-2xl font-bold">Support</CardTitle>

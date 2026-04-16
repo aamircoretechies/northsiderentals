@@ -111,26 +111,29 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
             Public Profile
           </Link>
         </DropdownMenuItem> */}
-        <DropdownMenuItem asChild>
-          <Link
-            to="/account/home/user-profile"
-            className="flex items-center gap-2"
-          >
-            <UserCircle />
-            My Profile
-          </Link>
-        </DropdownMenuItem>
+        {isAuthed && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link
+                to="/account/home/user-profile"
+                className="flex items-center gap-2"
+              >
+                <UserCircle />
+                My Profile
+              </Link>
+            </DropdownMenuItem>
 
-
-        <ChangePasswordModal>
-          <DropdownMenuItem
-            onSelect={(e) => e.preventDefault()}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <PencilIcon size={16} />
-            Change Password
-          </DropdownMenuItem>
-        </ChangePasswordModal>
+            <ChangePasswordModal>
+              <DropdownMenuItem
+                onSelect={(e) => e.preventDefault()}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <PencilIcon size={16} />
+                Change Password
+              </DropdownMenuItem>
+            </ChangePasswordModal>
+          </>
+        )}
 
         <SupportIssueModal>
           <DropdownMenuItem

@@ -60,11 +60,18 @@ import {
 import { type MenuConfig } from './types';
 
 export const MENU_SIDEBAR: MenuConfig = [
-  {
-    title: 'Dashboard',
+  /* {
+    title: 'Home',
     icon: LayoutGrid,
     children: [
-      { title: 'Home', path: '/' },
+      { title: 'Home', path: '/home' },
+    ],
+  }, */
+  {
+    title: 'Home',
+    icon: LayoutGrid,
+    children: [
+      { title: 'Home', path: '/home' },
     ],
   },
   {
@@ -803,7 +810,8 @@ export const MENU_SIDEBAR_COMPACT: MenuConfig = [
 ];
 
 export const MENU_MEGA: MenuConfig = [
-  { title: 'Home', path: '/' },
+  { title: 'Home', path: '/home' },
+  /*  { title: 'Home', path: '/' }, */
   {
     title: 'Profiles',
     children: [
@@ -1253,10 +1261,16 @@ export const MENU_MEGA: MenuConfig = [
 ];
 
 export const MENU_MEGA_MOBILE: MenuConfig = [
+  /*  {
+     title: 'Home',
+     icon: Home,
+     path: '/'
+   }, */
+
   {
     title: 'Home',
     icon: Home,
-    path: '/'
+    path: '/home'
   },
 
   {

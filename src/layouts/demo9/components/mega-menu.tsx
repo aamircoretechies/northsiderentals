@@ -42,7 +42,7 @@ export function MegaMenu() {
         <NavigationMenuItem>
           <NavigationMenuLink asChild>
             <Link
-              to={homeItem.path || '/'}
+              to={homeItem.path || '/home'}
               className={cn(linkClass)}
               data-active={isActive(homeItem.path) || undefined}
             >
