@@ -1,6 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Check, ChevronDown, ArrowLeft } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -68,6 +82,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
   const [countryId, setCountryId] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [driverLicense, setDriverLicense] = useState('');
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -132,7 +147,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
       <DialogTrigger asChild>{children}</DialogTrigger>
 
       <DialogContent
-        className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
+        className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[16px] pb-4"
         showCloseButton={false}
       >
         <div className="flex items-center p-4 pt-6 bg-[#f8f9fa]">
@@ -238,7 +253,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             <ProfileFormInput
               placeholder="Email"
               value={email}
-              onChange={() => {}}
+              onChange={() => { }}
               readOnly
             />
             <ProfileFormInput
@@ -280,27 +295,51 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="relative w-full shadow-sm rounded-[12px]">
-                <select
-                  value={countryId}
-                  onChange={(e) => setCountryId(e.target.value)}
-                  className="w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] focus:ring-1 focus:ring-[#0061e0] outline-none appearance-none font-medium"
-                >
-                  <option value="">Country</option>
-                  {countries.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.country}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                  <ChevronDown className="w-4 h-4" />
-                </div>
+              <div className="relative w-full">
+                <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium flex items-center justify-between shadow-sm transition-all text-left"
+                    >
+                      <span className="truncate">
+                        {countries.find((c) => String(c.id) === countryId)?.country || 'Country'}
+                      </span>
+                      <ChevronDown className={cn("w-4 h-4 opacity-50 transition-transform", comboboxOpen && "rotate-180")} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 border border-gray-100 shadow-xl rounded-[12px] overflow-hidden" align="start">
+                    <Command className="w-full">
+                      <CommandInput placeholder="Search country..." className="border-none" />
+                      <CommandList className="max-h-[250px] overflow-y-auto">
+                        <CommandEmpty>No country found.</CommandEmpty>
+                        <CommandGroup>
+                          {countries.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.country}
+                              onSelect={() => {
+                                setCountryId(String(c.id));
+                                setComboboxOpen(false);
+                              }}
+                              className="px-4 py-3 flex items-center justify-between cursor-pointer data-[selected=true]:bg-gray-50"
+                            >
+                              <span className="truncate">{c.country}</span>
+                              {String(c.id) === countryId && <Check className="w-4 h-4 text-[#0061e0] shrink-0" />}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <ProfileFormInput
                 placeholder="Post code"
                 value={postalCode}
-                onChange={setPostalCode}
+                onChange={(v) => {
+                  if (/^\d*$/.test(v)) setPostalCode(v);
+                }}
               />
             </div>
           </div>

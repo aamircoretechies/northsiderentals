@@ -93,21 +93,21 @@ const PersonalInfo = () => {
                       onRemoveRemote={
                         profile.avatarUrl
                           ? async () => {
-                              try {
-                                await deleteProfilePicture();
-                                toast.success('Photo removed');
-                              } catch (e) {
-                                toast.error(
-                                  e instanceof Error ? e.message : 'Remove failed',
-                                );
-                              }
+                            try {
+                              await deleteProfilePicture();
+                              toast.success('Photo removed');
+                            } catch (e) {
+                              toast.error(
+                                e instanceof Error ? e.message : 'Remove failed',
+                              );
                             }
+                          }
                           : undefined
                       }
                       busy={profileBusy}
                     />
                   ) : (
-                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500">
+                    <div className="size-10 w-[40px] h-[40px] shrink-0 overflow-hidden rounded-full border-2 border-green-500">
                       <ProfileAvatarImage
                         src={profile.avatarUrl}
                         fallbackLabel={fullName}

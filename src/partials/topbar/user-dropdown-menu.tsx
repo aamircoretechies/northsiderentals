@@ -65,7 +65,7 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
       <DropdownMenuContent className="w-64" side="bottom" align="end">
         {/* Header */}
         <div className="flex items-center justify-between p-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="size-9 shrink-0 overflow-hidden rounded-full border-2 border-green-500">
               <ProfileAvatarImage
                 src={profile.avatarUrl}
@@ -75,22 +75,22 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
                 fallbackClassName="size-full"
               />
             </div>
-            <div className="flex flex-col">
+             <div className="flex flex-col min-w-0 max-w-[150px]">
               <Link
                 to="/account/home/user-profile"
-                className="text-sm text-mono hover:text-primary font-semibold"
+                className="text-sm text-mono hover:text-primary font-semibold truncate"
               >
                 {displayName}
               </Link>
               {displayEmail.trim() ? (
                 <a
                   href={`mailto:${displayEmail}`}
-                  className="text-xs text-muted-foreground hover:text-primary"
+                  className="text-xs text-muted-foreground hover:text-primary truncate"
                 >
                   {displayEmail}
                 </a>
               ) : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground truncate">
                   {isAuthed ? 'No email on file' : 'Browsing as guest'}
                 </span>
               )}

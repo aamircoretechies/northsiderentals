@@ -190,9 +190,12 @@ export function EmailQuoteModal({
               />
               <input
                 type="tel"
-                placeholder="Phone (with country code)"
+                placeholder="Phone (digits only)"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (/^\d*$/.test(val)) setPhone(val);
+                }}
                 className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
               />
 

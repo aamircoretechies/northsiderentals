@@ -71,7 +71,7 @@ export function HelpContent() {
           Car Hire Booking
         </h2>
 
-        <Button className="w-full bg-[#0061e0] hover:bg-[#0051ba] text-white font-semibold text-[16px] py-7 rounded-full shadow-sm mb-4 cursor-pointer">
+        <Button onClick={() => window.location.href = 'tel:+611300677227'} className="w-full bg-[#0061e0] hover:bg-[#0051ba] text-white font-semibold text-[16px] py-7 rounded-full shadow-sm mb-4 cursor-pointer">
           <div className="flex items-center justify-center gap-2">
             <div className="bg-[#ffc107] p-1 rounded-full text-[#0061e0]">
               <Phone className="w-4 h-4 fill-current text-white" />
@@ -80,8 +80,8 @@ export function HelpContent() {
           </div>
         </Button>
 
-        <Button className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-semibold text-[16px] py-7 rounded-full shadow-sm mb-10 cursor-pointer">
-          Report Accident
+        <Button onClick={() => window.open('https://northsiderentals.com.au/faq/general-information/customer-handy-tips/', '_blank')} className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-semibold text-[16px] py-7 rounded-full shadow-sm mb-10 cursor-pointer">
+          Roadside Assistance
         </Button>
       </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { CollapsibleCard } from './components/collapsible-card';
@@ -258,6 +259,7 @@ export function ExpressCheckinContent() {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [launchingPayment, setLaunchingPayment] = useState(false);
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
+  const { rcmProfile } = useDashboardData();
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1241,6 +1243,7 @@ export function ExpressCheckinContent() {
             <CustomerDetailsCard
               value={customerForm}
               onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+              countries={rcmProfile?.countries ?? []}
             />
             <div className="flex gap-2 mt-4">
               <Button

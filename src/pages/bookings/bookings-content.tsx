@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search as SearchIcon, Loader2, AlertCircle } from 'lucide-react';
+import { Search as SearchIcon, Loader2, AlertCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/auth/context/auth-context';
 import { Input } from '@/components/ui/input';
@@ -133,7 +133,7 @@ export function BookingsContent() {
 
   return (
     <div className="flex flex-col items-stretch gap-7">
-      <div className="rounded-2xl border border-border bg-muted/20 p-4 sm:p-5 space-y-3">
+      <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Find a booking</h3>
           <p className="text-xs text-muted-foreground mt-1">
@@ -147,7 +147,7 @@ export function BookingsContent() {
             value={lookupReservation}
             onChange={(e) => setLookupReservation(e.target.value)}
             placeholder="Confirmation / reservation #"
-            className="flex-1"
+            className="flex-1 px-2 py-2 text-[13px]"
             onKeyDown={(e) => {
               if (e.key === 'Enter') void handleFindBooking();
             }}
@@ -157,7 +157,7 @@ export function BookingsContent() {
             value={lookupLastName}
             onChange={(e) => setLookupLastName(e.target.value)}
             placeholder="Last name on booking"
-            className="flex-1 sm:max-w-[220px]"
+            className="flex-1 sm:max-w-[220px] px-2 py-2 text-[13px]"
             onKeyDown={(e) => {
               if (e.key === 'Enter') void handleFindBooking();
             }}
@@ -196,8 +196,18 @@ export function BookingsContent() {
                 value={searchInput}
                 placeholder="Filter your list by confirmation #, car, or status…"
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="ps-9 pe-4 w-full"
+                className="ps-9 pe-10 w-full"
               />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  className="absolute end-3 p-1 rounded-full hover:bg-gray-100/50 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -220,8 +230,8 @@ export function BookingsContent() {
                 ? 'Loading…'
                 : `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`}
               {!listAreaLoading &&
-              searchInput.trim() &&
-              items.length !== filtered.length
+                searchInput.trim() &&
+                items.length !== filtered.length
                 ? ` (filtered from ${items.length})`
                 : null}
             </h3>
