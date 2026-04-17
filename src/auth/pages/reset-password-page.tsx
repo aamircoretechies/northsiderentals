@@ -63,7 +63,7 @@ export function ResetPasswordPage() {
   return (
     <div className="max-w-md mx-auto">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" noValidate>
           <div className="text-center space-y-2">
             <h1 className="text-2xl font-bold tracking-tight">
               Reset Password

@@ -1,6 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { normalizeMediaUrl } from '@/lib/helpers';
+import { fetchBookingByReference, fetchWorkflowChecklist } from '@/services/bookings';
+import { queryKeys } from '@/lib/query-keys';
 
 export interface BookingCardProps {
   bookingId: string;
@@ -35,7 +38,6 @@ function statusStyle(label: string): { dot: string; text: string } {
 }
 
 export function BookingCard({
-  bookingId,
   detailReference,
   reservationNumber,
   carName,
@@ -50,8 +52,21 @@ export function BookingCard({
   isQuote,
 }: BookingCardProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const imgSrc = normalizeMediaUrl(carImage);
   const { dot, text } = statusStyle(statusLabel);
+  const prefetchBooking = () => {
+    const ref = detailReference?.trim();
+    if (!ref) return;
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.bookingsDetail(ref),
+      queryFn: () => fetchBookingByReference(ref),
+    });
+    void queryClient.prefetchQuery({
+      queryKey: queryKeys.bookingsWorkflow(ref, 'checkin'),
+      queryFn: () => fetchWorkflowChecklist(ref, 'checkin'),
+    });
+  };
 
   return (
     <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm overflow-hidden flex flex-col w-full">
@@ -131,21 +146,47 @@ export function BookingCard({
             {statusLabel}
           </span>
         </div>
-        <Button
-          className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
-          title={
-            !detailReference?.trim()
-              ? 'Booking reference missing — open this booking from the list after refresh'
-              : undefined
-          }
-          onClick={() => {
-            const ref = detailReference?.trim();
-            if (ref) navigate(`/bookings/${encodeURIComponent(ref)}`);
-          }}
-          disabled={!detailReference?.trim()}
-        >
-          View details
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
+            title={
+              !detailReference?.trim()
+                ? 'Booking reference missing — open this booking from the list after refresh'
+                : undefined
+            }
+            onClick={() => {
+              const ref = detailReference?.trim();
+              if (ref) navigate(`/bookings/${encodeURIComponent(ref)}`);
+            }}
+            onMouseEnter={prefetchBooking}
+            onFocus={prefetchBooking}
+            disabled={!detailReference?.trim()}
+          >
+            View details
+          </Button>
+          <Button
+            className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
+            title={
+              !detailReference?.trim()
+                ? 'Booking reference missing — refresh your bookings list'
+                : undefined
+            }
+            onClick={() => {
+              const ref = detailReference?.trim();
+              if (ref) {
+                navigate(`/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`, {
+                  state: { reservationRef: ref, mode: 'update-pay' },
+                });
+              }
+            }}
+            onMouseEnter={prefetchBooking}
+            onFocus={prefetchBooking}
+            disabled={!detailReference?.trim()}
+          >
+            Modify Booking & Pay
+          </Button>
+        </div>
       </div>
     </div>
   );

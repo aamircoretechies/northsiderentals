@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
+import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { CollapsibleCard } from './components/collapsible-card';
 import { ReservationDetails } from './components/reservation-details';
@@ -10,6 +11,12 @@ import { BookingDetailsCard, type BookingDetailsForm } from './components/bookin
 import { ExtraDriversCard, type ExtraDriversForm } from './components/extra-drivers-card';
 import { UploadImagesCard, type UploadImagesForm } from './components/upload-images-card';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { carsService } from '@/services/cars';
 import {
   addExtraDriver,
@@ -18,14 +25,20 @@ import {
   extractWorkflowChecklistArrays,
   fetchBookingByReference,
   fetchWorkflowChecklist,
+  getCachedBookingByReference,
+  getCachedWorkflowChecklist,
+  invalidateBookingsCache,
   listRcmDocuments,
   mapBookingDetailToView,
   storeRcmDocument,
+  updateBooking,
   uploadRcmDocumentFile,
   type WorkflowChecklistStep,
 } from '@/services/bookings';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 interface ExpressCheckinRouteState {
+  mode?: 'update' | 'update-pay' | 'checkin';
   reservationRef?: string;
   customerSnapshot?: {
     firstName?: string;
@@ -156,6 +169,23 @@ function documentUploadRowId(
   return `${setup}-${cust}-${index}`;
 }
 
+function documentLinkIdFromRow(row: Record<string, unknown>): number {
+  const candidates = [
+    row.documentlinkid,
+    row.document_link_id,
+    row.documentLinkId,
+    row.document_linkid,
+    row.documentid,
+    row.document_id,
+    row.id,
+  ];
+  for (const candidate of candidates) {
+    const n = Number(candidate ?? 0);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
 /** Match a catalogue `optionalfees` row to a line on `extrafees` (same fee on the booking). */
 function findExtraFeeRowForOptional(
   opt: Record<string, unknown>,
@@ -237,10 +267,14 @@ function workflowFeeDescription(row: Record<string, unknown>): string {
   ]
     .map((x) => String(x ?? '').trim())
     .filter(Boolean);
-  return Array.from(new Set(fields)).join('\n\n');
+  // Keep all feedescription variants in order, even if repeated,
+  // so the tooltip reflects the backend-provided text exactly.
+  return fields.join('\n\n');
 }
 
 export function ExpressCheckinContent() {
+  const MAX_EXTRA_DRIVERS = 5;
+  const navigate = useNavigate();
   const location = useLocation();
   const searchParams = useMemo(
     () => new URLSearchParams(location.search),
@@ -248,6 +282,14 @@ export function ExpressCheckinContent() {
   );
   const routeState = (location.state as ExpressCheckinRouteState | null) ?? null;
   const snapshot = routeState?.bookingSnapshot ?? null;
+  const modeFromRoute = routeState?.mode;
+  const modeFromQuery = searchParams.get('mode');
+  const isUpdatePayMode = modeFromRoute === 'update-pay' || modeFromQuery === 'update-pay';
+  const isUpdateMode =
+    modeFromRoute === 'update' ||
+    modeFromQuery === 'update' ||
+    isUpdatePayMode ||
+    location.pathname === '/bookings/modify';
   const customerSnapshot = routeState?.customerSnapshot ?? null;
   const reservationRefFromQuery = searchParams.get('reservation_ref') ?? '';
   const reservationRef = firstText(routeState?.reservationRef, reservationRefFromQuery);
@@ -259,6 +301,7 @@ export function ExpressCheckinContent() {
   const [launchingPayment, setLaunchingPayment] = useState(false);
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
+  const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
 
   useEffect(() => {
     const st = (location.state as ExpressCheckinRouteState | null) ?? null;
@@ -270,6 +313,10 @@ export function ExpressCheckinContent() {
   // arrays are never missing due to stale/partial `location.state` payloads.
   useEffect(() => {
     if (!reservationRef) return;
+    const cachedWorkflow = getCachedWorkflowChecklist(reservationRef, 'checkin');
+    if (cachedWorkflow?.data && typeof cachedWorkflow.data === 'object') {
+      setWorkflow(cachedWorkflow.data as Record<string, unknown>);
+    }
     let cancelled = false;
     setLoadingWorkflow(true);
     void fetchWorkflowChecklist(reservationRef, 'checkin')
@@ -298,6 +345,23 @@ export function ExpressCheckinContent() {
   }, [reservationRef]);
 
   useEffect(() => {
+    if (!isUpdateMode) return;
+    if (!reservationRef) return;
+    const cachedDetail = getCachedBookingByReference(reservationRef);
+    const raw = cachedDetail?.data;
+    if (!raw || typeof raw !== 'object') return;
+    setWorkflow((prev) => {
+      if (prev && Object.keys(prev).length > 0) return prev;
+      const rcm = (raw as Record<string, unknown>).rcm_booking_info;
+      if (rcm && typeof rcm === 'object') {
+        return rcm as Record<string, unknown>;
+      }
+      return prev;
+    });
+  }, [isUpdateMode, reservationRef]);
+
+  useEffect(() => {
+    if (isUpdateMode) return;
     if (!reservationRef) return;
     let cancelled = false;
     setLoadingDocuments(true);
@@ -317,7 +381,7 @@ export function ExpressCheckinContent() {
               id: documentUploadRowId(row, i),
               customerId: Number(row.customerid ?? 0),
               documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
-              documentLinkId: Number(row.documentlinkid ?? 0),
+              documentLinkId: documentLinkIdFromRow(row),
               seqno: Number(row.seqno ?? 0),
               doctype: String(row.doctype ?? 'other').trim() || 'other',
               storageprovider:
@@ -333,7 +397,7 @@ export function ExpressCheckinContent() {
       })
       .catch((e) => {
         if (cancelled) return;
-        toast.error(e instanceof Error ? e.message : 'Could not load document list');
+        toast.error(getFriendlyError(e, 'Could not load document list'));
       })
       .finally(() => {
         if (!cancelled) setLoadingDocuments(false);
@@ -341,7 +405,7 @@ export function ExpressCheckinContent() {
     return () => {
       cancelled = true;
     };
-  }, [reservationRef]);
+  }, [isUpdateMode, reservationRef]);
   const normalizedWorkflow = useMemo(
     () => extractWorkflowChecklistArrays(workflow as Record<string, unknown> | undefined),
     [workflow],
@@ -393,45 +457,78 @@ export function ExpressCheckinContent() {
     [insuranceOptionsRaw],
   );
 
+  type StepId = 'customer' | 'booking' | 'drivers' | 'images' | 'creditcard';
   const [openCard, setOpenCard] = useState<string | null>('reservation');
-  const stepOrder = ['customer', 'booking', 'drivers', 'images', 'creditcard'] as const;
+  const stepOrder: StepId[] = isUpdateMode
+    ? ['customer', 'booking']
+    : ['customer', 'booking', 'drivers', 'images', 'creditcard'];
   const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
   const [savingStep, setSavingStep] = useState<string | null>(null);
 
-  const isStepLocked = (id: (typeof stepOrder)[number]) => {
+  const isStepLocked = (id: StepId) => {
+    if (isUpdateMode) return false;
     const idx = stepOrder.indexOf(id);
     if (idx <= 0) return false;
-    return !completedSteps[stepOrder[idx - 1]];
+    const previousStep = stepOrder[idx - 1];
+    if (previousStep === 'customer') return false;
+    return !completedSteps[previousStep];
   };
 
   const toggleCard = (id: string) => {
     if (bookingLockedReason && id !== 'reservation') return;
-    if (stepOrder.includes(id as (typeof stepOrder)[number]) && isStepLocked(id as (typeof stepOrder)[number])) {
+    if (stepOrder.includes(id as StepId) && isStepLocked(id as StepId)) {
       return;
     }
     setOpenCard(openCard === id ? null : id);
   };
 
-  const handleSave = () => {
-    // Save action logic here
-    console.log('Saved');
-  };
+  const saveCustomerStep = () => {
+    if (bookingLockedReason) {
+      toast.error(bookingLockedReason);
+      return;
+    }
+    const firstName = customerForm.firstName.trim();
+    const lastName = customerForm.lastName.trim();
+    const email = customerForm.email.trim();
+    const phone = customerForm.phone.trim();
+    const travellerCount = toFiniteNumber(customerForm.numberTravelling, 0);
 
-  const actionButtons = (
-    <Button
-      className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-4 sm:py-6 rounded-full shadow-md mt-4"
-      onClick={handleSave}
-    >
-      Save
-    </Button>
-  );
+    if (!firstName || !lastName) {
+      toast.error('First name and last name are required.');
+      return;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+    if (!phone) {
+      toast.error('Phone number is required.');
+      return;
+    }
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+    if (travellerCount <= 0) {
+      toast.error('Number of people traveling must be at least 1.');
+      return;
+    }
+
+    markSaved('customer');
+    toast.success('Customer details saved');
+  };
 
   const initialCustomerForm = useMemo<CustomerDetailsForm>(
     () => ({
       firstName: firstText(customerInfo?.firstname, customerSnapshot?.firstName),
       lastName: firstText(customerInfo?.lastname, customerSnapshot?.lastName),
       email: firstText(customerInfo?.email, customerSnapshot?.email),
-      phone: firstText(customerInfo?.mobile, customerInfo?.phone, customerSnapshot?.phone),
+      phone: firstText(
+        customerInfo?.mobile,
+        customerInfo?.phone,
+        customerSnapshot?.phone,
+      ),
       numberTravelling: firstText(
         bookingInfo?.numbertravelling,
         customerSnapshot?.numberTravelling,
@@ -541,7 +638,7 @@ export function ExpressCheckinContent() {
           id: documentUploadRowId(row, i),
           customerId: Number(row.customerid ?? 0),
           documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
-          documentLinkId: Number(row.documentlinkid ?? 0),
+          documentLinkId: documentLinkIdFromRow(row),
           seqno: Number(row.seqno ?? 0),
           doctype: String(row.doctype ?? 'other').trim() || 'other',
           storageprovider:
@@ -620,12 +717,13 @@ export function ExpressCheckinContent() {
     setBookingForm(f.booking);
     setDriversForm(f.drivers);
     setUploadForm(f.upload);
-    setCompletedSteps({});
+    setCompletedSteps({ customer: true });
     setOpenCard('reservation');
   }, [hydrationKey]);
 
-  const markSaved = (id: (typeof stepOrder)[number]) => {
+  const markSaved = (id: StepId) => {
     setCompletedSteps((prev) => ({ ...prev, [id]: true }));
+    if (isUpdateMode) return;
     const idx = stepOrder.indexOf(id);
     const next = stepOrder[idx + 1];
     if (next) setOpenCard(next);
@@ -756,28 +854,113 @@ export function ExpressCheckinContent() {
         })
         .filter((x): x is { id: number; qty: number } => Boolean(x));
 
-      await editBookingBasics({
-        reservation_ref: firstText(reservationRef, bookingInfo?.reservationref),
-        bookingtype: legacyEditFields.bookingtype,
-        insuranceid: toFiniteNumber(bookingForm.selectedInsurance, 0),
-        extrakmsid: toFiniteNumber(selectedExtraKmsId, 0),
-        numbertravelling: toFiniteNumber(customerForm.numberTravelling, 0),
+      const pickupDatetime = firstText(
+        [firstText(bookingInfo?.pickupdate), firstText(bookingInfo?.pickuptime)]
+          .filter(Boolean)
+          .join(' ')
+          .trim(),
+        firstText(bookingInfo?.pickupdatetime),
+      );
+      const dropoffDatetime = firstText(
+        [firstText(bookingInfo?.dropoffdate), firstText(bookingInfo?.dropofftime)]
+          .filter(Boolean)
+          .join(' ')
+          .trim(),
+        firstText(bookingInfo?.dropoffdatetime),
+      );
+
+      const customerPayload = {
+        customerid: toFiniteNumber(
+          customerInfo?.customerid ??
+            customerInfo?.id ??
+            bookingInfo?.customerid ??
+            legacyEditFields.id,
+          0,
+        ),
+        firstname: customerForm.firstName,
+        lastname: customerForm.lastName,
+        dateofbirth: customerForm.dateOfBirth,
+        licenseno: customerForm.licenseNo,
+        licenseissued: firstText(
+          customerForm.licenseIssued,
+          customerInfo?.licenseissued,
+        ),
+        licenseexpires: firstText(
+          customerForm.licenseExpires,
+          customerInfo?.licenseexpires,
+        ),
+        email: customerForm.email,
+        phone: firstText(customerInfo?.phone),
+        mobile: firstText(customerForm.phone, customerInfo?.mobile),
+        fulladdress: firstText(customerInfo?.fulladdress),
+        address: customerForm.address,
+        city: customerForm.city,
+        state: customerForm.state,
+        postcode: customerForm.postcode,
+        country: firstText(customerForm.country, customerInfo?.country),
+        countryid: toFiniteNumber(customerInfo?.countryid ?? customerInfo?.country_id, 0),
+        localaddress: firstText(customerInfo?.localaddress),
+        passport: firstText(customerInfo?.passport),
+        mailinglist: Boolean(customerInfo?.mailinglist),
+        loyaltycardno: firstText(customerInfo?.loyaltycardno),
+      };
+      const travellerCount = toFiniteNumber(customerForm.numberTravelling, 0);
+      if (travellerCount <= 0) {
+        throw new Error('Number of people traveling must be at least 1.');
+      }
+
+      const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+      const editPayload = {
+        booking_id: firstText(snapshot?.bookingId, bookingInfo?.booking_id, bookingInfo?.bookingid),
+        reservation_ref: reservationRefValue,
+        reservationref: reservationRefValue,
         customer_details: {
-          id: legacyEditFields.id,
-          first_name: customerForm.firstName,
-          last_name: customerForm.lastName,
-          date_of_birth: customerForm.dateOfBirth,
-          driver_license_number: customerForm.licenseNo,
-          email: customerForm.email,
-          state: customerForm.state,
-          city: customerForm.city,
-          postcode: customerForm.postcode,
-          address: customerForm.address,
+          id: customerPayload.customerid,
+          customerid: customerPayload.customerid,
+          first_name: customerPayload.firstname,
+          last_name: customerPayload.lastname,
+          firstname: customerPayload.firstname,
+          lastname: customerPayload.lastname,
+          email: customerPayload.email,
+          phone: customerPayload.phone || '',
+          mobile: customerPayload.mobile || '',
+          date_of_birth: customerPayload.dateofbirth,
+          dateofbirth: customerPayload.dateofbirth,
+          address: customerPayload.address,
+          city: customerPayload.city,
+          state: customerPayload.state,
+          postcode: customerPayload.postcode,
+          country_id: customerPayload.countryid || 0,
+          driver_license_number: customerPayload.licenseno,
+          licenseno: customerPayload.licenseno,
         },
-        // Keep these in payload for current backend compatibility.
+        customer: {
+          id: customerPayload.customerid,
+          customerid: customerPayload.customerid,
+          firstname: customerPayload.firstname,
+          lastname: customerPayload.lastname,
+          dateofbirth: customerPayload.dateofbirth,
+          licenseno: customerPayload.licenseno,
+          email: customerPayload.email,
+          phone: customerPayload.phone || '',
+          mobile: customerPayload.mobile || '',
+          address: customerPayload.address,
+          city: customerPayload.city,
+          state: customerPayload.state,
+          postcode: customerPayload.postcode,
+          countryid: customerPayload.countryid || 0,
+        },
+        bookingtype: legacyEditFields.bookingtype,
+        booking_type: legacyEditFields.bookingtype,
+        insuranceid: toFiniteNumber(bookingForm.selectedInsurance, 0),
+        insurance_id: toFiniteNumber(bookingForm.selectedInsurance, 0),
+        extrakmsid: toFiniteNumber(selectedExtraKmsId, 0),
+        extrakms_id: toFiniteNumber(selectedExtraKmsId, 0),
         pickuplocationid: legacyEditFields.pickuplocationid,
         transmission: legacyEditFields.transmission,
-        referralid: 0,
+        numbertravelling: travellerCount,
+        number_of_persons: travellerCount,
+        referralid: toFiniteNumber(bookingInfo?.referralid, 1),
         remark: firstText(bookingForm.notes, bookingInfo?.customerremark),
         flightin: firstText(bookingInfo?.flightin),
         flightout: firstText(bookingInfo?.flightout),
@@ -791,28 +974,61 @@ export function ExpressCheckinContent() {
         agentrefno: firstText(bookingInfo?.agentrefno),
         agentcollectedrecalcmode: firstText(bookingInfo?.agentcollectedrecalcmode),
         optionalfees,
-      });
-      toast.success('Booking details saved');
-      markSaved('booking');
+      };
+
+      if (isUpdateMode) {
+        await updateBooking({
+          reservation_ref: reservationRefValue,
+          bookingtype: legacyEditFields.bookingtype,
+          pickuplocationid: legacyEditFields.pickuplocationid,
+          pickupdatetime: pickupDatetime,
+          dropofflocationid: toFiniteNumber(
+            bookingInfo?.dropofflocationid ?? bookingInfo?.dropoff_location_id,
+            0,
+          ),
+          dropoffdatetime: dropoffDatetime,
+          vehiclecategoryid: toFiniteNumber(
+            bookingInfo?.vehiclecategoryid ?? bookingInfo?.vehicle_category_id,
+            0,
+          ),
+          driverageid: toFiniteNumber(bookingInfo?.driverageid ?? bookingInfo?.age_id, 0),
+          insuranceid: toFiniteNumber(bookingForm.selectedInsurance, 0),
+          extrakmsid: toFiniteNumber(selectedExtraKmsId, 0),
+          transmission: legacyEditFields.transmission,
+          customer: customerPayload,
+          referralid: toFiniteNumber(bookingInfo?.referralid, 1),
+          remark: firstText(bookingForm.notes, bookingInfo?.customerremark),
+          numbertravelling: travellerCount,
+          flightin: firstText(bookingInfo?.flightin),
+          flightout: firstText(bookingInfo?.flightout),
+          arrivalpoint: firstText(bookingInfo?.arrivalpoint),
+          departurepoint: firstText(bookingInfo?.departurepoint),
+          areaofuseid: toFiniteNumber(bookingInfo?.areaofuseid, 0),
+          newsletter: Boolean((customerInfo as Record<string, unknown> | undefined)?.mailinglist),
+          agentcode: firstText(bookingInfo?.agentcode),
+          agentname: firstText(bookingInfo?.agentname),
+          agentemail: firstText(bookingInfo?.agentemail),
+          agentrefno: firstText(bookingInfo?.agentrefno),
+          agentcollectedrecalcmode: firstText(bookingInfo?.agentcollectedrecalcmode),
+          optionalfees,
+        });
+      } else {
+        await editBookingBasics(editPayload);
+      }
+      invalidateBookingsCache(firstText(reservationRef, bookingInfo?.reservationref));
+      if (isUpdatePayMode) {
+        toast.success('Booking details saved');
+        await startSecurePaymentStep();
+      } else if (isUpdateMode) {
+        setShowUpdateSuccessDialog(true);
+      } else {
+        toast.success('Booking details saved');
+        markSaved('booking');
+      }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not save booking details';
+      const msg = getFriendlyError(e, 'Could not save booking details');
       setBookingSaveError(msg);
       toast.error(msg);
-    } finally {
-      setSavingStep(null);
-    }
-  };
-
-  const saveCustomerStep = async () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
-      return;
-    }
-    setSavingStep('customer');
-    try {
-      // Customer step is local-only. Persist happens on Booking Details save.
-      toast.success('Customer details saved locally. Continue to Booking Details to sync.');
-      markSaved('customer');
     } finally {
       setSavingStep(null);
     }
@@ -849,8 +1065,21 @@ export function ExpressCheckinContent() {
           d.lastname.trim() ||
           d.dateofbirth.trim() ||
           d.licenseno.trim() ||
-          d.email.trim(),
+          d.email.trim() ||
+          d.state.trim() ||
+          d.city.trim() ||
+          d.postcode.trim() ||
+          d.address.trim(),
       );
+      if (driversToSave.length > MAX_EXTRA_DRIVERS) {
+        toast.error(`You can add up to ${MAX_EXTRA_DRIVERS} additional drivers only.`);
+        return;
+      }
+      const hasRemovalChanges = driversForm.removedCustomerIds.length > 0;
+      if (driversToSave.length === 0 && !hasRemovalChanges) {
+        markSaved('drivers');
+        return;
+      }
 
       for (const d of driversToSave) {
         await addExtraDriver({
@@ -871,9 +1100,11 @@ export function ExpressCheckinContent() {
       }
 
       for (const removedId of driversForm.removedCustomerIds) {
+        const parsedRemovedId = Number(removedId);
+        if (!Number.isFinite(parsedRemovedId) || parsedRemovedId <= 0) continue;
         await addExtraDriver({
           reservation_ref: reservationRefValue,
-          customerid: -Math.abs(Number(removedId)),
+          customerid: -Math.abs(parsedRemovedId),
           customer: {
             firstname: 'Delete',
             lastname: 'Driver',
@@ -888,10 +1119,13 @@ export function ExpressCheckinContent() {
         });
       }
 
-      toast.success('Extra drivers saved');
+      if (driversToSave.length > 0 || hasRemovalChanges) {
+        toast.success('Extra drivers saved');
+      }
+      invalidateBookingsCache(reservationRefValue);
       markSaved('drivers');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save extra drivers');
+      toast.error(getFriendlyError(e, 'Could not save extra drivers'));
     } finally {
       setSavingStep(null);
     }
@@ -940,7 +1174,7 @@ export function ExpressCheckinContent() {
       setUploadForm((prev) => ({
         docs: prev.docs.map((d) => (d.id === id ? { ...d, isUploading: false } : d)),
       }));
-      toast.error(e instanceof Error ? e.message : 'Could not upload file');
+      toast.error(getFriendlyError(e, 'Could not upload file'));
     }
   };
 
@@ -1025,9 +1259,10 @@ export function ExpressCheckinContent() {
         }));
       }
       toast.success('Documents saved');
+      invalidateBookingsCache(reservationRefValue);
       markSaved('images');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save documents');
+      toast.error(getFriendlyError(e, 'Could not save documents'));
     } finally {
       setSavingStep(null);
     }
@@ -1067,7 +1302,7 @@ export function ExpressCheckinContent() {
       markSaved('creditcard');
       window.location.assign(url);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not start payment');
+      toast.error(getFriendlyError(e, 'Could not start payment'));
     } finally {
       setLaunchingPayment(false);
     }
@@ -1089,7 +1324,34 @@ export function ExpressCheckinContent() {
       }));
       return;
     }
-    const linkId = Number(doc.documentLinkId ?? 0);
+    let linkId = Number(doc.documentLinkId || doc.documentLinkSetupId || 0);
+    if (linkId <= 0) {
+      try {
+        const latest = await listRcmDocuments(reservationRefValue, 'checkin');
+        const rows = Array.isArray(latest?.data) ? latest.data : [];
+        const matched = rows.find((row) => {
+          const r = row as Record<string, unknown>;
+          const setupId = Number(r.documentlinksetupid ?? 0);
+          const customerId = Number(r.customerid ?? 0);
+          return (
+            setupId === Number(doc.documentLinkSetupId ?? 0) &&
+            customerId === Number(doc.customerId ?? 0)
+          );
+        }) as Record<string, unknown> | undefined;
+        if (matched) {
+          linkId = documentLinkIdFromRow(matched);
+          if (linkId > 0) {
+            setUploadForm((prev) => ({
+              docs: prev.docs.map((d) =>
+                d.id === id ? { ...d, documentLinkId: linkId } : d,
+              ),
+            }));
+          }
+        }
+      } catch {
+        // Ignore lookup error and keep friendly fallback below.
+      }
+    }
     if (linkId <= 0) {
       toast.error('Document link id missing for delete');
       return;
@@ -1110,11 +1372,12 @@ export function ExpressCheckinContent() {
         ),
       }));
       toast.success('Document deleted');
+      invalidateBookingsCache(reservationRefValue);
     } catch (e) {
       setUploadForm((prev) => ({
         docs: prev.docs.map((d) => (d.id === id ? { ...d, isUploading: false } : d)),
       }));
-      toast.error(e instanceof Error ? e.message : 'Could not delete document');
+      toast.error(getFriendlyError(e, 'Could not delete document'));
     }
   };
 
@@ -1130,7 +1393,9 @@ export function ExpressCheckinContent() {
     const workflowCarImage = carImagePath
       ? `${String(bookingInfo?.urlpathfordocuments ?? '').replace(/\/$/, '')}/${carImagePath.replace(/^\//, '')}`
       : '';
-    const carImage = workflowCarImage || String(snapshot?.carImage ?? '').trim();
+    const carImage =
+      workflowCarImage ||
+      String(snapshot?.carImage ?? '').trim();
     const pickupLocation = [
       String(bookingInfo?.pickuplocationname ?? '').trim(),
       String(bookingInfo?.pickuplocationaddress ?? '').trim(),
@@ -1158,29 +1423,51 @@ export function ExpressCheckinContent() {
         [bookingInfo?.pickupdate, bookingInfo?.pickuptime].filter(Boolean).join(' ').trim() ||
         String(snapshot?.pickupDate ?? '').trim() ||
         '—',
-      pickupLocation: pickupLocation || String(snapshot?.pickupLocation ?? '').trim() || '—',
+      pickupLocation:
+        pickupLocation ||
+        String(snapshot?.pickupLocation ?? '').trim() ||
+        '—',
       returnDate:
         [bookingInfo?.dropoffdate, bookingInfo?.dropofftime].filter(Boolean).join(' ').trim() ||
         String(snapshot?.returnDate ?? '').trim() ||
         '—',
-      returnLocation: returnLocation || String(snapshot?.returnLocation ?? '').trim() || '—',
+      returnLocation:
+        returnLocation ||
+        String(snapshot?.returnLocation ?? '').trim() ||
+        '—',
     };
-  }, [bookingInfo, reservationRef, snapshot]);
+  }, [bookingInfo, reservationRef, routeState?.reservationRef, snapshot]);
 
   return (
     <div className="flex flex-col h-full min-h-screen pb-[300px] lg:pb-10 relative px-4 pt-0 lg:px-0">
-      {/* Header */}
-      {/*  <div className="flex items-center mb-6 pt-2">
-        <button 
-          onClick={() => navigate(-1)} 
-          className="p-2 -ml-2 text-black hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="flex-1 text-center font-extrabold text-[18px] sm:text-[20px] text-black pr-8">
-          Express Check-in
+      <Dialog open={showUpdateSuccessDialog} onOpenChange={setShowUpdateSuccessDialog}>
+        <DialogContent className="max-w-md text-center">
+          <div className="mx-auto mt-2 flex size-16 items-center justify-center rounded-full bg-[#0061e0]">
+            <Check className="size-9 text-white" strokeWidth={3} />
+          </div>
+          <DialogTitle className="text-xl font-bold text-[#0061e0]">
+            Booking Updated
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
+            Booking details were updated successfully.
+          </DialogDescription>
+          <Button
+            className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold"
+            onClick={() => {
+              setShowUpdateSuccessDialog(false);
+              navigate('/bookings');
+            }}
+          >
+            Back to Bookings
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <div className="mb-4 pt-2">
+        <h1 className="font-extrabold text-[18px] sm:text-[20px] text-black">
+          {isUpdateMode ? 'Modify Booking' : 'Express Check-in'}
         </h1>
-      </div> */}
+      </div>
 
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 ">
         {bookingLockedReason ? (
@@ -1200,22 +1487,42 @@ export function ExpressCheckinContent() {
         <div className="col-span-1 flex flex-col lg:order-last">
 
           {/* Mapped to BookingOverview's place */}
-          <CollapsibleCard
-            title="RESERVATION DETAILS"
-            isOpen={openCard === 'reservation'}
-            onToggle={() => toggleCard('reservation')}
-          >
-            <ReservationDetails
-              reservationNumber={reservationData.reservationNumber}
-              carImage={reservationData.carImage}
-              carTitle={reservationData.carTitle}
-              carSubtitle={reservationData.carSubtitle}
-              pickupDate={reservationData.pickupDate}
-              pickupLocation={reservationData.pickupLocation}
-              returnDate={reservationData.returnDate}
-              returnLocation={reservationData.returnLocation}
-            />
-          </CollapsibleCard>
+          {isUpdateMode ? (
+            <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm">
+              <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-700">
+                RESERVATION DETAILS
+              </div>
+              <div className="p-4">
+                <ReservationDetails
+                  reservationNumber={reservationData.reservationNumber}
+                  carImage={reservationData.carImage}
+                  carTitle={reservationData.carTitle}
+                  carSubtitle={reservationData.carSubtitle}
+                  pickupDate={reservationData.pickupDate}
+                  pickupLocation={reservationData.pickupLocation}
+                  returnDate={reservationData.returnDate}
+                  returnLocation={reservationData.returnLocation}
+                />
+              </div>
+            </div>
+          ) : (
+            <CollapsibleCard
+              title="RESERVATION DETAILS"
+              isOpen={openCard === 'reservation'}
+              onToggle={() => toggleCard('reservation')}
+            >
+              <ReservationDetails
+                reservationNumber={reservationData.reservationNumber}
+                carImage={reservationData.carImage}
+                carTitle={reservationData.carTitle}
+                carSubtitle={reservationData.carSubtitle}
+                pickupDate={reservationData.pickupDate}
+                pickupLocation={reservationData.pickupLocation}
+                returnDate={reservationData.returnDate}
+                returnLocation={reservationData.returnLocation}
+              />
+            </CollapsibleCard>
+          )}
 
           {/* Desktop Summary Placeholder (matches options layout) */}
           <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 hidden lg:flex flex-col mt-2">
@@ -1224,150 +1531,199 @@ export function ExpressCheckinContent() {
               dailyRate={43.0}
               totalExtras={10.0}
               gstAmount={12.0}
-            >
-              {actionButtons}
-            </RentalFeeSummary>
+            />
           </div>
         </div>
 
         {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
         <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
 
-          <CollapsibleCard
-            title={stepName(steps, 'customerdetails', 'CUSTOMER DETAILS')}
-            isOpen={openCard === 'customer'}
-            onToggle={() => toggleCard('customer')}
-          >
-            <CustomerDetailsCard
-              value={customerForm}
-              onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
-            />
-            <div className="flex gap-2 mt-4">
-              <Button
-                onClick={() => void saveCustomerStep()}
-                disabled={savingStep === 'customer' || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
-              >
-                {savingStep === 'customer' ? 'Saving...' : 'Save'}
-              </Button>
-              <Button variant="outline" onClick={() => setCustomerForm(initialCustomerForm)}>
-                Cancel
-              </Button>
+          {isUpdateMode ? (
+            <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">MODIFY BOOKING</h3>
+              <div className="mb-5">
+                <CustomerDetailsCard
+                  value={customerForm}
+                  onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                />
+              </div>
+              {loadingWorkflow ? (
+                <p className="text-[13px] text-gray-500 mb-3">Loading booking options…</p>
+              ) : null}
+              <BookingDetailsCard
+                value={bookingForm}
+                onChange={(patch) => setBookingForm((prev) => ({ ...prev, ...patch }))}
+                optionalFees={optionalFeesUi}
+                insuranceOptions={insuranceOptionsUi}
+              />
+              <div className="flex gap-2 mt-4">
+                <Button
+                  type="button"
+                  onClick={() => void saveBookingStep()}
+                  disabled={savingStep === 'booking' || Boolean(bookingLockedReason)}
+                  className="bg-[#ffc107] text-black"
+                >
+                  {savingStep === 'booking' ? 'Saving…' : 'Save Changes'}
+                </Button>
+              </div>
             </div>
-          </CollapsibleCard>
+          ) : (
+            <>
+              <CollapsibleCard
+                title={stepName(steps, 'customerdetails', 'CUSTOMER DETAILS')}
+                isOpen={openCard === 'customer'}
+                onToggle={() => toggleCard('customer')}
+              >
+                <CustomerDetailsCard
+                  value={customerForm}
+                  onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                />
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    type="button"
+                    onClick={saveCustomerStep}
+                    disabled={Boolean(bookingLockedReason)}
+                    className="bg-[#ffc107] text-black"
+                  >
+                    Save
+                  </Button>
+                  <Button variant="outline" onClick={() => setCustomerForm(initialCustomerForm)}>
+                    Cancel
+                  </Button>
+                </div>
+              </CollapsibleCard>
 
-          <CollapsibleCard
-            title={stepName(steps, 'bookingextras', 'BOOKING DETAILS')}
-            isOpen={openCard === 'booking'}
-            onToggle={() => toggleCard('booking')}
-          >
-            {loadingWorkflow ? (
-              <p className="text-[13px] text-gray-500 mb-3">Loading booking options…</p>
-            ) : null}
-            <BookingDetailsCard
-              value={bookingForm}
-              onChange={(patch) => setBookingForm((prev) => ({ ...prev, ...patch }))}
-              optionalFees={optionalFeesUi}
-              insuranceOptions={insuranceOptionsUi}
-            />
-            <div className="flex gap-2 mt-4">
-              <Button
-                type="button"
-                onClick={() => void saveBookingStep()}
-                disabled={savingStep === 'booking' || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
+              <CollapsibleCard
+                title={stepName(steps, 'bookingextras', 'BOOKING DETAILS')}
+                isOpen={openCard === 'booking'}
+                onToggle={() => toggleCard('booking')}
               >
-                {savingStep === 'booking' ? 'Saving…' : 'Save'}
-              </Button>
-              <Button variant="outline" onClick={() => setBookingForm(initialBookingForm)}>
-                Cancel
-              </Button>
-            </div>
-          </CollapsibleCard>
+                {loadingWorkflow ? (
+                  <p className="text-[13px] text-gray-500 mb-3">Loading booking options…</p>
+                ) : null}
+                <BookingDetailsCard
+                  value={bookingForm}
+                  onChange={(patch) => setBookingForm((prev) => ({ ...prev, ...patch }))}
+                  optionalFees={optionalFeesUi}
+                  insuranceOptions={insuranceOptionsUi}
+                />
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    type="button"
+                    onClick={() => void saveBookingStep()}
+                    disabled={savingStep === 'booking' || Boolean(bookingLockedReason)}
+                    className="bg-[#ffc107] text-black"
+                  >
+                    {savingStep === 'booking'
+                      ? 'Saving…'
+                      : isUpdateMode
+                        ? 'Save Changes'
+                        : 'Save'}
+                  </Button>
+                  {!isUpdateMode ? (
+                    <Button variant="outline" onClick={() => setBookingForm(initialBookingForm)}>
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+              </CollapsibleCard>
+            </>
+          )}
 
-          <CollapsibleCard
-            title={stepName(steps, 'extradrivers', 'EXTRA DRIVERS')}
-            isOpen={openCard === 'drivers'}
-            onToggle={() => toggleCard('drivers')}
-          >
-            <ExtraDriversCard value={driversForm} onChange={setDriversForm} />
-            <div className="flex gap-2 mt-4">
-              <Button
-                onClick={() => void saveExtraDriversStep()}
-                disabled={savingStep === 'drivers' || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
-              >
-                {savingStep === 'drivers' ? 'Saving...' : 'Save'}
-              </Button>
-              <Button variant="outline" onClick={() => setDriversForm(initialDriversForm)}>
-                Cancel
-              </Button>
-            </div>
-          </CollapsibleCard>
+          {!isUpdateMode ? (
+            <CollapsibleCard
+              title={stepName(steps, 'extradrivers', 'EXTRA DRIVERS')}
+              isOpen={openCard === 'drivers'}
+              onToggle={() => toggleCard('drivers')}
+            >
+              <ExtraDriversCard
+                value={driversForm}
+                onChange={setDriversForm}
+                maxDrivers={MAX_EXTRA_DRIVERS}
+              />
+              <div className="flex gap-2 mt-4">
+                <Button
+                  onClick={() => void saveExtraDriversStep()}
+                  disabled={savingStep === 'drivers' || Boolean(bookingLockedReason)}
+                  className="bg-[#ffc107] text-black"
+                >
+                  {savingStep === 'drivers' ? 'Saving...' : 'Save'}
+                </Button>
+                <Button variant="outline" onClick={() => setDriversForm(initialDriversForm)}>
+                  Cancel
+                </Button>
+              </div>
+            </CollapsibleCard>
+          ) : null}
 
-          <CollapsibleCard
-            title={stepName(steps, 'storeupload', 'UPLOAD IMAGES')}
-            isOpen={openCard === 'images'}
-            onToggle={() => toggleCard('images')}
-          >
-            {loadingDocuments ? (
-              <p className="text-[13px] text-gray-500 mb-3">Loading required documents…</p>
-            ) : null}
-            <UploadImagesCard
-              value={uploadForm}
-              onUpload={(id, file) => void stageDocumentFile(id, file)}
-              onDelete={(id) => void deleteOneDocument(id)}
-            />
-            <div className="flex gap-2 mt-4">
-              <Button
-                type="button"
-                onClick={() => void saveUploadImagesStep()}
-                disabled={savingStep === 'images' || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
-              >
-                {savingStep === 'images' ? 'Saving…' : 'Save'}
-              </Button>
-              <Button variant="outline" onClick={() => setUploadForm(initialUploadForm)}>
-                Cancel
-              </Button>
-            </div>
-          </CollapsibleCard>
+          {!isUpdateMode ? (
+            <CollapsibleCard
+              title={stepName(steps, 'storeupload', 'UPLOAD IMAGES')}
+              isOpen={openCard === 'images'}
+              onToggle={() => toggleCard('images')}
+            >
+              {loadingDocuments ? (
+                <p className="text-[13px] text-gray-500 mb-3">Loading required documents…</p>
+              ) : null}
+              <UploadImagesCard
+                value={uploadForm}
+                onUpload={(id, file) => void stageDocumentFile(id, file)}
+                onDelete={(id) => void deleteOneDocument(id)}
+              />
+              <div className="flex gap-2 mt-4">
+                <Button
+                  type="button"
+                  onClick={() => void saveUploadImagesStep()}
+                  disabled={savingStep === 'images' || Boolean(bookingLockedReason)}
+                  className="bg-[#ffc107] text-black"
+                >
+                  {savingStep === 'images' ? 'Saving…' : 'Save'}
+                </Button>
+                <Button variant="outline" onClick={() => setUploadForm(initialUploadForm)}>
+                  Cancel
+                </Button>
+              </div>
+            </CollapsibleCard>
+          ) : null}
 
-          <CollapsibleCard
-            title={stepName(steps, 'createdpspaymentmethod', 'COLLECT CARD DETAIL')}
-            isOpen={openCard === 'creditcard'}
-            onToggle={() => toggleCard('creditcard')}
-          >
-            <div className="rounded-xl border border-gray-100 bg-[#f8f9fa] p-4 text-[14px] text-[#4b5563]">
-              Card details are collected securely on Windcave. Click below to
-              continue to the hosted payment page.
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button
-                type="button"
-                onClick={() => void startSecurePaymentStep()}
-                disabled={launchingPayment || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
-              >
-                {launchingPayment ? 'Redirecting…' : 'Pay securely with Windcave'}
-              </Button>
-            </div>
-          </CollapsibleCard>
+          {!isUpdateMode ? (
+            <CollapsibleCard
+              title={stepName(steps, 'createdpspaymentmethod', 'COLLECT CARD DETAIL')}
+              isOpen={openCard === 'creditcard'}
+              onToggle={() => toggleCard('creditcard')}
+            >
+              <div className="rounded-xl border border-gray-100 bg-[#f8f9fa] p-4 text-[14px] text-[#4b5563]">
+                Card details are collected securely on Windcave. Click below to
+                continue to the hosted payment page.
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button
+                  type="button"
+                  onClick={() => void startSecurePaymentStep()}
+                  disabled={launchingPayment || Boolean(bookingLockedReason)}
+                  className="bg-[#ffc107] text-black"
+                >
+                  {launchingPayment ? 'Redirecting…' : 'Pay securely with Windcave'}
+                </Button>
+              </div>
+            </CollapsibleCard>
+          ) : null}
 
         </div>
       </div>
 
       {/* Mobile Sticky Bottom Sheet */}
-      <div className="lg:hidden">
-        <RentalFeeSummaryBottomSheet
-          days={6}
-          dailyRate={43.0}
-          totalExtras={10.0}
-          totalCost={280.0}
-          gstAmount={12.0}
-          onSave={handleSave}
-        />
-      </div>
+      {!isUpdateMode ? (
+        <div className="lg:hidden">
+          <RentalFeeSummaryBottomSheet
+            days={6}
+            dailyRate={43.0}
+            totalExtras={10.0}
+            totalCost={280.0}
+            gstAmount={12.0}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

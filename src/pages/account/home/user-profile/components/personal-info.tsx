@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { EditProfileModal } from './edit-profile-modal';
 import { useAuth } from '@/auth/context/auth-context';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 function dash(value: string | null | undefined) {
   const v = (value ?? '').trim();
@@ -85,25 +86,17 @@ const PersonalInfo = () => {
                           await uploadProfilePicture(file);
                           toast.success('Photo updated');
                         } catch (e) {
-                          toast.error(
-                            e instanceof Error ? e.message : 'Upload failed',
-                          );
+                          toast.error(getFriendlyError(e, 'Upload failed'));
                         }
                       }}
-                      onRemoveRemote={
-                        profile.avatarUrl
-                          ? async () => {
-                              try {
-                                await deleteProfilePicture();
-                                toast.success('Photo removed');
-                              } catch (e) {
-                                toast.error(
-                                  e instanceof Error ? e.message : 'Remove failed',
-                                );
-                              }
-                            }
-                          : undefined
-                      }
+                      onRemoveRemote={async () => {
+                        try {
+                          await deleteProfilePicture();
+                          toast.success('Photo removed');
+                        } catch (e) {
+                          toast.error(getFriendlyError(e, 'Could not remove photo'));
+                        }
+                      }}
                       busy={profileBusy}
                     />
                   ) : (
@@ -137,16 +130,7 @@ const PersonalInfo = () => {
                 Email
               </TableCell>
               <TableCell className="min-w-60 py-2">
-                {email !== '—' ? (
-                  <a
-                    href={`mailto:${email}`}
-                    className="text-sm font-normal text-foreground hover:text-primary-active"
-                  >
-                    {email}
-                  </a>
-                ) : (
-                  <span className="text-sm font-normal text-foreground">{email}</span>
-                )}
+                <span className="text-sm font-normal text-foreground">{email}</span>
               </TableCell>
             </TableRow>
 

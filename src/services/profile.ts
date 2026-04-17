@@ -1,4 +1,5 @@
 import { getAuth } from '@/auth/lib/helpers';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
@@ -21,6 +22,11 @@ function authBearerOnly(): HeadersInit {
   if (auth?.access_token) {
     headers.Authorization = `Bearer ${auth.access_token}`;
   }
+  return headers;
+}
+
+function authOptionalJsonHeaders(): Record<string, string> {
+  const headers = authJsonHeaders() as Record<string, string>;
   return headers;
 }
 
@@ -69,6 +75,7 @@ export interface UpdateProfilePayload {
   state?: string;
   country?: string;
   postal_code?: string;
+  profile_picture?: string | null;
 }
 
 export function normalizeProfilePicturePath(
@@ -92,15 +99,25 @@ function assertEnvelope(json: Record<string, unknown>): void {
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Profile request failed';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not load your profile. Please try again.',
+      }),
+    );
   }
 }
 
 function parseProfileData(raw: Record<string, unknown>): RcmProfile {
   const addr = (raw.address as Record<string, unknown>) || {};
   const countriesRaw = Array.isArray(raw.countries) ? raw.countries : [];
+
+  const pictureValue =
+    raw.profile_picture ??
+    raw.profile_image ??
+    raw.profile_image_url ??
+    raw.avatar ??
+    raw.avatar_url;
 
   return {
     user_id: String(raw.user_id ?? ''),
@@ -111,7 +128,7 @@ function parseProfileData(raw: Record<string, unknown>): RcmProfile {
     is_social_login: Boolean(raw.is_social_login),
     method: raw.method != null ? String(raw.method) : undefined,
     profile_picture: normalizeProfilePicturePath(
-      raw.profile_picture as string | null | undefined,
+      pictureValue as string | null | undefined,
     ),
     address: {
       local_address: (addr.local_address as string) ?? null,
@@ -132,6 +149,18 @@ function parseProfileData(raw: Record<string, unknown>): RcmProfile {
   };
 }
 
+function extractPictureUrl(raw: Record<string, unknown> | undefined): string | null {
+  if (!raw) return null;
+  return normalizeProfilePicturePath(
+    (raw.profile_picture ??
+      raw.profile_image ??
+      raw.profile_image_url ??
+      raw.avatar ??
+      raw.avatar_url ??
+      raw.url) as string | null | undefined,
+  );
+}
+
 export const profileService = {
   async fetchProfile(): Promise<RcmProfile> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
@@ -143,7 +172,13 @@ export const profileService = {
 
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`Profile GET failed: ${res.status} ${t}`);
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: res.status,
+          message: t,
+          fallback: 'Could not load your profile. Please try again.',
+        }),
+      );
     }
 
     const json = (await res.json()) as Record<string, unknown>;
@@ -164,14 +199,25 @@ export const profileService = {
 
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`Profile update failed: ${res.status} ${t}`);
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: res.status,
+          message: t,
+          fallback: 'Could not update your profile. Please try again.',
+        }),
+      );
     }
 
     const json = (await res.json()) as Record<string, unknown>;
     assertEnvelope(json);
     const data = json.data as Record<string, unknown> | undefined;
-    if (!data) throw new Error('Profile update response missing data');
-    return parseProfileData(data);
+    if (!data) return profileService.fetchProfile();
+    const parsed = parseProfileData(data);
+    if (!parsed.profile_picture) {
+      const fresh = await profileService.fetchProfile();
+      return fresh;
+    }
+    return parsed;
   },
 
   async uploadProfilePicture(file: File): Promise<RcmProfile> {
@@ -188,37 +234,158 @@ export const profileService = {
 
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`Upload failed: ${res.status} ${t}`);
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: res.status,
+          message: t,
+          fallback: 'Could not upload your photo. Please try again.',
+        }),
+      );
     }
 
     const json = (await res.json()) as Record<string, unknown>;
     assertEnvelope(json);
     const data = json.data as Record<string, unknown> | undefined;
     if (!data) return profileService.fetchProfile();
-    return parseProfileData(data);
+    const parsed = parseProfileData(data);
+    const inlineUrl = extractPictureUrl(data);
+    if (inlineUrl && !parsed.profile_picture) {
+      return { ...parsed, profile_picture: inlineUrl };
+    }
+    if (!parsed.profile_picture) return profileService.fetchProfile();
+    return parsed;
   },
 
   /** Removes the current profile picture on the server. */
   async deleteProfilePicture(): Promise<void> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
+    const attempts: Array<{
+      endpoint: string;
+      method: 'DELETE' | 'PATCH' | 'PUT';
+      body?: string;
+      headers: HeadersInit;
+    }> = [
+      {
+        endpoint: `${API_BASE}/profile/delete-picture`,
+        method: 'DELETE',
+        headers: authBearerOnly(),
+      },
+      {
+        endpoint: `${API_BASE}/profile/remove-picture`,
+        method: 'DELETE',
+        headers: authBearerOnly(),
+      },
+      {
+        endpoint: `${API_BASE}/profile`,
+        method: 'PATCH',
+        headers: authOptionalJsonHeaders(),
+        body: JSON.stringify({ profile_picture: null }),
+      },
+      {
+        endpoint: `${API_BASE}/profile`,
+        method: 'PUT',
+        headers: authOptionalJsonHeaders(),
+        body: JSON.stringify({ profile_picture: null }),
+      },
+    ];
 
-    const res = await fetch(`${API_BASE}/profile/delete-picture`, {
-      method: 'DELETE',
-      headers: authBearerOnly(),
-    });
-
-    const body = await res.text();
-    if (!res.ok) {
-      throw new Error(`Delete picture failed: ${res.status} ${body}`);
-    }
-    if (body.trim()) {
-      try {
-        const json = JSON.parse(body) as Record<string, unknown>;
-        assertEnvelope(json);
-      } catch (e) {
-        if (e instanceof SyntaxError) return;
-        throw e;
+    let lastError = 'Delete picture failed';
+    for (const attempt of attempts) {
+      const res = await fetch(attempt.endpoint, {
+        method: attempt.method,
+        headers: attempt.headers,
+        body: attempt.body,
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        lastError = getFriendlyErrorMessage({
+          status: res.status,
+          message: body,
+          fallback: 'Could not remove your photo. Please try again.',
+        });
+        continue;
       }
+      if (body.trim()) {
+        try {
+          const json = JSON.parse(body) as Record<string, unknown>;
+          assertEnvelope(json);
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+      return;
     }
+    throw new Error(lastError);
+  },
+
+  async deleteAccount(userId?: string): Promise<void> {
+    if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
+
+    const attempts: Array<{
+      endpoint: string;
+      method: 'DELETE' | 'POST';
+      body?: string;
+      headers: HeadersInit;
+    }> = [
+      {
+        endpoint: `${API_BASE}/profile/delete-account`,
+        method: 'DELETE',
+        headers: authBearerOnly(),
+      },
+      {
+        endpoint: `${API_BASE}/profile/delete-account`,
+        method: 'POST',
+        headers: authOptionalJsonHeaders(),
+        body: JSON.stringify(userId ? { user_id: userId } : {}),
+      },
+      {
+        endpoint: `${API_BASE}/profile`,
+        method: 'DELETE',
+        headers: authBearerOnly(),
+      },
+      ...(userId
+        ? [
+            {
+              endpoint: `${API_BASE}/user/${encodeURIComponent(userId)}`,
+              method: 'DELETE' as const,
+              headers: authBearerOnly(),
+            },
+          ]
+        : []),
+      {
+        endpoint: `${API_BASE}/user`,
+        method: 'DELETE',
+        headers: authOptionalJsonHeaders(),
+        body: JSON.stringify(userId ? { user_id: userId } : {}),
+      },
+    ];
+
+    let lastError = 'Delete account failed';
+    for (const attempt of attempts) {
+      const res = await fetch(attempt.endpoint, {
+        method: attempt.method,
+        headers: attempt.headers,
+        body: attempt.body,
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        lastError = getFriendlyErrorMessage({
+          status: res.status,
+          message: text,
+          fallback: 'Could not delete account. Please try again.',
+        });
+        continue;
+      }
+      if (text.trim()) {
+        try {
+          const json = JSON.parse(text) as Record<string, unknown>;
+          assertEnvelope(json);
+        } catch (e) {
+          if (!(e instanceof SyntaxError)) throw e;
+        }
+      }
+      return;
+    }
+    throw new Error(lastError);
   },
 };

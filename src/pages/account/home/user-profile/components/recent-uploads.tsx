@@ -1,21 +1,23 @@
-import { DropdownMenu4 } from '@/partials/dropdown-menu/dropdown-menu-4';
+import { useState } from 'react';
 import { DropdownMenu7 } from '@/partials/dropdown-menu/dropdown-menu-7';
 import { EllipsisVertical } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { toAbsoluteUrl } from '@/lib/helpers';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 
 interface IRecentUploadsItem {
+  id: string;
   image: string;
   desc: string;
   date: string;
+  viewUrl: string;
 }
 type IRecentUploadsItems = Array<IRecentUploadsItem>;
 
@@ -24,15 +26,8 @@ interface IRecentUploadsProps {
 }
 
 const RecentUploads = ({ title }: IRecentUploadsProps) => {
-  const items: IRecentUploadsItems = [
-    {
-      image: 'doc.svg',
-      desc: 'Driving License',
-      date: 'uploaded on 10 Sep 2024 3:20 PM',
-    },
-
-
-  ];
+  const navigate = useNavigate();
+  const [items, setItems] = useState<IRecentUploadsItems>([]);
 
   const renderItem = (item: IRecentUploadsItem, index: number) => {
     return (
@@ -52,6 +47,13 @@ const RecentUploads = ({ title }: IRecentUploadsProps) => {
           </div>
         </div>
         <DropdownMenu7
+          viewTo={item.viewUrl}
+          editTo="/account/home/user-profile?edit=1"
+          onEdit={() => navigate('/account/home/user-profile?edit=1')}
+          onRemove={() => {
+            setItems((prev) => prev.filter((x) => x.id !== item.id));
+            toast.success('File removed');
+          }}
           trigger={
             <Button variant="ghost" mode="icon">
               <EllipsisVertical />

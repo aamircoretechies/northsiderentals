@@ -106,11 +106,11 @@ export const MENU_SIDEBAR: MenuConfig = [
     title: 'Bookings',
     icon: LayoutGrid,
     children: [
-      { title: 'My Bookings', path: '/bookings' },
+      { title: 'Bookings', path: '/bookings' },
     ],
   },
   {
-    title: 'My Booking',
+    title: 'Bookings',
     icon: LayoutGrid,
     children: [
       { title: 'Express Check-in', path: '/express-checkin' },

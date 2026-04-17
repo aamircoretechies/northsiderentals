@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, MoveLeft } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoaderCircleIcon } from 'lucide-react';
 import { useAuth } from '@/auth/context/auth-context';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 const getVerifyOtpSchema = () =>
   z.object({
@@ -42,6 +43,14 @@ export function SignupVerifyOtpPage() {
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showResendMessage, setShowResendMessage] = useState(false);
+  const [resendMessageCycle, setResendMessageCycle] = useState(0);
+
+  useEffect(() => {
+    if (resendMessageCycle <= 0) return;
+    const timeout = window.setTimeout(() => setShowResendMessage(false), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [resendMessageCycle]);
 
   const form = useForm<VerifyOtpSchemaType>({
     resolver: zodResolver(getVerifyOtpSchema()),
@@ -54,13 +63,14 @@ export function SignupVerifyOtpPage() {
     try {
       setIsProcessing(true);
       setError(null);
+      setShowResendMessage(false);
       await verifySignupOtp(email, values.otp);
       setSuccessMessage('OTP verified successfully. You can sign in now.');
       setTimeout(() => {
         navigate(signinPath);
       }, 1000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OTP verification failed.');
+      setError(getFriendlyError(err, 'OTP verification failed.'));
     } finally {
       setIsProcessing(false);
     }
@@ -70,10 +80,12 @@ export function SignupVerifyOtpPage() {
     try {
       setIsResending(true);
       setError(null);
+      setSuccessMessage(null);
       await resendSignupOtp(email);
-      setSuccessMessage('OTP resent successfully. Please check your inbox.');
+      setShowResendMessage(true);
+      setResendMessageCycle((prev) => prev + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not resend OTP.');
+      setError(getFriendlyError(err, 'Could not resend OTP.'));
     } finally {
       setIsResending(false);
     }
@@ -118,6 +130,15 @@ export function SignupVerifyOtpPage() {
                 <Check className="h-4 w-4 text-green-500" />
               </AlertIcon>
               <AlertTitle>{successMessage}</AlertTitle>
+            </Alert>
+          )}
+
+          {showResendMessage && (
+            <Alert>
+              <AlertIcon>
+                <Check className="h-4 w-4 text-green-500" />
+              </AlertIcon>
+              <AlertTitle>OTP resent successfully. Please check your inbox.</AlertTitle>
             </Alert>
           )}
 

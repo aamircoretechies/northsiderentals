@@ -1,5 +1,6 @@
-import { getAuth } from '@/auth/lib/helpers';
 import { normalizeProfilePicturePath } from '@/services/profile';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 export interface RegisterDeviceRequest {
   fcm_token: string;
@@ -162,9 +163,12 @@ function mergeResultsBundle(data: Record<string, unknown> | null | undefined) {
 
 function assertOkEnvelope(json: Record<string, unknown>): void {
   if (json.status !== undefined && json.status !== 1 && json.status !== '1') {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Unexpected API status';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not load dashboard data.',
+      }),
+    );
   }
   const data = json.data as Record<string, unknown> | undefined;
   const inner = data?.status;
@@ -173,7 +177,14 @@ function assertOkEnvelope(json: Record<string, unknown>): void {
       (data?.error as string) ||
       (typeof data?.message === 'string' ? (data.message as string) : '') ||
       'API returned a non-OK status';
-    if (err) throw new Error(err);
+    if (err) {
+      throw new Error(
+        getFriendlyErrorMessage({
+          message: err,
+          fallback: 'Could not load dashboard data.',
+        }),
+      );
+    }
   }
 }
 
@@ -223,7 +234,7 @@ export function parseRegisterDevicePayload(json: Record<string, unknown>): Dashb
 
   const driverages: DriverAge[] = b.driverages.map((age) => ({
     id: Number(age.id ?? age.age_id),
-    driverage: age.driverage ?? age.age_id ?? '',
+    driverage: Number(age.driverage ?? age.age_id ?? 0) || String(age.driverage ?? age.age_id ?? ''),
     isdefault: Boolean(age.isdefault),
     age_id: age.age_id != null ? Number(age.age_id) : undefined,
   }));
@@ -253,7 +264,7 @@ export function parseRegisterDevicePayload(json: Record<string, unknown>): Dashb
   }));
 
   const featuredCars: FeaturedCar[] = b.featured_cars.map((car) => ({
-    id: car.id ?? '',
+    id: Number.isFinite(Number(car.id)) ? Number(car.id) : String(car.id ?? ''),
     title: String(car.title || ''),
     description: String(car.description || ''),
     daily_rate:
@@ -265,7 +276,7 @@ export function parseRegisterDevicePayload(json: Record<string, unknown>): Dashb
   }));
 
   const promotions: Promotion[] = b.promotions.map((p) => ({
-    id: p.id ?? '',
+    id: Number.isFinite(Number(p.id)) ? Number(p.id) : String(p.id ?? ''),
     title: String(p.title || ''),
     description: String(p.description || ''),
     coupon_code: String(p.coupon_code || ''),
@@ -312,30 +323,14 @@ export const dashboardService = {
       throw new Error('VITE_API_BASE_URL is not configured');
     }
 
-    const auth = getAuth();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (auth?.access_token) {
-      headers.Authorization = `Bearer ${auth.access_token}`;
-    }
-
-    const request = fetch(`${API_BASE_URL}/dashboard/register-device`, {
+    const request = apiJson<Record<string, unknown>>(`${API_BASE_URL}/dashboard/register-device`, {
       method: 'POST',
-      headers,
-      body: JSON.stringify(body),
+      auth: 'optional',
+      body: body as unknown as Record<string, unknown>,
+      fallbackError: 'Could not load dashboard data.',
     });
 
-    const response = await withTimeout(request, 15000);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Failed to register device: ${response.status} ${response.statusText} — ${errorText}`,
-      );
-    }
-
-    const json = (await response.json()) as Record<string, unknown>;
+    const json = (await withTimeout(request, 15000)) as Record<string, unknown>;
     return parseRegisterDevicePayload(json);
   },
 };

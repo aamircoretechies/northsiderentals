@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { carsService } from '@/services/cars';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyError } from '@/utils/api-error-handler';
 import {
   buildCreateBookingPayload,
   mapUiExtrasToPayload,
@@ -63,13 +66,15 @@ export function CarsCheckoutDetailsContent() {
     if (!termsData) {
       setTermsLoading(true);
       try {
-        const res = await fetch("https://northsiderentals.com.au/wp-json/wp/v2/pages/10078");
-        const data = await res.json();
+        const data = await apiJson<Record<string, unknown>>(
+          'https://northsiderentals.com.au/wp-json/wp/v2/pages/10078',
+          { method: 'GET', auth: 'none', fallbackError: 'Could not load terms and conditions.' },
+        );
         setTermsData({
-          title: data.title?.rendered || 'Terms & Conditions',
-          content: data.content?.rendered || 'Content could not be loaded.'
+          title: ((data.title as Record<string, unknown> | undefined)?.rendered as string) || 'Terms & Conditions',
+          content: ((data.content as Record<string, unknown> | undefined)?.rendered as string) || 'Content could not be loaded.'
         });
-      } catch (err) {
+      } catch {
         setTermsData({
           title: 'Terms & Conditions',
           content: '<p>Failed to load terms and conditions.</p>'
@@ -86,13 +91,15 @@ export function CarsCheckoutDetailsContent() {
     if (!noticeData) {
       setNoticeLoading(true);
       try {
-        const res = await fetch("https://northsiderentals.com.au/wp-json/wp/v2/pages/10085");
-        const data = await res.json();
+        const data = await apiJson<Record<string, unknown>>(
+          'https://northsiderentals.com.au/wp-json/wp/v2/pages/10085',
+          { method: 'GET', auth: 'none', fallbackError: 'Could not load important notice.' },
+        );
         setNoticeData({
-          title: data.title?.rendered || 'Important Notice',
-          content: data.content?.rendered || 'Content could not be loaded.'
+          title: ((data.title as Record<string, unknown> | undefined)?.rendered as string) || 'Important Notice',
+          content: ((data.content as Record<string, unknown> | undefined)?.rendered as string) || 'Content could not be loaded.'
         });
-      } catch (err) {
+      } catch {
         setNoticeData({
           title: 'Important Notice',
           content: '<p>Failed to load important notice.</p>'
@@ -105,7 +112,7 @@ export function CarsCheckoutDetailsContent() {
 
   const handleContinue = async () => {
     if (!agreed) {
-      alert("Please agree to the Terms and Conditions.");
+      toast.error('Please agree to the Terms and Conditions.');
       return;
     }
 
@@ -118,7 +125,7 @@ export function CarsCheckoutDetailsContent() {
     if (!formData.dob.trim()) missing.push('date of birth');
     if (!formData.licenseNumber.trim()) missing.push('licence number');
     if (missing.length > 0) {
-      alert(`Please complete: ${missing.join(', ')}.`);
+      toast.error(`Please complete: ${missing.join(', ')}.`);
       return;
     }
 
@@ -202,9 +209,8 @@ export function CarsCheckoutDetailsContent() {
           locations,
         },
       });
-    } catch (e: any) {
-      console.error(e);
-      alert(e.message || 'Failed to create booking');
+    } catch (e: unknown) {
+      toast.error(getFriendlyError(e, 'Could not create booking.'));
     } finally {
       setLoading(false);
     }

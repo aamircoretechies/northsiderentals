@@ -62,9 +62,23 @@ export function OptionalExtras({ extras, onUpdateQuantity, onToggle }: OptionalE
                   >
                     -
                   </button>
-                  <span className="w-6 text-center text-black font-extrabold text-[14px]">
-                    {extra.quantity || 0}
-                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={extra.quantity || 0}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      if (!raw) {
+                        onUpdateQuantity(extra.id, 0);
+                        return;
+                      }
+                      const parsed = Number(raw);
+                      if (!Number.isFinite(parsed)) return;
+                      onUpdateQuantity(extra.id, Math.max(0, Math.floor(parsed)));
+                    }}
+                    className="w-12 text-center text-black font-extrabold text-[14px] outline-none bg-transparent"
+                  />
                   <button
                     className="w-10 flex items-center justify-center text-[#0061e0] font-bold text-lg cursor-pointer hover:bg-gray-50"
                     onClick={() => onUpdateQuantity(extra.id, (extra.quantity || 0) + 1)}

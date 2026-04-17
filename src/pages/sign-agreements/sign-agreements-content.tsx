@@ -17,13 +17,22 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   SignatureAgreementSection,
+  displayCustomerNameForSignatureItem,
   displayTitleForSignatureItem,
   signatureRowKey,
 } from './components/signature-agreement-section';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 function isMeaningfulPngBase64(s: string | null | undefined): boolean {
   if (!s || !s.trim()) return false;
   return s.trim().length > 80;
+}
+
+function toSentenceCase(message: string): string {
+  const text = message.trim();
+  if (!text) return '';
+  const normalized = text.toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export function SignAgreementsContent() {
@@ -40,6 +49,7 @@ export function SignAgreementsContent() {
   );
   const [agreementSigned, setAgreementSigned] = useState(false);
   const [signatures, setSignatures] = useState<Record<string, string | null>>({});
+  const [signatureErrors, setSignatureErrors] = useState<Record<string, string | null>>({});
   const [saving, setSaving] = useState(false);
   const [signingOneKey, setSigningOneKey] = useState<string | null>(null);
 
@@ -50,6 +60,7 @@ export function SignAgreementsContent() {
   const handleSignatureChange = useCallback(
     (rowKey: string, png: string | null) => {
       setSignatures((prev) => ({ ...prev, [rowKey]: png }));
+      setSignatureErrors((prev) => ({ ...prev, [rowKey]: null }));
     },
     [],
   );
@@ -57,7 +68,7 @@ export function SignAgreementsContent() {
   useEffect(() => {
     if (!reservationRef) {
       setLoading(false);
-      setError('Missing reservation reference. Open this page from your booking.');
+      setError(toSentenceCase('Missing reservation reference. Open this page from your booking.'));
       setBookingView(null);
       setSignatureItems([]);
       return;
@@ -93,7 +104,7 @@ export function SignAgreementsContent() {
         if (cancelled) return;
         setBookingView(null);
         setSignatureItems([]);
-        setError(e instanceof Error ? e.message : 'Failed to load agreements');
+        setError(toSentenceCase(getFriendlyError(e, 'Could not load agreements.')));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -109,14 +120,18 @@ export function SignAgreementsContent() {
 
     const pending = signatureItems.filter((i) => !i.issigned && !i.overcounteronly);
     if (pending.length === 0) {
-      toast.info('Nothing to sign here.');
+      toast.info(toSentenceCase('Nothing to sign here.'));
       return;
     }
 
     for (const item of pending) {
       const key = signatureRowKey(item);
       if (!isMeaningfulPngBase64(signatures[key])) {
-        toast.error(`Please add your signature for: ${displayTitleForSignatureItem(item)}`);
+        const msg = toSentenceCase(
+          `Please add your signature for ${displayTitleForSignatureItem(item)}.`,
+        );
+        setSignatureErrors((prev) => ({ ...prev, [key]: msg }));
+        toast.error(msg);
         setOpenCard(key);
         return;
       }
@@ -134,10 +149,10 @@ export function SignAgreementsContent() {
           signature_png: png,
         });
       }
-      toast.success('Signatures saved');
+      toast.success(toSentenceCase('Signatures saved.'));
       navigate(-1);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save signatures');
+      toast.error(toSentenceCase(getFriendlyError(e, 'Could not save signatures.')));
     } finally {
       setSaving(false);
     }
@@ -148,7 +163,11 @@ export function SignAgreementsContent() {
     const key = signatureRowKey(item);
     const png = signatures[key];
     if (!isMeaningfulPngBase64(png)) {
-      toast.error(`Please add your signature for: ${displayTitleForSignatureItem(item)}`);
+      const msg = toSentenceCase(
+        `Please add your signature for ${displayTitleForSignatureItem(item)}.`,
+      );
+      setSignatureErrors((prev) => ({ ...prev, [key]: msg }));
+      toast.error(msg);
       setOpenCard(key);
       return;
     }
@@ -169,7 +188,7 @@ export function SignAgreementsContent() {
         return next;
       });
       setSignatures((prev) => ({ ...prev, [key]: null }));
-      toast.success(`${displayTitleForSignatureItem(item)} signed`);
+      toast.success(toSentenceCase(`${displayTitleForSignatureItem(item)} signed.`));
 
       const nextUnsigned = signatureItems.find(
         (x) => !x.issigned && !x.overcounteronly && signatureRowKey(x) !== key,
@@ -178,7 +197,7 @@ export function SignAgreementsContent() {
         setOpenCard(signatureRowKey(nextUnsigned));
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save signature');
+      toast.error(toSentenceCase(getFriendlyError(e, 'Could not save signature.')));
     } finally {
       setSigningOneKey(null);
     }
@@ -266,16 +285,18 @@ export function SignAgreementsContent() {
               signatureItems.map((item) => {
                 const key = signatureRowKey(item);
                 const title = displayTitleForSignatureItem(item);
+                const customerName = displayCustomerNameForSignatureItem(item);
                 return (
                   <CollapsibleCard
                     key={key}
-                    title={title.toUpperCase()}
+                    title={`${title} - ${customerName}`.toUpperCase()}
                     isOpen={openCard === key}
                     onToggle={() => toggleCard(key)}
                   >
                     <SignatureAgreementSection
                       item={item}
                       onSignatureChange={handleSignatureChange}
+                      errorMessage={signatureErrors[key]}
                     />
                     {!item.issigned && !item.overcounteronly ? (
                       <div className="mt-4">

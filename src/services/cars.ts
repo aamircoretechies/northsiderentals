@@ -1,4 +1,5 @@
-import { getAuth } from '@/auth/lib/helpers';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 export interface RentalSource {
   id: string;
@@ -49,99 +50,53 @@ export interface CreatePaymentSessionRequest {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
 
-function headersJsonOptionalAuth(): Record<string, string> {
-  const h: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  const auth = getAuth();
-  if (auth?.access_token) {
-    h.Authorization = `Bearer ${auth.access_token}`;
-  }
-  return h;
-}
-
 export const carsService = {
   async getDetails(): Promise<{ rentalsource: RentalSource[] }> {
-    const h = headersJsonOptionalAuth();
-    delete h['Content-Type'];
-    const response = await fetch(`${API_BASE_URL}/cars/get-details`, {
+    return apiJson<{ rentalsource: RentalSource[] }>(`${API_BASE_URL}/cars/get-details`, {
       method: 'GET',
-      headers: h,
+      auth: 'optional',
+      fallbackError: 'Could not load car details.',
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get car details: ${response.statusText}`);
-    }
-
-    return response.json();
   },
 
   async searchCars(data: CarSearchRequest): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/cars/search`, {
+    return apiJson<any>(`${API_BASE_URL}/cars/search`, {
       method: 'POST',
-      headers: headersJsonOptionalAuth(),
-      body: JSON.stringify(data),
+      auth: 'optional',
+      body: data,
+      fallbackError: 'Could not search available cars.',
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to search cars: ${response.statusText}`);
-    }
-
-    return response.json();
   },
 
   async getVehicleDetails(data: CarGetDetailsRequest): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/cars/get-details`, {
+    return apiJson<any>(`${API_BASE_URL}/cars/get-details`, {
       method: 'POST',
-      headers: headersJsonOptionalAuth(),
-      body: JSON.stringify(data),
+      auth: 'optional',
+      body: data,
+      fallbackError: 'Could not load vehicle details.',
     });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get vehicle details: ${response.statusText}`);
-    }
-
-    return response.json();
   },
 
   async createBooking(data: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/bookings/create`, {
+    const json = await apiJson<Record<string, unknown>>(`${API_BASE_URL}/bookings/create`, {
       method: 'POST',
-      headers: headersJsonOptionalAuth(),
-      body: JSON.stringify(data),
+      auth: 'optional',
+      body: data,
+      fallbackError: 'Could not create booking.',
     });
-
-    const text = await response.text();
-    let json: Record<string, unknown> | null = null;
-    if (text.trim()) {
-      try {
-        json = JSON.parse(text) as Record<string, unknown>;
-      } catch {
-        json = null;
-      }
-    }
-
-    if (!response.ok) {
-      const msg =
-        (json?.message as string) ||
-        (json?.error as string) ||
-        `Failed to create booking: ${response.statusText}`;
-      throw new Error(msg);
-    }
-
     if (
-      json &&
       json.status !== undefined &&
       json.status !== 1 &&
       json.status !== '1'
     ) {
       throw new Error(
-        (json.message as string) || 'Could not create booking',
+        getFriendlyErrorMessage({
+          message: json.message,
+          fallback: 'Could not create booking.',
+        }),
       );
     }
-
-    return (json || {}) as Record<string, unknown>;
+    return json;
   },
 
   async createPaymentSession(
@@ -172,41 +127,24 @@ export const carsService = {
     body.failureUrl = fallbackReturnUrl;
     body.redirectUrl = fallbackReturnUrl;
 
-    const response = await fetch(`${API_BASE_URL}/payments/create`, {
+    const json = await apiJson<Record<string, unknown>>(`${API_BASE_URL}/payments/create`, {
       method: 'POST',
-      headers: headersJsonOptionalAuth(),
-      body: JSON.stringify(body),
+      auth: 'optional',
+      body,
+      fallbackError: 'Could not initiate payment.',
     });
-
-    const text = await response.text();
-    let json: Record<string, unknown> | null = null;
-    if (text.trim()) {
-      try {
-        json = JSON.parse(text) as Record<string, unknown>;
-      } catch {
-        json = null;
-      }
-    }
-
-    if (!response.ok) {
-      const msg =
-        (json?.message as string) ||
-        (json?.error as string) ||
-        `Failed to initiate payment: ${response.statusText}`;
-      throw new Error(msg);
-    }
-
     if (
-      json &&
       json.status !== undefined &&
       json.status !== 1 &&
       json.status !== '1'
     ) {
       throw new Error(
-        (json.message as string) || 'Could not create payment session',
+        getFriendlyErrorMessage({
+          message: json.message,
+          fallback: 'Could not create payment session.',
+        }),
       );
     }
-
-    return (json || {}) as CreatePaymentSessionResponse;
+    return json as CreatePaymentSessionResponse;
   },
 };

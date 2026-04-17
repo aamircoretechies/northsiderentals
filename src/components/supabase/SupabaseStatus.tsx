@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SupabaseAdapter } from '@/auth/adapters/supabase-adapter';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 /**
  * A simple component that displays the status of the Supabase connection.
@@ -23,7 +24,7 @@ export const SupabaseStatus: React.FC = () => {
         }
       } catch (e) {
         setStatus('error');
-        setError(e instanceof Error ? e.message : 'Unknown error');
+        setError(getFriendlyError(e, 'Unknown error'));
       }
     };
 

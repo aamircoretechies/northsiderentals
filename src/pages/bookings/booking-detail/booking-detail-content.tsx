@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { RequestExtensionModal } from './components/request-extension-modal';
 import { SupportIssueModal } from '@/partials/topbar/support-issue-modal';
@@ -17,7 +18,9 @@ import {
   openBookingReceipt,
   type BookingDetailView,
 } from '@/services/bookings';
+import { getFriendlyError } from '@/utils/api-error-handler';
 import { normalizeMediaUrl } from '@/lib/helpers';
+import { queryKeys } from '@/lib/query-keys';
 
 function statusStyle(label: string): { dot: string; text: string } {
   const s = label.toLowerCase();
@@ -240,46 +243,47 @@ export function BookingDetailContent() {
   const reference = referenceParam ? decodeURIComponent(referenceParam) : '';
 
   const [view, setView] = useState<BookingDetailView | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [launchingCheckin, setLaunchingCheckin] = useState(false);
   const [checkinError, setCheckinError] = useState<string | null>(null);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
 
+  const queryClient = useQueryClient();
+  const cachedData = queryClient.getQueryData(
+    queryKeys.bookingsDetail(reference),
+  ) as { data?: unknown } | undefined;
+
   useEffect(() => {
     if (!reference.trim()) {
-      setLoading(false);
       setError('Missing booking reference.');
       setView(null);
       return;
     }
+    if (cachedData?.data && typeof cachedData.data === 'object') {
+      setView(mapBookingDetailToView(cachedData.data as Record<string, unknown>));
+    }
+  }, [reference, cachedData]);
 
-    let cancelled = false;
-    setLoading(true);
+  const bookingQuery = useQuery({
+    queryKey: queryKeys.bookingsDetail(reference),
+    enabled: Boolean(reference.trim()),
+    queryFn: () => fetchBookingByReference(reference),
+  });
+
+  useEffect(() => {
+    if (!bookingQuery.error) return;
+    setView(null);
+    setError(getFriendlyError(bookingQuery.error, 'Could not load booking details.'));
+  }, [bookingQuery.error]);
+
+  useEffect(() => {
+    const data = bookingQuery.data?.data;
+    if (!data || typeof data !== 'object') return;
     setError(null);
+    setView(mapBookingDetailToView(data as Record<string, unknown>));
+  }, [bookingQuery.data]);
 
-    void (async () => {
-      try {
-        const res = await fetchBookingByReference(reference);
-        const data = res.data;
-        if (!data || typeof data !== 'object') {
-          throw new Error(res.message || 'No booking data');
-        }
-        if (cancelled) return;
-        setView(mapBookingDetailToView(data as Record<string, unknown>));
-      } catch (e) {
-        if (cancelled) return;
-        setView(null);
-        setError(e instanceof Error ? e.message : 'Failed to load booking');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reference]);
+  const loading = bookingQuery.isLoading && !view;
 
   const { dot, text } = view ? statusStyle(view.bookingStatus) : statusStyle('');
 
@@ -398,6 +402,19 @@ export function BookingDetailContent() {
                 </span>
               </DropdownMenuItem>
               <RequestExtensionModal
+                context={{
+                  view,
+                  detailData:
+                    bookingQuery.data?.data && typeof bookingQuery.data.data === 'object'
+                      ? (bookingQuery.data.data as Record<string, unknown>)
+                      : null,
+                }}
+                onUpdated={async () => {
+                  await Promise.all([
+                    bookingQuery.refetch(),
+                    queryClient.invalidateQueries({ queryKey: ['bookings', 'list'] }),
+                  ]);
+                }}
                 trigger={
                   <DropdownMenuItem
                     className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"

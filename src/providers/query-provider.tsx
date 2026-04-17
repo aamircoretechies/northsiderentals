@@ -9,15 +9,23 @@ import {
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 const QueryProvider = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60_000,
+            gcTime: 5 * 60_000,
+            refetchOnWindowFocus: false,
+            retry: 1,
+          },
+        },
         queryCache: new QueryCache({
           onError: (error) => {
-            const message =
-              error.message || 'Something went wrong. Please try again.';
+            const message = getFriendlyError(error);
 
             toast.custom(
               () => (

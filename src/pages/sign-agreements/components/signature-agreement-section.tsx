@@ -2,7 +2,7 @@ import type { RcmSignatureListItem } from '@/services/rcm-documents';
 import { SignaturePad } from './signature-pad';
 
 export function signatureRowKey(item: RcmSignatureListItem): string {
-  return `${item.signaturetemplateid}-${item.signingorder}`;
+  return `${item.customerid || 0}-${item.signaturetemplateid}-${item.signingorder}`;
 }
 
 export function displayTitleForSignatureItem(item: RcmSignatureListItem): string {
@@ -11,17 +11,28 @@ export function displayTitleForSignatureItem(item: RcmSignatureListItem): string
   return 'Rental agreement';
 }
 
+export function displayCustomerNameForSignatureItem(item: RcmSignatureListItem): string {
+  const full = [item.customerfirstname, item.customerlastname]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+  if (full) return full;
+  if (item.customerid > 0) return `Customer #${item.customerid}`;
+  return 'Customer';
+}
+
 type SignatureAgreementSectionProps = {
   item: RcmSignatureListItem;
   onSignatureChange: (rowKey: string, pngBase64: string | null) => void;
+  errorMessage?: string | null;
 };
 
 export function SignatureAgreementSection({
   item,
   onSignatureChange,
+  errorMessage,
 }: SignatureAgreementSectionProps) {
   const key = signatureRowKey(item);
-  const title = displayTitleForSignatureItem(item);
   const html = item.signaturetemplatetext?.trim();
   const link = item.linktoagreement?.trim();
 
@@ -76,6 +87,9 @@ export function SignatureAgreementSection({
       ) : null}
 
       <SignaturePad onChange={(png) => onSignatureChange(key, png)} />
+      {errorMessage ? (
+        <p className="text-[12px] text-destructive mt-1">{errorMessage}</p>
+      ) : null}
     </div>
   );
 }

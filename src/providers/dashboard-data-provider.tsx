@@ -26,6 +26,7 @@ import {
   RcmProfile,
   UpdateProfilePayload,
 } from '@/services/profile';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 const DEVICE_ID_STORAGE_KEY = `${import.meta.env.VITE_APP_NAME || 'app'}-device-id`;
 
@@ -102,11 +103,15 @@ function mergeProfile(
     rcm?.first_name ?? dash?.first_name ?? user?.first_name ?? '';
   const last = rcm?.last_name ?? dash?.last_name ?? user?.last_name ?? '';
   const fromParts = `${first} ${last}`.trim();
-  const displayName =
+  const rawDisplayName =
     user?.fullname?.trim() ||
     fromParts ||
     (email ? email.split('@')[0] : '') ||
-    'Guest';
+    '';
+  const displayName =
+    /^guest$/i.test(rawDisplayName) || /^guest user$/i.test(rawDisplayName)
+      ? ''
+      : rawDisplayName;
 
   const rawPic =
     rcm?.profile_picture?.trim() ||
@@ -192,9 +197,7 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
       } else {
         setData(null);
         setError(
-          dashResult[0].reason instanceof Error
-            ? dashResult[0].reason.message
-            : 'Failed to load home data',
+          getFriendlyError(dashResult[0].reason, 'Failed to load home data'),
         );
       }
 
@@ -224,7 +227,7 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
       setRcmProfile(null);
       setNotifications([]);
       setError(
-        err instanceof Error ? err.message : 'Failed to load dashboard data',
+        getFriendlyError(err, 'Failed to load dashboard data'),
       );
     } finally {
       setLoading(false);
@@ -249,7 +252,11 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     try {
       setProfileBusy(true);
       const updated = await profileService.updateProfile(body);
-      setRcmProfile(updated);
+      setRcmProfile((prev) => ({
+        ...(prev ?? updated),
+        ...updated,
+        profile_picture: updated.profile_picture ?? prev?.profile_picture ?? null,
+      }));
     } finally {
       setProfileBusy(false);
     }
@@ -259,7 +266,14 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     try {
       setProfileBusy(true);
       const updated = await profileService.uploadProfilePicture(file);
-      setRcmProfile(updated);
+      const nextPicture = updated.profile_picture
+        ? `${updated.profile_picture}${updated.profile_picture.includes('?') ? '&' : '?'}v=${Date.now()}`
+        : updated.profile_picture;
+      setRcmProfile((prev) => ({
+        ...(prev ?? updated),
+        ...updated,
+        profile_picture: nextPicture ?? prev?.profile_picture ?? null,
+      }));
     } finally {
       setProfileBusy(false);
     }
@@ -269,8 +283,12 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     try {
       setProfileBusy(true);
       await profileService.deleteProfilePicture();
-      const fresh = await profileService.fetchProfile();
-      setRcmProfile(fresh);
+      let fresh = await profileService.fetchProfile();
+      if (fresh.profile_picture) {
+        // Some backends require a profile PATCH/PUT nulling the field after delete.
+        fresh = await profileService.updateProfile({ profile_picture: null });
+      }
+      setRcmProfile({ ...fresh, profile_picture: null });
     } finally {
       setProfileBusy(false);
     }

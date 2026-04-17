@@ -1,5 +1,6 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,6 +17,9 @@ import {
   licenseCountryToId,
 } from '@/services/booking-payload';
 import type { CarCardProps } from '@/pages/cars/search-results-grid/components/car-card';
+import { getFriendlyError } from '@/utils/api-error-handler';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
+import { useAuth } from '@/auth/context/auth-context';
 
 type SearchParams = Record<string, unknown> | undefined;
 
@@ -39,6 +43,8 @@ export function EmailQuoteModal({
   extras,
   selectedDamageOption,
 }: EmailQuoteModalProps) {
+  const { user } = useAuth();
+  const { profile, apiProfile, rcmProfile } = useDashboardData();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [firstName, setFirstName] = useState('');
@@ -47,6 +53,17 @@ export function EmailQuoteModal({
   const [phone, setPhone] = useState('');
   const [numberOfPeople, setNumberOfPeople] = useState('');
   const [note, setNote] = useState('');
+
+  const applyProfilePrefill = () => {
+    setFirstName(
+      String(rcmProfile?.first_name ?? apiProfile?.first_name ?? user?.first_name ?? '').trim(),
+    );
+    setLastName(
+      String(rcmProfile?.last_name ?? apiProfile?.last_name ?? user?.last_name ?? '').trim(),
+    );
+    setEmail(String(rcmProfile?.email ?? profile.email ?? user?.email ?? '').trim());
+    setPhone(String(rcmProfile?.mobile ?? apiProfile?.phone ?? user?.phone ?? '').trim());
+  };
 
   const resetForm = () => {
     setFirstName('');
@@ -57,13 +74,18 @@ export function EmailQuoteModal({
     setNote('');
   };
 
+  useEffect(() => {
+    if (!open) return;
+    applyProfilePrefill();
+  }, [open, rcmProfile, apiProfile, profile.email, user]);
+
   const handleSubmit = async () => {
     if (!carData || carData.unavailable || !searchParams) {
-      alert('Missing vehicle or search details. Please start from car search.');
+      toast.error('Missing vehicle or search details. Please start from car search.');
       return;
     }
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
-      alert('Please enter your first name, last name, and email.');
+      toast.error('Please enter your first name, last name, and email.');
       return;
     }
 
@@ -120,12 +142,11 @@ export function EmailQuoteModal({
     setSubmitting(true);
     try {
       await carsService.createBooking(payload);
-      alert('Quote request sent. Check your email for details.');
+      toast.success('Quote request sent. Check your email for details.');
       resetForm();
       setOpen(false);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Request failed';
-      alert(msg);
+      toast.error(getFriendlyError(e, 'Could not send quote request.'));
     } finally {
       setSubmitting(false);
     }
@@ -136,7 +157,9 @@ export function EmailQuoteModal({
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (!v) resetForm();
+        if (!v) {
+          resetForm();
+        }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>

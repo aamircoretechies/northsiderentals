@@ -31,12 +31,9 @@ const BasicSettings = ({ title }: IBasicSettingsProps) => {
                 Email
               </TableCell>
               <TableCell className="py-2 min-w-60">
-                <Link
-                  to="#"
-                  className="text-foreground font-normal text-sm hover:text-primary-active"
-                >
+                <span className="text-foreground font-normal text-sm">
                   jasontt@studio.co
-                </Link>
+                </span>
               </TableCell>
               <TableCell className="py-2 max-w-16 text-end">
                 <Button variant="ghost" mode="icon">

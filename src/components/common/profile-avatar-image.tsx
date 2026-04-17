@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getAuth } from '@/auth/lib/helpers';
 import { getInitials } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
+import { apiBlob } from '@/utils/api-client';
 
 type Props = {
   src: string | null | undefined;
@@ -55,13 +55,6 @@ export function ProfileAvatarImage({
       return;
     }
 
-    const token = getAuth()?.access_token?.trim();
-    if (!token) {
-      setResolved(u);
-      setPending(false);
-      return;
-    }
-
     let cancelled = false;
     const blobRef = { current: null as string | null };
     setPending(true);
@@ -69,16 +62,11 @@ export function ProfileAvatarImage({
 
     void (async () => {
       try {
-        const res = await fetch(u, {
-          headers: { Authorization: `Bearer ${token}` },
+        const blob = await apiBlob(u, {
+          method: 'GET',
+          auth: 'optional',
+          fallbackError: 'Could not load profile image.',
         });
-        if (cancelled) return;
-        if (!res.ok) {
-          setResolved(u);
-          setPending(false);
-          return;
-        }
-        const blob = await res.blob();
         if (cancelled) return;
         const objectUrl = URL.createObjectURL(blob);
         if (cancelled) {
@@ -105,7 +93,7 @@ export function ProfileAvatarImage({
     };
   }, [src]);
 
-  const initials = getInitials(fallbackLabel, 2) || '?';
+  const initials = getInitials(fallbackLabel, 2) || '';
 
   if (!trimmed) {
     return (
@@ -116,7 +104,7 @@ export function ProfileAvatarImage({
           fallbackClassName,
         )}
       >
-        {initials}
+        {initials || null}
       </div>
     );
   }
@@ -130,7 +118,7 @@ export function ProfileAvatarImage({
           fallbackClassName,
         )}
       >
-        {initials}
+        {initials || null}
       </div>
     );
   }

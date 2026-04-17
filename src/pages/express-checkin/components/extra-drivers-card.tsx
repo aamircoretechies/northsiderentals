@@ -20,9 +20,11 @@ export interface ExtraDriversForm {
 export function ExtraDriversCard({
   value,
   onChange,
+  maxDrivers = 5,
 }: {
   value: ExtraDriversForm;
   onChange: (next: ExtraDriversForm) => void;
+  maxDrivers?: number;
 }) {
   const drivers = value.drivers ?? [];
   const removedCustomerIds = value.removedCustomerIds ?? [];
@@ -47,6 +49,7 @@ export function ExtraDriversCard({
   };
 
   const add = () => {
+    if (drivers.length >= maxDrivers) return;
     onChange({
       drivers: [
         ...drivers,
@@ -67,6 +70,8 @@ export function ExtraDriversCard({
       removedCustomerIds,
     });
   };
+
+  const reachedMaxDrivers = drivers.length >= maxDrivers;
 
   return (
     <div className="flex flex-col gap-3">
@@ -150,11 +155,17 @@ export function ExtraDriversCard({
       ))}
       <button
         type="button"
-        className="w-full rounded-full border border-[#0061e0] text-[#0061e0] py-2 font-semibold"
+        className="w-full rounded-full border border-[#0061e0] text-[#0061e0] py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={add}
+        disabled={reachedMaxDrivers}
       >
         + Add More Driver
       </button>
+      {reachedMaxDrivers ? (
+        <p className="text-[12px] text-[#6b7280] text-center">
+          Maximum {maxDrivers} additional drivers allowed.
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -44,12 +44,16 @@ import { Switch } from '@/components/ui/switch';
 export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
   const { logout, auth } = useAuth();
   const isAuthed = Boolean(auth?.access_token);
-  const { profile } = useDashboardData();
+  const { profile, rcmProfile } = useDashboardData();
   const { currenLanguage, changeLanguage } = useLanguage();
   const { theme, setTheme } = useTheme();
 
   const displayName = profile.displayName;
   const displayEmail = profile.email;
+  const socialMethod = String(rcmProfile?.method ?? '').toLowerCase();
+  // Only hide password actions for explicit Google-auth accounts.
+  // Some email/password accounts can still have is_social_login=true from backend flags.
+  const isGoogleUser = socialMethod.includes('google');
 
   const handleLanguage = (lang: Language) => {
     changeLanguage(lang);
@@ -123,15 +127,17 @@ export function UserDropdownMenu({ trigger }: { trigger: ReactNode }) {
               </Link>
             </DropdownMenuItem>
 
-            <ChangePasswordModal>
-              <DropdownMenuItem
-                onSelect={(e) => e.preventDefault()}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <PencilIcon size={16} />
-                Change Password
-              </DropdownMenuItem>
-            </ChangePasswordModal>
+            {!isGoogleUser ? (
+              <ChangePasswordModal>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <PencilIcon size={16} />
+                  Change Password
+                </DropdownMenuItem>
+              </ChangePasswordModal>
+            ) : null}
           </>
         )}
 

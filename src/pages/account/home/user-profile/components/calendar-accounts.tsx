@@ -1,6 +1,4 @@
-import { Trash2 } from 'lucide-react';
 import { toAbsoluteUrl } from '@/lib/helpers';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 
@@ -53,17 +51,11 @@ const CalendarAccounts = () => {
           />
           <div className="flex flex-col min-w-0">
             <span className="text-sm font-medium text-mono mb-px">{item.title}</span>
-            <a
-              href={`mailto:${item.email}`}
-              className="text-sm text-secondary-foreground hover:text-primary-active truncate"
-            >
+            <span className="text-sm text-secondary-foreground truncate">
               {item.email}
-            </a>
+            </span>
           </div>
         </div>
-        <Button variant="ghost" type="button" title="Unlink is not available" disabled>
-          <Trash2 />
-        </Button>
       </div>
     );
   };

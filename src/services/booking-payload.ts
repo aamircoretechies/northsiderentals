@@ -5,7 +5,7 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 
-export type BookingType = 'Booking' | 'Quotation';
+export type BookingType = 'Booking' | 'Quote' | 'Quotation';
 
 /** HTML date (yyyy-MM-dd) → API format e.g. 01/Jan/1990 */
 export function formatDobForApi(value: string): string {
@@ -143,6 +143,9 @@ export function buildCreateBookingPayload(
     return t || fallback;
   };
 
+  const bookingTypeCode =
+    bookingType === 'Quotation' || bookingType === 'Quote' ? 1 : 2;
+
   return {
     vehicle_id: parsePositiveInt(vehicle_id, 0),
     category_id: parsePositiveInt(category_id, 0),
@@ -185,7 +188,9 @@ export function buildCreateBookingPayload(
       qty: parsePositiveInt(e.qty, 1),
     })),
     extradriver,
-    booking_type: bookingType,
+    // Backend expects numeric booking type (1=quote, 2=booking).
+    bookingtype: bookingTypeCode,
+    booking_type: bookingTypeCode,
     comments,
   };
 }

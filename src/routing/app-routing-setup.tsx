@@ -374,6 +374,7 @@ export function AppRoutingSetup() {
           />
           <Route path="/bookings" element={<BookingsPage />} />
           <Route path="/bookings/:id" element={<BookingDetailPage />} />
+          <Route path="/bookings/modify" element={<ExpressCheckinPage />} />
           <Route path="/express-checkin" element={<ExpressCheckinPage />} />
           <Route path="/sign-agreements" element={<SignAgreementsPage />} />
           <Route path="/help" element={<HelpPage />} />

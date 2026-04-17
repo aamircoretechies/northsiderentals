@@ -91,9 +91,24 @@ export function BookingDetailsCard({
                     >
                       -
                     </button>
-                    <span className="min-w-8 text-center text-[14px] font-semibold tabular-nums">
-                      {qty}
-                    </span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={upper}
+                      value={qty}
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                          setQty(0);
+                          return;
+                        }
+                        const parsed = Number(raw);
+                        if (!Number.isFinite(parsed)) return;
+                        setQty(Math.floor(parsed));
+                      }}
+                      className="h-8 w-14 rounded border border-[#d0d7e2] bg-white text-center text-[14px] font-semibold tabular-nums outline-none focus:ring-1 focus:ring-[#0061e0]"
+                    />
                     <button
                       type="button"
                       className="h-8 w-8 rounded border border-[#d0d7e2] text-[15px] leading-none font-medium"
@@ -106,7 +121,6 @@ export function BookingDetailsCard({
               );
             }
             const checked = selectedOptionalFees.includes(f.id);
-            const qty = Math.max(1, Number(optionalFeeQuantities[f.id] ?? 1));
             return (
               <div
                 key={f.id}

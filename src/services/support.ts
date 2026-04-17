@@ -1,4 +1,5 @@
-import { getAuth } from '@/auth/lib/helpers';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
@@ -10,9 +11,12 @@ function assertOk(json: Record<string, unknown>): void {
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Could not send support request';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not send support request',
+      }),
+    );
   }
 }
 
@@ -36,37 +40,44 @@ export async function submitSupportIssue(
     body.reservation_ref = ref;
   }
 
-  const auth = getAuth();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (auth?.access_token) {
-    headers.Authorization = `Bearer ${auth.access_token}`;
-  }
+  const attempts: Array<{ endpoint: string; payload: Record<string, string> }> = [
+    { endpoint: `${API_BASE}/support/issue`, payload: body },
+    {
+      endpoint: `${API_BASE}/support/issues`,
+      payload: {
+        subject: body.title,
+        message: body.description,
+        ...(body.reservation_ref ? { reservation_ref: body.reservation_ref } : {}),
+      },
+    },
+    {
+      endpoint: `${API_BASE}/support`,
+      payload: {
+        title: body.title,
+        message: body.description,
+        ...(body.reservation_ref ? { reservation_ref: body.reservation_ref } : {}),
+      },
+    },
+  ];
 
-  const res = await fetch(`${API_BASE}/support/issue`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
-  let parsed: Record<string, unknown> | null = null;
-  if (text.trim()) {
+  let lastError = 'Could not send support request';
+  for (const attempt of attempts) {
     try {
-      parsed = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      parsed = null;
+      const parsed = await apiJson<Record<string, unknown>>(attempt.endpoint, {
+        method: 'POST',
+        auth: 'optional',
+        body: attempt.payload,
+        fallbackError: 'Could not send support request',
+      });
+      if (parsed) assertOk(parsed);
+      return;
+    } catch (error) {
+      lastError = getFriendlyErrorMessage({
+        message: error instanceof Error ? error.message : '',
+        fallback: 'Could not send support request',
+      });
     }
   }
 
-  if (!res.ok) {
-    const msg =
-      (parsed?.message as string) ||
-      (parsed?.error as string) ||
-      (text.trim() ? text.slice(0, 200) : `Request failed: ${res.status}`);
-    throw new Error(msg);
-  }
-
-  if (parsed) assertOk(parsed);
+  throw new Error(lastError);
 }

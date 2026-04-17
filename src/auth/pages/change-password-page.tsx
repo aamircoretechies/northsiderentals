@@ -25,6 +25,7 @@ import {
   getNewPasswordSchema,
   NewPasswordSchemaType,
 } from '../forms/reset-password-schema';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -50,19 +51,12 @@ export function ChangePasswordPage() {
     searchParams.get('code') ||
     searchParams.get('token_hash');
 
-  console.log('Reset token from URL:', token);
-  console.log(
-    'All search parameters:',
-    Object.fromEntries(searchParams.entries()),
-  );
-
   // Process Supabase recovery token
   useEffect(() => {
     // This automatically processes the token in the URL
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         // Token is valid and has been processed by Supabase
-        console.log('Password recovery mode activated');
         setTokenValid(true);
         setSuccessMessage('You can now set your new password');
       }
@@ -81,10 +75,7 @@ export function ChangePasswordPage() {
       hashParams.get('code') ||
       hashParams.get('token_hash');
 
-    if (hashToken && !token) {
-      console.log('Found token in URL hash fragment:', hashToken);
-      // Optionally, you could update the state or reload the page with the token as a query param
-    }
+    if (hashToken && !token) return;
   }, [token]);
 
   const form = useForm<NewPasswordSchemaType>({
@@ -121,12 +112,7 @@ export function ChangePasswordPage() {
         navigate(signinPath);
       }, 2000);
     } catch (err) {
-      console.error('Password reset error:', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'An unexpected error occurred. Please try again.',
-      );
+      setError(getFriendlyError(err, 'Could not reset password. Please try again.'));
     } finally {
       setIsProcessing(false);
     }
@@ -205,7 +191,7 @@ export function ChangePasswordPage() {
                   <FormLabel>New Password</FormLabel>
                   <div className="relative">
                     <Input
-                      placeholder="Create a strong password"
+                      placeholder="New password"
                       type={passwordVisible ? 'text' : 'password'}
                       autoComplete="new-password"
                       {...field}
@@ -237,7 +223,7 @@ export function ChangePasswordPage() {
                   <FormLabel>Confirm Password</FormLabel>
                   <div className="relative">
                     <Input
-                      placeholder="Verify your password"
+                      placeholder="Confirm new password"
                       type={confirmPasswordVisible ? 'text' : 'password'}
                       autoComplete="new-password"
                       {...field}
@@ -267,7 +253,7 @@ export function ChangePasswordPage() {
           <Button type="submit" className="w-full" disabled={isProcessing}>
             {isProcessing ? (
               <span className="flex items-center gap-2">
-                <LoaderCircleIcon className="h-4 w-4" /> Updating Password...
+                  <LoaderCircleIcon className="h-4 w-4" /> Updating password...
               </span>
             ) : (
               'Reset Password'

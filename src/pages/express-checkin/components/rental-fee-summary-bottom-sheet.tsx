@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 
 export interface RentalFeeSummaryBottomSheetProps {
   days: number;
@@ -7,7 +6,6 @@ export interface RentalFeeSummaryBottomSheetProps {
   totalExtras: number;
   totalCost: number;
   gstAmount: number;
-  onSave: () => void;
 }
 
 export function RentalFeeSummaryBottomSheet({
@@ -16,7 +14,6 @@ export function RentalFeeSummaryBottomSheet({
   totalExtras,
   totalCost,
   gstAmount,
-  onSave,
 }: RentalFeeSummaryBottomSheetProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -69,12 +66,6 @@ export function RentalFeeSummaryBottomSheet({
         </div>
       </div>
 
-      <Button
-        className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-6 mt-2 rounded-full shadow-md"
-        onClick={onSave}
-      >
-        Save
-      </Button>
     </div>
   );
 }

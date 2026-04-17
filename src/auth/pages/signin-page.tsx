@@ -88,12 +88,6 @@ export function SignInPage() {
 
       console.log('Attempting to sign in with email:', values.email);
 
-      // Simple validation
-      if (!values.email.trim() || !values.password) {
-        setError('Email and password are required');
-        return;
-      }
-
       // Sign in using the auth context
       await login(values.email, values.password);
 
@@ -162,6 +156,7 @@ export function SignInPage() {
       <form
         onSubmit={form.handleSubmit(onSubmit)}
         className="block w-full space-y-5"
+        noValidate
       >
         <div className="text-center space-y-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight">Sign In</h1>

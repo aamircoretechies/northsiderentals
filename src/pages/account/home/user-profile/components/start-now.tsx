@@ -29,7 +29,7 @@ const StartNow = () => {
             Discover promotions crafted to match your preferences.
           </span>
           <Button variant="mono">
-            <Link to="/network/user-table/visitors">Start Now</Link>
+            <Link to="/home">Start Now</Link>
           </Button>
         </div>
         <div className="text-center">

@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { timeAgo } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
   const {
@@ -43,7 +44,6 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
   const listBootLoading = refreshing && notifications.length === 0;
 
   const unread = notifications.filter((n) => !n.is_read);
-  const read = notifications.filter((n) => n.is_read);
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -97,7 +97,7 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
                 await clearAllNotifications();
                 toast.success('All notifications cleared');
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : 'Clear failed');
+                toast.error(getFriendlyError(e, 'Could not clear notifications.'));
               } finally {
                 setBusy(false);
               }
@@ -114,7 +114,7 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
                 await markAllNotificationsRead();
                 toast.success('Marked all as read');
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : 'Update failed');
+                toast.error(getFriendlyError(e, 'Could not update notifications.'));
               } finally {
                 setBusy(false);
               }
@@ -182,7 +182,7 @@ function NotificationList({
                   setBusy(true);
                   await onRead(n.notification_id);
                 } catch (e) {
-                  toast.error(e instanceof Error ? e.message : 'Could not mark read');
+                  toast.error(getFriendlyError(e, 'Could not mark notification as read.'));
                 } finally {
                   setBusy(false);
                 }
@@ -222,7 +222,7 @@ function NotificationList({
                   await onDelete(n.notification_id);
                   toast.success('Notification removed');
                 } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Delete failed');
+                  toast.error(getFriendlyError(err, 'Could not delete notification.'));
                 } finally {
                   setBusy(false);
                 }

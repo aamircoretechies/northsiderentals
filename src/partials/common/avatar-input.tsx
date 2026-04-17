@@ -23,10 +23,12 @@ export type AvatarInputProps = {
   busy?: boolean;
   /** Smaller control for dense layouts (e.g. profile settings table). */
   compact?: boolean;
+  /** Hide remove icon for read-only upload-only integrations. */
+  hideRemove?: boolean;
 };
 
 export function AvatarInput(props: AvatarInputProps = {}) {
-  const { remoteImageUrl, onPickFile, onRemoveRemote, busy, compact } = props;
+  const { remoteImageUrl, onPickFile, onRemoveRemote, busy, compact, hideRemove } = props;
   const isApiMode = Boolean(onPickFile);
 
   const [standaloneAvatar, setStandaloneAvatar] =
@@ -61,7 +63,7 @@ export function AvatarInput(props: AvatarInputProps = {}) {
     : (files: ImageInputFile[]) => setStandaloneAvatar(files);
 
   const showImg = value.length > 0 && Boolean(value[0]?.dataURL);
-  const showRemove = !isApiMode || Boolean(remoteImageUrl);
+  const showRemove = !hideRemove && (!isApiMode || Boolean(remoteImageUrl));
 
   return (
     <ImageInput

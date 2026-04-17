@@ -57,10 +57,21 @@ export function CustomerDetailsCard({
         autoComplete="tel"
       />
       <input
-        type="text"
+        type="number"
+        inputMode="numeric"
+        min={1}
         placeholder="Number of People Traveling"
         value={value.numberTravelling}
-        onChange={(e) => onChange({ numberTravelling: e.target.value })}
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          if (!raw) {
+            onChange({ numberTravelling: '' });
+            return;
+          }
+          const parsed = Number(raw);
+          if (!Number.isFinite(parsed)) return;
+          onChange({ numberTravelling: String(Math.max(1, Math.floor(parsed))) });
+        }}
         className={inputClass}
       />
       <input

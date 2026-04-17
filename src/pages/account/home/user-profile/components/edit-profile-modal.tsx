@@ -10,13 +10,22 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import { getFriendlyError } from '@/utils/api-error-handler';
 import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
 import { useAuth } from '@/auth/context/auth-context';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { toAbsoluteUrl } from '@/lib/helpers';
+import { useLocation, useNavigate } from 'react-router';
 
 const profileFormInputClassName =
   'w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#3f4254] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow shadow-sm read-only:opacity-70';
+const NAME_MAX_LENGTH = 10;
+const NAME_PATTERN = /^[a-zA-Z\s'-]+$/;
+const POSTAL_CODE_PATTERN = /^[a-zA-Z0-9\s-]{3,10}$/;
+
+function clampName(value: string): string {
+  return value.slice(0, NAME_MAX_LENGTH);
+}
 
 /** Module-level so React does not remount inputs every parent render (focus loss). */
 function ProfileFormInput({
@@ -45,6 +54,8 @@ function ProfileFormInput({
 }
 
 export function EditProfileModal({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     profile,
@@ -53,12 +64,13 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     profileBusy,
     updateProfile,
     uploadProfilePicture,
-    deleteProfilePicture,
   } = useDashboardData();
 
   const [open, setOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [firstNameError, setFirstNameError] = useState<string | null>(null);
+  const [lastNameError, setLastNameError] = useState<string | null>(null);
   const [mobile, setMobile] = useState('');
   const [localAddress, setLocalAddress] = useState('');
   const [postalAddress, setPostalAddress] = useState('');
@@ -67,16 +79,26 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
   const [postalCode, setPostalCode] = useState('');
   const [countryId, setCountryId] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [driverLicense, setDriverLicense] = useState('');
 
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('edit') === '1') {
+      setOpen(true);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!open) return;
     const addr = rcmProfile?.address;
     const dash = apiProfile;
-    setFirstName(rcmProfile?.first_name ?? dash?.first_name ?? user?.first_name ?? '');
-    setLastName(rcmProfile?.last_name ?? dash?.last_name ?? user?.last_name ?? '');
+    setFirstName(
+      clampName(rcmProfile?.first_name ?? dash?.first_name ?? user?.first_name ?? ''),
+    );
+    setLastName(
+      clampName(rcmProfile?.last_name ?? dash?.last_name ?? user?.last_name ?? ''),
+    );
     setMobile(rcmProfile?.mobile ?? dash?.phone ?? user?.phone ?? '');
     setLocalAddress(addr?.local_address ?? dash?.local_address ?? '');
     setPostalAddress(addr?.postal_address ?? dash?.postal_address ?? '');
@@ -93,7 +115,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     }
     setCountryId(nextCountry);
     setDateOfBirth('');
-    setDriverLicense('');
   }, [open, rcmProfile, apiProfile, user]);
 
   const countries = rcmProfile?.countries ?? [];
@@ -102,28 +123,70 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     profile.avatarUrl || toAbsoluteUrl('/media/avatars/blank.png');
 
   const handleSubmit = async () => {
+    const cleanedFirst = firstName.trim();
+    const cleanedLast = lastName.trim();
+    if (!cleanedFirst || !cleanedLast) {
+      toast.error('First name and last name are required');
+      return;
+    }
+    if (!mobile.trim()) {
+      toast.error('Phone number is required');
+      return;
+    }
+    const cleanedPostalCode = postalCode.trim();
+    if (cleanedPostalCode) {
+      if (cleanedPostalCode.startsWith('-') || !POSTAL_CODE_PATTERN.test(cleanedPostalCode)) {
+        toast.error('Please enter a valid postal code.');
+        return;
+      }
+    }
+    if (cleanedFirst.length > NAME_MAX_LENGTH || cleanedLast.length > NAME_MAX_LENGTH) {
+      toast.error(`Name cannot exceed ${NAME_MAX_LENGTH} characters.`);
+      return;
+    }
+    if (!NAME_PATTERN.test(cleanedFirst) || !NAME_PATTERN.test(cleanedLast)) {
+      toast.error("Name can only contain letters, spaces, hyphens, and apostrophes.");
+      return;
+    }
     try {
       const idNum = countryId ? Number(countryId) : 0;
       const selected = countries.find((c) => c.id === idNum);
       await updateProfile({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        full_name: `${firstName} ${lastName}`.trim(),
+        first_name: cleanedFirst,
+        last_name: cleanedLast,
+        full_name: `${cleanedFirst} ${cleanedLast}`.trim(),
         mobile: mobile.trim(),
         local_address: localAddress.trim(),
         postal_address: postalAddress.trim(),
         city: city.trim(),
         state: state.trim(),
-        postal_code: postalCode.trim(),
+        postal_code: cleanedPostalCode,
         country_id: idNum,
         country: selected?.country?.trim() || '',
         date_of_birth: dateOfBirth.trim() || undefined,
-        driver_license_number: driverLicense.trim() || undefined,
       });
       toast.success('Profile updated');
       setOpen(false);
+      const params = new URLSearchParams(location.search);
+      if (params.get('edit') === '1') {
+        params.delete('edit');
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : '',
+          },
+          { replace: true },
+        );
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Update failed');
+      const raw = e instanceof Error ? e.message : 'Update failed';
+      if (/400|422|required|validation/i.test(raw)) {
+        toast.error(`Please fix the highlighted profile fields: ${raw}`);
+      } else if (/401|403|unauthor/i.test(raw)) {
+        toast.error('Your session expired. Please sign in again and retry.');
+      } else {
+        toast.error(raw);
+      }
     }
   };
 
@@ -184,7 +247,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
                     await uploadProfilePicture(f);
                     toast.success('Photo updated');
                   } catch (err) {
-                    toast.error(err instanceof Error ? err.message : 'Upload failed');
+                    toast.error(getFriendlyError(err, 'Upload failed'));
                   }
                 }}
               />
@@ -197,43 +260,74 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
                 >
                   Change Picture
                 </Button>
-                {profile.avatarUrl ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    disabled={profileBusy}
-                    onClick={async () => {
-                      try {
-                        await deleteProfilePicture();
-                        toast.success('Photo removed');
-                      } catch (err) {
-                        toast.error(
-                          err instanceof Error ? err.message : 'Remove failed',
-                        );
-                      }
-                    }}
-                  >
-                    Remove
-                  </Button>
-                ) : null}
               </div>
             </div>
           </div>
 
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <ProfileFormInput
-                placeholder="First name"
-                value={firstName}
-                onChange={setFirstName}
-              />
-              <ProfileFormInput
-                placeholder="Last name"
-                value={lastName}
-                onChange={setLastName}
-              />
+              <div className="flex flex-col gap-1">
+                <input
+                  type="text"
+                  placeholder="First name"
+                  value={firstName}
+                  maxLength={NAME_MAX_LENGTH}
+                  onChange={(e) => {
+                    const next = clampName(e.target.value);
+                    setFirstName(next);
+                    const trimmed = next.trim();
+                    if (trimmed.length > NAME_MAX_LENGTH) {
+                      setFirstNameError('Name cannot exceed 50 characters.');
+                    } else if (trimmed && !NAME_PATTERN.test(trimmed)) {
+                      setFirstNameError(
+                        "Name can only contain letters, spaces, hyphens, and apostrophes.",
+                      );
+                    } else {
+                      setFirstNameError(null);
+                    }
+                  }}
+                  className={profileFormInputClassName}
+                />
+                {firstName.length >= Math.max(1, NAME_MAX_LENGTH - 2) ? (
+                  <p className="text-[11px] text-[#8692a6]">
+                    {firstName.length}/{NAME_MAX_LENGTH} (Max {NAME_MAX_LENGTH} characters)
+                  </p>
+                ) : null}
+                {firstNameError ? (
+                  <p className="text-[12px] text-destructive">{firstNameError}</p>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-1">
+                <input
+                  type="text"
+                  placeholder="Last name"
+                  value={lastName}
+                  maxLength={NAME_MAX_LENGTH}
+                  onChange={(e) => {
+                    const next = clampName(e.target.value);
+                    setLastName(next);
+                    const trimmed = next.trim();
+                    if (trimmed.length > NAME_MAX_LENGTH) {
+                      setLastNameError('Name cannot exceed 50 characters.');
+                    } else if (trimmed && !NAME_PATTERN.test(trimmed)) {
+                      setLastNameError(
+                        "Name can only contain letters, spaces, hyphens, and apostrophes.",
+                      );
+                    } else {
+                      setLastNameError(null);
+                    }
+                  }}
+                  className={profileFormInputClassName}
+                />
+                {lastName.length >= Math.max(1, NAME_MAX_LENGTH - 2) ? (
+                  <p className="text-[11px] text-[#8692a6]">
+                    {lastName.length}/{NAME_MAX_LENGTH} (Max {NAME_MAX_LENGTH} characters)
+                  </p>
+                ) : null}
+                {lastNameError ? (
+                  <p className="text-[12px] text-destructive">{lastNameError}</p>
+                ) : null}
+              </div>
             </div>
             <ProfileFormInput
               placeholder="Email"
@@ -250,11 +344,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
               placeholder="Date of birth (YYYY-MM-DD)"
               value={dateOfBirth}
               onChange={setDateOfBirth}
-            />
-            <ProfileFormInput
-              placeholder="Driver licence number"
-              value={driverLicense}
-              onChange={setDriverLicense}
             />
           </div>
 

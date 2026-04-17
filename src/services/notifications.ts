@@ -1,19 +1,9 @@
-import { getAuth } from '@/auth/lib/helpers';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
   '';
-
-function authJsonHeaders(): HeadersInit {
-  const auth = getAuth();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (auth?.access_token) {
-    headers.Authorization = `Bearer ${auth.access_token}`;
-  }
-  return headers;
-}
 
 function assertEnvelope(json: Record<string, unknown>): void {
   if (
@@ -21,9 +11,12 @@ function assertEnvelope(json: Record<string, unknown>): void {
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Notification request failed';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not process notifications right now.',
+      }),
+    );
   }
 }
 
@@ -57,17 +50,10 @@ export const notificationsService = {
   async list(page = 1, limit = 20): Promise<RcmNotification[]> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const res = await fetch(
+    const json = await apiJson<Record<string, unknown>>(
       `${API_BASE}/notifications/list?page=${encodeURIComponent(String(page))}&limit=${encodeURIComponent(String(limit))}`,
-      { method: 'GET', headers: authJsonHeaders() },
+      { method: 'GET', auth: 'optional', fallbackError: 'Could not load notifications.' },
     );
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Notifications list failed: ${res.status} ${text}`);
-    }
-
-    const json = JSON.parse(text) as Record<string, unknown>;
     assertEnvelope(json);
     return parseNotificationList(json.data);
   },
@@ -76,17 +62,11 @@ export const notificationsService = {
   async fetchRoot(): Promise<RcmNotification[]> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const res = await fetch(`${API_BASE}/notifications/`, {
+    const json = await apiJson<Record<string, unknown>>(`${API_BASE}/notifications/`, {
       method: 'GET',
-      headers: authJsonHeaders(),
+      auth: 'optional',
+      fallbackError: 'Could not load notifications.',
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Notifications fetch failed: ${res.status} ${text}`);
-    }
-
-    const json = JSON.parse(text) as Record<string, unknown>;
     assertEnvelope(json);
     const data = json.data;
     if (Array.isArray(data)) return parseNotificationList(data);
@@ -100,19 +80,13 @@ export const notificationsService = {
   async markAllRead(): Promise<void> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const res = await fetch(`${API_BASE}/notifications/mark-all-read`, {
+    const json = await apiJson<Record<string, unknown> | null>(`${API_BASE}/notifications/mark-all-read`, {
       method: 'PUT',
-      headers: authJsonHeaders(),
-      body: JSON.stringify({}),
+      auth: 'optional',
+      body: {},
+      fallbackError: 'Could not mark notifications as read.',
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Mark all read failed: ${res.status} ${text}`);
-    }
-
-    if (!text.trim()) return;
-    const json = JSON.parse(text) as Record<string, unknown>;
+    if (!json) return;
     assertEnvelope(json);
   },
 
@@ -120,18 +94,12 @@ export const notificationsService = {
   async markRead(notificationId: string): Promise<RcmNotification> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const res = await fetch(`${API_BASE}/notifications/mark-read`, {
+    const json = await apiJson<Record<string, unknown>>(`${API_BASE}/notifications/mark-read`, {
       method: 'POST',
-      headers: authJsonHeaders(),
-      body: JSON.stringify({ notification_id: notificationId }),
+      auth: 'optional',
+      body: { notification_id: notificationId },
+      fallbackError: 'Could not update notification status.',
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Mark read failed: ${res.status} ${text}`);
-    }
-
-    const json = JSON.parse(text) as Record<string, unknown>;
     assertEnvelope(json);
     const row = json.data as Record<string, unknown> | undefined;
     if (!row) throw new Error('Mark read response missing data');
@@ -142,21 +110,12 @@ export const notificationsService = {
   async clearAll(): Promise<number> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const headers = { ...authJsonHeaders() } as Record<string, string>;
-    delete headers['Content-Type'];
-
-    const res = await fetch(`${API_BASE}/notifications/clear-all`, {
+    const json = await apiJson<Record<string, unknown> | null>(`${API_BASE}/notifications/clear-all`, {
       method: 'DELETE',
-      headers,
+      auth: 'optional',
+      fallbackError: 'Could not clear notifications.',
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Clear all failed: ${res.status} ${text}`);
-    }
-
-    if (!text.trim()) return 0;
-    const json = JSON.parse(text) as Record<string, unknown>;
+    if (!json) return 0;
     assertEnvelope(json);
     const data = json.data as Record<string, unknown> | undefined;
     const n = data?.deleted_count;
@@ -169,19 +128,13 @@ export const notificationsService = {
     const id = String(notificationId ?? '').trim();
     if (!id) throw new Error('notification_id is required');
 
-    const res = await fetch(`${API_BASE}/notifications/delete`, {
+    const json = await apiJson<Record<string, unknown> | null>(`${API_BASE}/notifications/delete`, {
       method: 'DELETE',
-      headers: authJsonHeaders(),
-      body: JSON.stringify({ notification_id: id }),
+      auth: 'optional',
+      body: { notification_id: id },
+      fallbackError: 'Could not delete notification.',
     });
-
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Delete notification failed: ${res.status} ${text}`);
-    }
-
-    if (!text.trim()) return;
-    const json = JSON.parse(text) as Record<string, unknown>;
+    if (!json) return;
     assertEnvelope(json);
   },
 };

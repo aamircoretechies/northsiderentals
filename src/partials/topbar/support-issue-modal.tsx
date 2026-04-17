@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { submitSupportIssue } from '@/services/support';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 const inputClass =
   'w-full bg-[#f2f4f8] border-0 rounded-[12px] px-5 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#8692a6] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow';
@@ -67,7 +68,7 @@ export function SupportIssueModal({
       reset();
       setOpen(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not send request');
+      toast.error(getFriendlyError(e, 'Could not send request'));
     } finally {
       setSubmitting(false);
     }

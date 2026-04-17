@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { changePasswordApi } from '@/services/auth-password';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 const passwordInputClass =
   'w-full bg-[#f2f4f8] border-0 rounded-[12px] pl-5 pr-12 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#8692a6] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow';
@@ -103,7 +104,7 @@ export function ChangePasswordModal({ children }: { children: React.ReactNode })
       reset();
       setOpen(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not update password');
+      toast.error(getFriendlyError(e, 'Could not update password'));
     } finally {
       setSubmitting(false);
     }
@@ -135,19 +136,19 @@ export function ChangePasswordModal({ children }: { children: React.ReactNode })
           {isAuthed ? (
             <>
               <PasswordField
-                placeholder="Current Password"
+                placeholder="Current password"
                 value={currentPassword}
                 onChange={setCurrentPassword}
                 disabled={submitting}
               />
               <PasswordField
-                placeholder="New Password"
+                placeholder="New password"
                 value={newPassword}
                 onChange={setNewPassword}
                 disabled={submitting}
               />
               <PasswordField
-                placeholder="Confirm New Password"
+                placeholder="Confirm new password"
                 value={confirmNewPassword}
                 onChange={setConfirmNewPassword}
                 disabled={submitting}

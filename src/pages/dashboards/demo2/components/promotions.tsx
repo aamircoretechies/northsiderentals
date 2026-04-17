@@ -17,8 +17,7 @@ export function Promotions({ promotions }: PromotionsProps) {
         {promotions.map((promo) => (
           <div
             key={String(promo.id)}
-            className="shrink-0 snap-center sm:snap-start flex flex-col w-[calc(100%)] md:w-[calc(100%)] lg:w-[calc(70%-0.5rem)] cursor-pointer group"
-            onClick={() => { if (promo.link) window.open(promo.link, '_blank'); }}
+            className="shrink-0 snap-center sm:snap-start flex flex-col w-[calc(100%)] md:w-[calc(100%)] lg:w-[calc(70%-0.5rem)] group"
           >
             <div className="bg-[#f0f4f9] rounded-[24px] overflow-hidden relative shadow-sm hover:shadow-md transition-all duration-300 w-full aspect-[3/1] sm:aspect-[3/1]">
               <img

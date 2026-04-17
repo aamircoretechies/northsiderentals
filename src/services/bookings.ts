@@ -1,7 +1,59 @@
 import { getAuth } from '@/auth/lib/helpers';
 import { createApiUrl } from '@/lib/api-url';
+import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
+const BOOKING_LIST_TTL_MS = 60_000;
+const BOOKING_DETAIL_TTL_MS = 60_000;
+const WORKFLOW_TTL_MS = 30_000;
+
+type CacheEntry<T> = { ts: number; data: T };
+
+const bookingsListCache = new Map<string, CacheEntry<BookingsListResponse>>();
+const bookingDetailCache = new Map<string, CacheEntry<BookingByReferenceResponse>>();
+const workflowCache = new Map<string, CacheEntry<WorkflowChecklistResponse>>();
+
+const inflightRequests = new Map<string, Promise<unknown>>();
+
+function isFresh(entryTs: number, ttlMs: number): boolean {
+  return Date.now() - entryTs < ttlMs;
+}
+
+export function getCachedBookingsList(
+  params: BookingsListParams = {},
+): BookingsListResponse | null {
+  const key = `${params.page ?? 1}:${params.limit ?? 20}:${params.status ?? 'all'}`;
+  const hit = bookingsListCache.get(key);
+  return hit?.data ?? null;
+}
+
+export function getCachedBookingByReference(
+  reference: string,
+): BookingByReferenceResponse | null {
+  const key = reference.trim();
+  if (!key) return null;
+  return bookingDetailCache.get(key)?.data ?? null;
+}
+
+export function getCachedWorkflowChecklist(
+  reservationRef: string,
+  workflowCode = 'checkin',
+): WorkflowChecklistResponse | null {
+  const key = `${reservationRef.trim()}:${workflowCode}`;
+  if (!reservationRef.trim()) return null;
+  return workflowCache.get(key)?.data ?? null;
+}
+
+export function invalidateBookingsCache(reference?: string): void {
+  bookingsListCache.clear();
+  workflowCache.clear();
+  if (reference?.trim()) {
+    bookingDetailCache.delete(reference.trim());
+  } else {
+    bookingDetailCache.clear();
+  }
+}
 
 export interface BookingsListParams {
   page?: number;
@@ -30,15 +82,44 @@ function assertApiSuccess(
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    const msg =
-      typeof json.message === 'string' ? json.message : fallbackMessage;
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: fallbackMessage,
+      }),
+    );
   }
 }
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function getValidationFailureMessage(
+  dataObj: Record<string, unknown> | null,
+  fallback: string,
+): string {
+  if (!dataObj) return fallback;
+  const details = Array.isArray(dataObj.validation_error_details)
+    ? dataObj.validation_error_details
+    : [];
+  const messages = details
+    .map((item) => {
+      if (!item || typeof item !== 'object') return '';
+      const row = item as Record<string, unknown>;
+      return String(row.Message ?? row.message ?? '').trim();
+    })
+    .filter(Boolean);
+  if (messages.length === 0) return fallback;
+
+  const normalized = messages.map((msg) => {
+    if (/quotes?\s+cannot\s+be\s+updated/i.test(msg)) {
+      return 'This reservation is a quote and cannot be updated from this screen.';
+    }
+    return msg;
+  });
+  return normalized.join(' ');
 }
 
 /** Raw API response wrapper */
@@ -60,29 +141,53 @@ export async function fetchBookingsList(
   const page = params.page ?? 1;
   const limit = params.limit ?? 20;
   const status = params.status ?? 'all';
+  const cacheKey = `${page}:${limit}:${status}`;
+  const cacheHit = bookingsListCache.get(cacheKey);
+  if (cacheHit && isFresh(cacheHit.ts, BOOKING_LIST_TTL_MS)) {
+    return cacheHit.data;
+  }
+  const inflightKey = `bookings:list:${cacheKey}`;
+  const inflight = inflightRequests.get(inflightKey);
+  if (inflight) return inflight as Promise<BookingsListResponse>;
 
   const url = createApiUrl('bookings/list');
   url.searchParams.set('page', String(page));
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('status', status);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: buildAuthHeaders(),
-  });
+  const request = (async () => {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: buildAuthHeaders(),
+    });
 
-  if (!response.ok) {
-    let msg = response.statusText;
-    try {
-      const err = await response.json();
-      msg = err.message || msg;
-    } catch {
-      /* ignore */
+    if (!response.ok) {
+      let msg = response.statusText;
+      try {
+        const err = await response.json();
+        msg = err.message || msg;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: response.status,
+          message: msg,
+          fallback: 'Could not load bookings right now.',
+        }),
+      );
     }
-    throw new Error(msg || 'Failed to load bookings');
-  }
 
-  return response.json();
+    const json = (await response.json()) as BookingsListResponse;
+    bookingsListCache.set(cacheKey, { ts: Date.now(), data: json });
+    return json;
+  })();
+  inflightRequests.set(inflightKey, request);
+  try {
+    return await request;
+  } finally {
+    inflightRequests.delete(inflightKey);
+  }
 }
 
 function assertBookingEnvelopeOk(json: Record<string, unknown>): void {
@@ -91,9 +196,12 @@ function assertBookingEnvelopeOk(json: Record<string, unknown>): void {
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Booking not found';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Booking not found.',
+      }),
+    );
   }
 }
 
@@ -114,10 +222,10 @@ export async function findBookingLookup(params: {
   const reservationNo = params.reservationNo.trim();
   const lastName = params.lastName.trim();
   if (!reservationNo) {
-    throw new Error('Enter your reservation or confirmation number');
+    throw new Error('Please enter your reservation or confirmation number.');
   }
   if (!lastName) {
-    throw new Error('Enter the last name on the booking');
+    throw new Error('Please enter the last name on the booking.');
   }
 
   const url = createApiUrl('bookings/find');
@@ -144,11 +252,17 @@ export async function findBookingLookup(params: {
       (json?.message as string) ||
       (json?.error as string) ||
       `Request failed: ${response.status}`;
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not find this booking.',
+      }),
+    );
   }
 
   if (!json) {
-    throw new Error('Empty response from booking lookup');
+    throw new Error('Could not read booking response. Please try again.');
   }
 
   assertBookingEnvelopeOk(json);
@@ -180,6 +294,7 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
   const spec =
     (bookingInfo?.vehicledescription1 as string) ||
     (vd.vehicle_name as string) ||
+    (vd.category_name as string) ||
     '';
 
   const pickupDate = dates.pickup_date;
@@ -213,7 +328,13 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     reservationNumber: String(
       b.confirmation_number ?? b.rcm_reservation_no ?? b.booking_id ?? '',
     ),
-    carName: String(b.car_name ?? vd.vehicle_name ?? 'Vehicle'),
+    carName: String(
+      b.car_name ??
+        b.category_name ??
+        vd.vehicle_name ??
+        vd.category_name ??
+        'Vehicle',
+    ),
     carSpecs: spec.trim() || '—',
     carImage: img,
     pickupDate: pickup,
@@ -239,26 +360,49 @@ export async function fetchBookingByReference(
   if (!ref) {
     throw new Error('Missing booking reference');
   }
-
-  const url = `${API_BASE_URL.replace(/\/$/, '')}/bookings/${encodeURIComponent(ref)}`;
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: buildAuthHeaders(),
-  });
-
-  if (!response.ok) {
-    let msg = response.statusText;
-    try {
-      const err = await response.json();
-      msg = err.message || msg;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg || 'Failed to load booking');
+  const cacheHit = bookingDetailCache.get(ref);
+  if (cacheHit && isFresh(cacheHit.ts, BOOKING_DETAIL_TTL_MS)) {
+    return cacheHit.data;
   }
+  const inflightKey = `bookings:detail:${ref}`;
+  const inflight = inflightRequests.get(inflightKey);
+  if (inflight) return inflight as Promise<BookingByReferenceResponse>;
 
-  return response.json();
+  const url = `${API_BASE_URL.replace(/\/$/, '')}/bookings/by-reference/${encodeURIComponent(ref)}`;
+
+  const request = (async () => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: buildAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      let msg = response.statusText;
+      try {
+        const err = await response.json();
+        msg = err.message || msg;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: response.status,
+          message: msg,
+          fallback: 'Could not load booking details.',
+        }),
+      );
+    }
+
+    const json = (await response.json()) as BookingByReferenceResponse;
+    bookingDetailCache.set(ref, { ts: Date.now(), data: json });
+    return json;
+  })();
+  inflightRequests.set(inflightKey, request);
+  try {
+    return await request;
+  } finally {
+    inflightRequests.delete(inflightKey);
+  }
 }
 
 export interface WorkflowChecklistStep {
@@ -300,29 +444,53 @@ export async function fetchWorkflowChecklist(
   if (!ref) {
     throw new Error('Missing reservation reference');
   }
+  const cacheKey = `${ref}:${workflowCode}`;
+  const cacheHit = workflowCache.get(cacheKey);
+  if (cacheHit && isFresh(cacheHit.ts, WORKFLOW_TTL_MS)) {
+    return cacheHit.data;
+  }
+  const inflightKey = `bookings:workflow:${cacheKey}`;
+  const inflight = inflightRequests.get(inflightKey);
+  if (inflight) return inflight as Promise<WorkflowChecklistResponse>;
   const url = createApiUrl('bookings/workflow-checklist');
   url.searchParams.set('reservation_ref', ref);
   url.searchParams.set('workflow_code', workflowCode);
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: buildAuthHeaders(),
-  });
+  const request = (async () => {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: buildAuthHeaders(),
+    });
 
-  if (!response.ok) {
-    let msg = response.statusText;
-    try {
-      const err = await response.json();
-      msg = err.message || msg;
-    } catch {
-      /* ignore */
+    if (!response.ok) {
+      let msg = response.statusText;
+      try {
+        const err = await response.json();
+        msg = err.message || msg;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(
+        getFriendlyErrorMessage({
+          status: response.status,
+          message: msg,
+          fallback: 'Could not load booking details.',
+        }),
+      );
     }
-    throw new Error(msg || 'Failed to load express check-in workflow');
-  }
 
-  const json = (await response.json()) as Record<string, unknown>;
-  assertApiSuccess(json, 'Failed to load express check-in workflow');
-  return json as WorkflowChecklistResponse;
+    const json = (await response.json()) as Record<string, unknown>;
+    assertApiSuccess(json, 'Failed to load express check-in workflow');
+    const typed = json as WorkflowChecklistResponse;
+    workflowCache.set(cacheKey, { ts: Date.now(), data: typed });
+    return typed;
+  })();
+  inflightRequests.set(inflightKey, request);
+  try {
+    return await request;
+  } finally {
+    inflightRequests.delete(inflightKey);
+  }
 }
 
 /**
@@ -461,14 +629,26 @@ export interface UpdateBookingPayload {
   extrakmsid: number;
   transmission: number;
   customer: {
+    customerid?: number;
     firstname: string;
     lastname: string;
     dateofbirth: string;
     licenseno: string;
+    licenseissued?: string;
+    licenseexpires?: string;
     email: string;
+    phone?: string;
+    mobile?: string;
+    fulladdress?: string;
     state: string;
     city: string;
     postcode: string;
+    country?: string;
+    countryid?: number;
+    localaddress?: string;
+    passport?: string;
+    mailinglist?: boolean;
+    loyaltycardno?: string;
     address: string;
   };
   referralid: number;
@@ -512,17 +692,45 @@ export async function updateBooking(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to update booking');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not update booking details.',
+      }),
+    );
   }
 
   const json = (await response.json()) as Record<string, unknown>;
+  const dataObj =
+    json.data && typeof json.data === 'object'
+      ? (json.data as Record<string, unknown>)
+      : null;
+  const validationDetails = Array.isArray(dataObj?.validation_error_details)
+    ? dataObj.validation_error_details
+    : [];
+  const nestedSuccess = dataObj?.success;
+  if (nestedSuccess === false || validationDetails.length > 0) {
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: getValidationFailureMessage(
+          dataObj,
+          String(json.message ?? 'Could not update booking details.'),
+        ),
+        fallback: 'Could not update booking details.',
+      }),
+    );
+  }
   const okBySuccess = json.success === true;
   const okByStatus =
     json.status === 1 || json.status === '1' || json.status === undefined;
   if (!okBySuccess && !okByStatus) {
-    const msg =
-      typeof json.message === 'string' ? json.message : 'Failed to update booking';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not update booking details.',
+      }),
+    );
   }
   return json as { success?: boolean; status?: number; message?: string; data?: unknown };
 }
@@ -636,19 +844,45 @@ export async function editBookingBasics(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to update booking details');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not update booking details.',
+      }),
+    );
   }
 
   const json = (await response.json()) as Record<string, unknown>;
+  const dataObj =
+    json.data && typeof json.data === 'object'
+      ? (json.data as Record<string, unknown>)
+      : null;
+  const validationDetails = Array.isArray(dataObj?.validation_error_details)
+    ? dataObj.validation_error_details
+    : [];
+  const nestedSuccess = dataObj?.success;
+  if (nestedSuccess === false || validationDetails.length > 0) {
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: getValidationFailureMessage(
+          dataObj,
+          String(json.message ?? 'Could not update booking details.'),
+        ),
+        fallback: 'Could not update booking details.',
+      }),
+    );
+  }
   const okBySuccess = json.success === true;
   const okByStatus =
     json.status === 1 || json.status === '1' || json.status === undefined;
   if (!okBySuccess && !okByStatus) {
-    const msg =
-      typeof json.message === 'string'
-        ? json.message
-        : 'Failed to update booking details';
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not update booking details.',
+      }),
+    );
   }
   return json as {
     success?: boolean;
@@ -695,7 +929,13 @@ export async function addExtraDriver(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to add extra driver');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not save extra driver details.',
+      }),
+    );
   }
 
   const json = (await response.json()) as Record<string, unknown>;
@@ -747,7 +987,13 @@ export async function listRcmDocuments(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to load required documents');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not load required documents.',
+      }),
+    );
   }
   const json = (await response.json()) as Record<string, unknown>;
   assertApiSuccess(json, 'Failed to load required documents');
@@ -773,7 +1019,13 @@ export async function uploadRcmDocumentFile(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to upload document file');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not upload document. Please try again.',
+      }),
+    );
   }
   return response.json();
 }
@@ -815,7 +1067,13 @@ export async function storeRcmDocument(
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to store uploaded document');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not save uploaded document.',
+      }),
+    );
   }
   const json = (await response.json()) as Record<string, unknown>;
   assertApiSuccess(json, 'Failed to store uploaded document');
@@ -843,7 +1101,13 @@ export async function deleteRcmDocument(payload: {
     } catch {
       /* ignore */
     }
-    throw new Error(msg || 'Failed to delete document');
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not delete document.',
+      }),
+    );
   }
   const json = (await response.json()) as Record<string, unknown>;
   assertApiSuccess(json, 'Failed to delete document');
@@ -862,6 +1126,58 @@ export function resolveApiAssetUrl(pathOrUrl: string): string {
     path = path.slice('/api/v1'.length) || '/';
   }
   return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function apiOrigin(): string {
+  const base = API_BASE_URL.trim();
+  if (/^https?:\/\//i.test(base)) {
+    try {
+      return new URL(base).origin;
+    } catch {
+      /* ignore */
+    }
+  }
+  const publicBase = API_PUBLIC_BASE_URL.trim();
+  if (/^https?:\/\//i.test(publicBase)) {
+    try {
+      return new URL(publicBase).origin;
+    } catch {
+      /* ignore */
+    }
+  }
+  return '';
+}
+
+function resolveUploadsUrl(pathOrUrl: string): string {
+  const s = pathOrUrl.trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  const origin = apiOrigin();
+  let path = s.startsWith('/') ? s : `/${s}`;
+  // Convert /api/v1/uploads/... -> /uploads/... because files are hosted at origin root.
+  path = path.replace(/^\/api\/v1(?=\/uploads\/)/i, '');
+  return origin ? `${origin}${path}` : path;
+}
+
+function resolveAgreementUrl(pathOrUrl: string): string {
+  const s = pathOrUrl.trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) {
+    const origin = apiOrigin();
+    const path = s.startsWith('/') ? s : `/${s}`;
+    return origin ? `${origin}${path}` : path;
+  }
+  if (/\/documents\/agreement\.aspx/i.test(s)) {
+    const origin = apiOrigin();
+    if (!origin) return s;
+    try {
+      const url = new URL(s);
+      return `${origin}${url.pathname}${url.search}`;
+    } catch {
+      return s;
+    }
+  }
+  return s;
 }
 
 const RECEIPT_URL_KEYS = [
@@ -952,7 +1268,7 @@ function resolveInvoiceTargetUrl(
     /^\/?uploads\/invoice\//i.test(s) ||
     /^\/?api\/v1\/uploads\/invoice\//i.test(s)
   ) {
-    return resolveApiAssetUrl(s.startsWith('/') ? s : `/${s}`);
+    return resolveUploadsUrl(s.startsWith('/') ? s : `/${s}`);
   }
   const base = documentsBaseUrl?.replace(/\/$/, '') ?? '';
   if (base && !s.startsWith('/api')) {
@@ -991,7 +1307,13 @@ export async function openBookingReceipt(
     } catch {
       /* ignore */
     }
-    throw new Error(msg);
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not open receipt right now.',
+      }),
+    );
   }
 
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -1207,13 +1529,14 @@ export function mapBookingDetailToView(
   );
 
   const agreementRaw = String(data.rental_agreement_url ?? '');
-  let rentalAgreementUrl = agreementRaw;
+  let rentalAgreementUrl = resolveAgreementUrl(agreementRaw);
   if (agreementRaw && !/^https?:\/\//i.test(agreementRaw)) {
     const docBase = String(bookingInfo?.urlpathfordocuments ?? '').replace(
       /\/$/,
       '',
     );
     rentalAgreementUrl = docBase ? `${docBase}/${agreementRaw.replace(/^\//, '')}` : agreementRaw;
+    rentalAgreementUrl = resolveAgreementUrl(rentalAgreementUrl);
   }
 
   const receiptPath = String(data.payment_invoice_url ?? '');

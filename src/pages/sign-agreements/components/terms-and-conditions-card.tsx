@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SignaturePad } from './signature-pad';
+import { apiJson } from '@/utils/api-client';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 export function TermsAndConditionsCard() {
   const [content, setContent] = useState<string>('');
@@ -9,12 +11,15 @@ export function TermsAndConditionsCard() {
   useEffect(() => {
     async function fetchTerms() {
       try {
-        const response = await fetch('https://northsiderentals.com.au/wp-json/wp/v2/pages/10078');
-        if (!response.ok) throw new Error('Failed to fetch terms');
-        const data = await response.json();
-        setContent(data.content.rendered);
+        const data = await apiJson<Record<string, unknown>>(
+          'https://northsiderentals.com.au/wp-json/wp/v2/pages/10078',
+          { method: 'GET', auth: 'none', fallbackError: 'Could not load terms and conditions.' },
+        );
+        setContent(
+          ((data.content as Record<string, unknown> | undefined)?.rendered as string) || '',
+        );
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        setError(getFriendlyError(err, 'Could not load terms and conditions.'));
       } finally {
         setLoading(false);
       }

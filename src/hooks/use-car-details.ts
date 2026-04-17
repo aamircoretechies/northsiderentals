@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { carsService, RentalSource } from '@/services/cars';
+import { getFriendlyError } from '@/utils/api-error-handler';
 
 export function useCarDetails() {
   const [rentalsource, setRentalsource] = useState<RentalSource[]>([]);
@@ -14,7 +15,7 @@ export function useCarDetails() {
         const result = await carsService.getDetails();
         setRentalsource(result.rentalsource);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        setError(getFriendlyError(err, 'An error occurred'));
       } finally {
         setLoading(false);
       }

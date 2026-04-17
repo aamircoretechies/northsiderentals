@@ -616,9 +616,9 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-6">
-              No vehicles match your search text. Clear the search box to see
-              all {bookableItems.length} available option
-              {bookableItems.length === 1 ? '' : 's'}.
+              {filterText
+                ? `No vehicles match your search text. Clear the search box to see all ${bookableItems.length} available option${bookableItems.length === 1 ? '' : 's'}.`
+                : 'No vehicles match your selected filters. Adjust filters to view available options.'}
             </p>
           )}
 

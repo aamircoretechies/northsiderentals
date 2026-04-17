@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 
 import {
   MapPin,
@@ -189,6 +190,25 @@ export function CarHireWidget({
       };
 
       const result = await searchCars(params);
+      const resultData =
+        result?.data && typeof result.data === 'object'
+          ? (result.data as Record<string, unknown>)
+          : (result as Record<string, unknown> | undefined);
+      const availableCars = Array.isArray(resultData?.availablecars)
+        ? (resultData?.availablecars as Array<Record<string, unknown>>)
+        : [];
+      const promoProvided = promoCode.trim().length > 0;
+      if (promoProvided && availableCars.length > 0) {
+        const hasDiscount = availableCars.some((car) => {
+          const before = Number(car.totalratebeforediscount ?? 0);
+          const after = Number(car.totalrateafterdiscount ?? 0);
+          const discountRate = Number(car.discountrate ?? 0);
+          return (before > 0 && after > 0 && after < before) || discountRate > 0;
+        });
+        if (!hasDiscount) {
+          toast.error('Invalid promo code or no discount available for this search.');
+        }
+      }
       navigate('/cars/search-results-grid', {
         state: {
           searchData: result,
