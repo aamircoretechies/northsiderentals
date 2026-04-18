@@ -410,31 +410,40 @@ export function BookingDetailContent() {
                   Book A Service
                 </span>
               </DropdownMenuItem>
-              <RequestExtensionModal
-                context={{
-                  view,
-                  detailData:
-                    bookingQuery.data?.data && typeof bookingQuery.data.data === 'object'
-                      ? (bookingQuery.data.data as Record<string, unknown>)
-                      : null,
-                }}
-                onUpdated={async () => {
-                  await Promise.all([
-                    bookingQuery.refetch(),
-                    queryClient.invalidateQueries({ queryKey: ['bookings', 'list'] }),
-                  ]);
-                }}
-                trigger={
-                  <DropdownMenuItem
-                    className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <span className="text-[18px] text-black tracking-tight">
-                      Request Extension
-                    </span>
-                  </DropdownMenuItem>
-                }
-              />
+              {view ? (
+                <RequestExtensionModal
+                  context={{
+                    view,
+                    detailData:
+                      bookingQuery.data?.data && typeof bookingQuery.data.data === 'object'
+                        ? (bookingQuery.data.data as Record<string, unknown>)
+                        : null,
+                  }}
+                  onUpdated={async () => {
+                    await Promise.all([
+                      bookingQuery.refetch(),
+                      queryClient.invalidateQueries({ queryKey: ['bookings', 'list'] }),
+                    ]);
+                  }}
+                  trigger={
+                    <DropdownMenuItem
+                      className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="text-[18px] text-black tracking-tight">
+                        Request Extension
+                      </span>
+                    </DropdownMenuItem>
+                  }
+                />
+              ) : (
+                <DropdownMenuItem
+                  disabled
+                  className="py-4 px-4 rounded-[8px] opacity-60 cursor-not-allowed"
+                >
+                  <span className="text-[18px] text-black tracking-tight">Request Extension</span>
+                </DropdownMenuItem>
+              )}
               <SupportIssueModal
                 defaultReservationRef={view?.referenceKey?.trim() || ''}
               >

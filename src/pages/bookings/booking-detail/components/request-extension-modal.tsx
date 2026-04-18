@@ -21,7 +21,11 @@ import { normalizeMediaUrl } from '@/lib/helpers';
 
 interface RequestExtensionModalProps {
   trigger: React.ReactNode;
-  view: BookingDetailView;
+  context: {
+    view: BookingDetailView | undefined | null;
+    detailData: Record<string, unknown> | null;
+  };
+  onUpdated?: () => void | Promise<void>;
 }
 
 const ALL_TIME_OPTIONS = [
@@ -37,13 +41,19 @@ const ALL_TIME_OPTIONS = [
   '11:00 PM', '11:30 PM',
 ];
 
-export function RequestExtensionModal({ trigger, view }: RequestExtensionModalProps) {
+export function RequestExtensionModal({
+  trigger,
+  context,
+  onUpdated,
+}: RequestExtensionModalProps) {
+  const view = context?.view ?? undefined;
+
   const [open, setOpen] = useState(false);
   const [targetDate, setTargetDate] = useState('');
   const [targetTime, setTargetTime] = useState('09:00 AM');
 
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const dateInputId = `ext-date-${view.bookingId || 'booking'}`;
+  const dateInputId = `ext-date-${view?.bookingId?.trim() || 'booking'}`;
 
   // Helper to convert DD/MM/YYYY or DD/MMM/YYYY to YYYY-MM-DD
   const formatToInputDate = (dateStr: string | undefined): string => {
@@ -93,16 +103,14 @@ export function RequestExtensionModal({ trigger, view }: RequestExtensionModalPr
   const minDate = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    if (open && view.returnWhen) {
-      const parts = view.returnWhen.split(' ');
-      if (parts[0]) setTargetDate(formatToInputDate(parts[0]));
-      // Initialize time in 12h format for Select
-      const timePart = parts[1];
-      setTargetTime(formatTo12Hour(timePart));
-    }
-  }, [open, view.returnWhen]);
+    if (!open || !view?.returnWhen) return;
+    const parts = view.returnWhen.split(' ');
+    if (parts[0]) setTargetDate(formatToInputDate(parts[0]));
+    const timePart = parts[1];
+    setTargetTime(formatTo12Hour(timePart));
+  }, [open, view?.returnWhen]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!targetDate || !targetTime) {
       toast.error('Please select both a new return date and time');
       return;
@@ -113,38 +121,34 @@ export function RequestExtensionModal({ trigger, view }: RequestExtensionModalPr
     }
     toast.success(`Extension request submitted for ${formatToDisplayDate(targetDate)} at ${targetTime}`);
     setOpen(false);
+    try {
+      await onUpdated?.();
+    } catch {
+      // optional refresh failed — booking list may be stale until next visit
+    }
   };
 
-  const handleManualTrigger = (ref: React.RefObject<HTMLInputElement>) => {
+  const handleManualTrigger = (ref: React.RefObject<HTMLInputElement | null>) => {
+    const el = ref.current;
+    if (!el) return;
     try {
-      if (ref.current && 'showPicker' in ref.current) {
-        (ref.current as any).showPicker();
+      const showPicker = (el as HTMLInputElement & { showPicker?: () => void }).showPicker;
+      if (typeof showPicker === 'function') {
+        showPicker.call(el);
       } else {
-        ref.current?.focus();
+        el.focus();
       }
     } catch (e) {
       console.error('Failed to trigger picker:', e);
     }
   };
 
+  if (!view) {
+    return null;
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) {
-          const parsedPickup = pickupDateTimeInput;
-          const parsed = dropoffDateTimeInput;
-          setPickupDate(parsedPickup.date);
-          setPickupTime(parsedPickup.time);
-          setNewDate(parsed.date);
-          setNewTime(parsed.time);
-          setSubmitError(null);
-          setValidationErrors([]);
-          setSuccessMessage(null);
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         showCloseButton={false}
@@ -163,7 +167,7 @@ export function RequestExtensionModal({ trigger, view }: RequestExtensionModalPr
           </DialogTitle>
         </div>
         <DialogDescription className="sr-only">
-          Booking extension for {view.carName}.
+          Booking extension for {view.carName || 'this booking'}.
         </DialogDescription>
 
         {/* Content */}
