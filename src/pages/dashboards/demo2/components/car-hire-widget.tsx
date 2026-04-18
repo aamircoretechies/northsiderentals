@@ -88,8 +88,8 @@ export function CarHireWidget({
       setSelectedDriverAge('');
       return;
     }
-    const def = driverAges.find((a) => a.isdefault)?.id ?? driverAges[0].id;
-    setSelectedDriverAge(String(def));
+    const lastAge = driverAges[driverAges.length - 1];
+    setSelectedDriverAge(String(lastAge.id));
   }, [driverAges]);
 
   const [pickupDate, setPickupDate] = useState<Date>(() => startOfDay(new Date()));
@@ -424,7 +424,7 @@ export function CarHireWidget({
               >
                 <SelectTrigger className="h-auto w-auto cursor-pointer gap-3 border-none bg-transparent p-0 pl-1 shadow-none hover:bg-transparent focus:ring-0 [&>svg:last-child]:hidden">
                   <User className="h-7 w-7 shrink-0 text-black" strokeWidth={2} />
-                  <span className="text-[16px] text-black">Driver&apos;s Age</span>
+                  <span className="text-[16px] text-black capitalize">DRIVER&apos;S AGE</span>
                   <span className="ml-1 text-[18px] font-extrabold text-black">
                     <SelectValue placeholder="Select" />
                   </span>

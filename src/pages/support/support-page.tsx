@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,9 +47,9 @@ export function SupportPage() {
 
   return (
     <>
-      <Helmet>
-        <title>Support Request</title>
-      </Helmet>
+      {/* <Helmet>
+        <title>Support</title>
+      </Helmet> */}
       <Container>
 
         <div className='max-w-3xl mx-auto mb-4'>
@@ -105,14 +104,20 @@ export function SupportPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Enter Description</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="description">Enter Description</Label>
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                    {description.length}/500 characters
+                  </span>
+                </div>
                 <Textarea
                   id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  maxLength={500}
                   placeholder="Please describe your issue in detail..."
                   className="min-h-[150px] w-full"
-                  value={description}
                   disabled={submitting}
-                  onChange={(e) => setDescription(e.target.value)}
                 />
               </div>
 

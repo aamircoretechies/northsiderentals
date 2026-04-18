@@ -95,39 +95,34 @@ export function ProfileAvatarImage({
 
   const initials = getInitials(fallbackLabel, 2) || '';
 
+  const fallbackShell = (
+    <div
+      className={cn(
+        'flex size-full min-h-0 min-w-0 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground',
+        className,
+        fallbackClassName,
+      )}
+    >
+      {initials || null}
+    </div>
+  );
+
   if (!trimmed) {
-    return (
-      <div
-        className={cn(
-          'flex items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground',
-          className,
-          fallbackClassName,
-        )}
-      >
-        {initials || null}
-      </div>
-    );
+    return fallbackShell;
   }
 
   if (pending && !resolved) {
-    return (
-      <div
-        className={cn(
-          'flex items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground',
-          className,
-          fallbackClassName,
-        )}
-      >
-        {initials || null}
-      </div>
-    );
+    return fallbackShell;
   }
 
   return (
     <img
       src={resolved || trimmed}
       alt={alt}
-      className={className}
+      className={cn(
+        'block size-full max-h-full max-w-full min-h-0 min-w-0 rounded-full object-cover',
+        className,
+      )}
     />
   );
 }

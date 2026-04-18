@@ -1,6 +1,4 @@
-import { useNavigate } from 'react-router-dom';
 import { toAbsoluteUrl } from '@/lib/helpers';
-import { useDashboardData } from '@/hooks/use-dashboard-data';
 
 export interface FeaturedCar {
   id: number | string;
@@ -18,22 +16,26 @@ export interface FeaturedCar {
 
 interface FeaturedCarsProps {
   cars?: FeaturedCar[];
-  locations?: any[];
-  searchParams?: any;
+  /** Reserved for future flows; featured cards do not navigate. */
+  locations?: unknown[];
+  searchParams?: unknown;
 }
 
-export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProps) {
-  const navigate = useNavigate();
-  const { data: dashboardData } = useDashboardData();
-
+export function FeaturedCars({ cars }: FeaturedCarsProps) {
   const carsToRender: FeaturedCar[] = cars || [];
 
   if (!carsToRender || carsToRender.length === 0) {
     return (
-      <div className="w-full flex flex-col gap-4">
-        <h2 className="text-xl font-bold">Featured Cars</h2>
+      <section
+        id="featured-cars"
+        className="w-full flex flex-col gap-4 scroll-mt-28"
+        aria-labelledby="featured-cars-heading"
+      >
+        <h2 id="featured-cars-heading" className="text-xl font-bold">
+          Featured Cars
+        </h2>
         <div className="text-center text-gray-500">No featured cars available.</div>
-      </div>
+      </section>
     );
   }
 
@@ -44,53 +46,18 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
     return `$${num % 1 === 0 ? num.toFixed(0) : num.toFixed(2)}`;
   };
 
-  const handleCarClick = (car: FeaturedCar) => {
-    // Default search parameters if not provided
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 8);
-
-    const locList = locations?.length ? locations : dashboardData?.locations;
-    const defaultLoc =
-      locList?.find((l: { isdefault?: boolean }) => l.isdefault)?.id ??
-      locList?.[0]?.id;
-    const ages = dashboardData?.driverages;
-    const defaultAge =
-      ages?.find((a) => a.isdefault)?.id ?? ages?.[0]?.id ?? 0;
-
-    if (!defaultLoc || !defaultAge) {
-      return;
-    }
-
-    const defaultSearchParams = {
-      pickup_location_id: Number(defaultLoc),
-      dropoff_location_id: Number(defaultLoc),
-      pickup_date: tomorrow.toISOString().split('T')[0],
-      pickup_time: '09:00',
-      dropoff_date: nextWeek.toISOString().split('T')[0],
-      dropoff_time: '09:00',
-      category_id: 0,
-      age_id: Number(defaultAge),
-    };
-
-    const finalSearchParams = searchParams || defaultSearchParams;
-
-    navigate('/cars/checkout/options', {
-      state: {
-        car: {
-          ...car,
-          searchParams: finalSearchParams,
-          locations: locList ?? [],
-        },
-      },
-    });
-  };
-
   return (
-    <div className="w-full flex flex-col gap-4">
-      <h2 className="text-[22px] font-extrabold text-black mb-2">Featured Cars</h2>
+    <section
+      id="featured-cars"
+      className="w-full flex flex-col gap-4 scroll-mt-28"
+      aria-labelledby="featured-cars-heading"
+    >
+      <h2
+        id="featured-cars-heading"
+        className="text-[22px] font-extrabold text-black mb-2"
+      >
+        Featured Cars
+      </h2>
       <div className="flex gap-4 lg:gap-6 overflow-x-auto snap-x pb-4 no-scrollbar">
         {carsToRender.map((car) => (
           <div key={String(car.id)} className="shrink-0 snap-center sm:snap-start flex flex-col w-[280px] md:w-[320px]">
@@ -114,9 +81,7 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
                 <p className="text-[#6b7280] text-[15px] mt-1 mb-5 font-medium">{car.description}</p>
 
                 <div className="mt-auto">
-                  <div className="bg-[#ffc107] rounded-[16px] py-4 px-4 flex flex-col items-center justify-center text-black shadow-sm mb-3 hover:bg-[#ffb000] transition-colors cursor-pointer"
-                  /* onClick={() => handleCarClick(car)} */
-                  >
+                  <div className="bg-[#ffc107] rounded-[16px] py-4 px-4 flex flex-col items-center justify-center text-black shadow-sm mb-3">
                     <div className="flex items-baseline gap-1">
                       <span className="text-[36px] font-extrabold leading-none tracking-tight">{formatPrice(car.daily_rate)}</span>
                       <span className="text-[16px] font-bold">/ day</span>
@@ -132,6 +97,6 @@ export function FeaturedCars({ cars, locations, searchParams }: FeaturedCarsProp
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

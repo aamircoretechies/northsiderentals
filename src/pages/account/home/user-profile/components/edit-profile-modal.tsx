@@ -1,6 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Check, ChevronDown, ArrowLeft } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,11 +24,11 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import { normalizeDobToIso } from '@/lib/dob';
 import { getFriendlyError } from '@/utils/api-error-handler';
 import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
 import { useAuth } from '@/auth/context/auth-context';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
-import { toAbsoluteUrl } from '@/lib/helpers';
 import { useLocation, useNavigate } from 'react-router';
 
 const profileFormInputClassName =
@@ -79,6 +93,8 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
   const [postalCode, setPostalCode] = useState('');
   const [countryId, setCountryId] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [driverLicense, setDriverLicense] = useState('');
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -119,8 +135,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
 
   const countries = rcmProfile?.countries ?? [];
   const email = rcmProfile?.email || profile.email || user?.email || '';
-  const avatarSrc =
-    profile.avatarUrl || toAbsoluteUrl('/media/avatars/blank.png');
 
   const handleSubmit = async () => {
     const cleanedFirst = firstName.trim();
@@ -151,6 +165,20 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     try {
       const idNum = countryId ? Number(countryId) : 0;
       const selected = countries.find((c) => c.id === idNum);
+
+      let dateOfBirthPayload: string | undefined;
+      const dobRaw = dateOfBirth.trim();
+      if (dobRaw) {
+        const iso = normalizeDobToIso(dobRaw);
+        if (!iso) {
+          toast.error(
+            'Please enter a valid date of birth (YYYY-MM-DD or DD/MM/YYYY).',
+          );
+          return;
+        }
+        dateOfBirthPayload = iso;
+      }
+
       await updateProfile({
         first_name: cleanedFirst,
         last_name: cleanedLast,
@@ -163,7 +191,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
         postal_code: cleanedPostalCode,
         country_id: idNum,
         country: selected?.country?.trim() || '',
-        date_of_birth: dateOfBirth.trim() || undefined,
+        date_of_birth: dateOfBirthPayload,
       });
       toast.success('Profile updated');
       setOpen(false);
@@ -195,7 +223,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
       <DialogTrigger asChild>{children}</DialogTrigger>
 
       <DialogContent
-        className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
+        className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[16px] pb-4"
         showCloseButton={false}
       >
         <div className="flex items-center p-4 pt-6 bg-[#f8f9fa]">
@@ -213,22 +241,14 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
 
         <div className="px-5 pb-6 overflow-y-auto max-h-[85vh]">
           <div className="flex items-center gap-5 mt-4 mb-8">
-            <div className="w-[100px] h-[100px] rounded-full overflow-hidden shrink-0 border border-gray-100 shadow-sm relative bg-muted">
-              {profile.avatarUrl ? (
-                <ProfileAvatarImage
-                  src={profile.avatarUrl}
-                  fallbackLabel={profile.displayName}
-                  alt="Profile"
-                  className="size-full object-cover"
-                  fallbackClassName="size-full"
-                />
-              ) : (
-                <img
-                  src={avatarSrc}
-                  alt="Profile"
-                  className="size-full object-cover"
-                />
-              )}
+            <div className="size-[100px] shrink-0 overflow-hidden rounded-full border border-gray-100 shadow-sm relative bg-muted aspect-square">
+              <ProfileAvatarImage
+                src={profile.avatarUrl}
+                fallbackLabel={profile.displayName}
+                alt="Profile"
+                className="size-full object-cover"
+                fallbackClassName="size-full"
+              />
             </div>
             <div className="flex flex-col gap-3">
               <span className="text-[#8692a6] text-[13px] leading-tight">
@@ -332,7 +352,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             <ProfileFormInput
               placeholder="Email"
               value={email}
-              onChange={() => {}}
+              onChange={() => { }}
               readOnly
             />
             <ProfileFormInput
@@ -340,11 +360,27 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
               value={mobile}
               onChange={setMobile}
             />
-            <ProfileFormInput
-              placeholder="Date of birth (YYYY-MM-DD)"
-              value={dateOfBirth}
-              onChange={setDateOfBirth}
-            />
+            <div className="flex flex-col gap-1">
+              <input
+                type="text"
+                placeholder="Date of birth (YYYY-MM-DD or DD/MM/YYYY)"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                onBlur={() => {
+                  const t = dateOfBirth.trim();
+                  if (!t) return;
+                  const iso = normalizeDobToIso(t);
+                  if (iso) setDateOfBirth(iso);
+                }}
+                className={profileFormInputClassName}
+                autoComplete="bday"
+                aria-label="Date of birth"
+              />
+              <p className="text-[11px] text-[#8692a6] px-1">
+                Optional. Recognised formats are normalized when you leave the field; the server receives a standard date
+                string.
+              </p>
+            </div>
           </div>
 
           <h2 className="text-[#8692a6] font-bold text-[14px] uppercase tracking-wide mb-3 mt-8">
@@ -369,27 +405,51 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="relative w-full shadow-sm rounded-[12px]">
-                <select
-                  value={countryId}
-                  onChange={(e) => setCountryId(e.target.value)}
-                  className="w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] focus:ring-1 focus:ring-[#0061e0] outline-none appearance-none font-medium"
-                >
-                  <option value="">Country</option>
-                  {countries.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.country}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                  <ChevronDown className="w-4 h-4" />
-                </div>
+              <div className="relative w-full">
+                <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium flex items-center justify-between shadow-sm transition-all text-left"
+                    >
+                      <span className="truncate">
+                        {countries.find((c) => String(c.id) === countryId)?.country || 'Country'}
+                      </span>
+                      <ChevronDown className={cn("w-4 h-4 opacity-50 transition-transform", comboboxOpen && "rotate-180")} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 border border-gray-100 shadow-xl rounded-[12px] overflow-hidden" align="start">
+                    <Command className="w-full">
+                      <CommandInput placeholder="Search country..." className="border-none" />
+                      <CommandList className="max-h-[250px] overflow-y-auto">
+                        <CommandEmpty>No country found.</CommandEmpty>
+                        <CommandGroup>
+                          {countries.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.country}
+                              onSelect={() => {
+                                setCountryId(String(c.id));
+                                setComboboxOpen(false);
+                              }}
+                              className="px-4 py-3 flex items-center justify-between cursor-pointer data-[selected=true]:bg-gray-50"
+                            >
+                              <span className="truncate">{c.country}</span>
+                              {String(c.id) === countryId && <Check className="w-4 h-4 text-[#0061e0] shrink-0" />}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <ProfileFormInput
                 placeholder="Post code"
                 value={postalCode}
-                onChange={setPostalCode}
+                onChange={(v) => {
+                  if (/^\d*$/.test(v)) setPostalCode(v);
+                }}
               />
             </div>
           </div>

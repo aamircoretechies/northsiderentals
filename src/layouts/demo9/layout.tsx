@@ -61,11 +61,15 @@ export function Demo9Layout() {
               <ToolbarHeading />
 
               <ToolbarActions>
-                {!pathname.includes('/cars/checkout/success') && pathname !== '/home' && pathname !== '/' && (<Button variant="outline" asChild>
-                  <a onClick={() => navigate(-1)}>
+                {!pathname.includes('/cars/checkout/success') && pathname !== '/home' && pathname !== '/' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate(-1)}
+                  >
                     Go Back
-                  </a>
-                </Button>)}
+                  </Button>
+                )}
               </ToolbarActions>
             </Toolbar>
           )}

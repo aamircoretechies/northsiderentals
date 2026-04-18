@@ -18,6 +18,8 @@ const DEFAULT_AVATAR: ImageInputFile[] = [
 export type AvatarInputProps = {
   /** When `onPickFile` is set, this URL is shown until the user picks a new file. */
   remoteImageUrl?: string | null;
+  /** Shown in the placeholder circle when there is no photo (initials). */
+  fallbackLabel?: string | null;
   onPickFile?: (file: File) => Promise<void>;
   onRemoveRemote?: () => Promise<void>;
   busy?: boolean;
@@ -28,7 +30,15 @@ export type AvatarInputProps = {
 };
 
 export function AvatarInput(props: AvatarInputProps = {}) {
-  const { remoteImageUrl, onPickFile, onRemoveRemote, busy, compact, hideRemove } = props;
+  const {
+    remoteImageUrl,
+    fallbackLabel,
+    onPickFile,
+    onRemoveRemote,
+    busy,
+    compact,
+    hideRemove,
+  } = props;
   const isApiMode = Boolean(onPickFile);
 
   const [standaloneAvatar, setStandaloneAvatar] =
@@ -62,7 +72,11 @@ export function AvatarInput(props: AvatarInputProps = {}) {
     ? handleApiChange
     : (files: ImageInputFile[]) => setStandaloneAvatar(files);
 
-  const showImg = value.length > 0 && Boolean(value[0]?.dataURL);
+  const previewDataUrl = value[0]?.dataURL;
+  const displaySrc =
+    (typeof previewDataUrl === 'string' && previewDataUrl.trim()) ||
+    (remoteImageUrl?.trim() ?? '');
+  const showImg = Boolean(displaySrc);
   const showRemove = !hideRemove && (!isApiMode || Boolean(remoteImageUrl));
 
   return (
@@ -73,7 +87,7 @@ export function AvatarInput(props: AvatarInputProps = {}) {
     >
       {({ onImageUpload }) => (
         <div
-          className={`relative cursor-pointer ${compact ? 'size-10' : 'size-16'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
+          className={`relative aspect-square cursor-pointer shrink-0 overflow-hidden rounded-full ${compact ? 'size-10' : 'size-16'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
           onClick={onImageUpload}
         >
           <TooltipProvider>
@@ -104,21 +118,16 @@ export function AvatarInput(props: AvatarInputProps = {}) {
               </Tooltip>
             )}
           </TooltipProvider>
-          <div
-            className="relative border-2 border-green-500 rounded-full overflow-hidden"
-            style={{
-              backgroundImage: `url(${toAbsoluteUrl(`/media/avatars/blank.png`)})`,
-            }}
-          >
-            {showImg && value[0].dataURL ? (
-              <ProfileAvatarImage
-                src={value[0].dataURL}
-                alt="avatar"
-                className="size-full object-cover"
-              />
-            ) : null}
+          <div className="relative size-full min-h-0 min-w-0 border-2 border-green-500 rounded-full bg-muted overflow-hidden">
+            <ProfileAvatarImage
+              src={showImg ? displaySrc : null}
+              fallbackLabel={fallbackLabel ?? ''}
+              alt="Profile photo"
+              className="size-full object-cover"
+              fallbackClassName="size-full"
+            />
             <div
-              className={`flex items-center justify-center cursor-pointer left-0 right-0 bottom-0 bg-black/25 absolute ${compact ? 'h-3.5' : 'h-5'}`}
+              className={`pointer-events-none flex items-center justify-center absolute inset-x-0 bottom-0 bg-black/25 ${compact ? 'h-3.5' : 'h-5'}`}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

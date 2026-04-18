@@ -1,4 +1,4 @@
-import { PropsWithChildren, useEffect, useState } from 'react';
+import { PropsWithChildren, useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { SupabaseAdapter } from '@/auth/adapters/supabase-adapter';
 import { AuthContext } from '@/auth/context/auth-context';
@@ -33,16 +33,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => window.removeEventListener('app:auth-expired', onAuthExpired);
   }, []);
 
-  const verify = async () => {
-    if (auth) {
-      try {
-        const user = await getUser();
-        setCurrentUser(user || undefined);
-      } catch {
-        setCurrentUser(undefined);
-      }
+  /**
+   * Refresh Supabase-backed user metadata when available.
+   * Email/password and Google login against the **API** store JWT in localStorage; that session
+   * is not always mirrored in `supabase.auth`. Clearing `currentUser` when Supabase has no user
+   * made every navigation (including browser back) look like a logout while the token was still valid.
+   */
+  const verify = useCallback(async () => {
+    const stored = authHelper.getAuth();
+    if (!stored?.access_token?.trim()) {
+      setCurrentUser(undefined);
+      return;
     }
-  };
+    try {
+      const user = await SupabaseAdapter.getCurrentUser();
+      if (user) {
+        setCurrentUser(user);
+      }
+      // If we have an API token but no Supabase session, keep the previous user snapshot (if any).
+    } catch {
+      // Do not clear currentUser: backend-only JWT sessions may not have Supabase user metadata.
+    }
+  }, []);
 
   const saveAuth = (auth: AuthModel | undefined) => {
     setAuth(auth);

@@ -158,6 +158,17 @@ export function SignInPage() {
         className="block w-full space-y-5"
         noValidate
       >
+
+        <div className="flex justify-center pb-2">
+          <Link to="/">
+            <img
+              src="/media/app/logo-nsr.svg"
+              className="h-10 shrink-0"
+              alt="Logo"
+            />
+          </Link>
+        </div>
+
         <div className="text-center space-y-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight">Sign In</h1>
           <p className="text-sm text-muted-foreground">

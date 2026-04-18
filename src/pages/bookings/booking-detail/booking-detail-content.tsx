@@ -350,7 +350,7 @@ export function BookingDetailContent() {
 
   return (
     <div className="flex flex-col h-full pb-[250px] relative lg:pb-12">
-      <div className="flex items-center justify-between px-6 py-4 bg-white sticky top-0 z-10 shadow-sm border-b border-gray-100">
+      <div className="flex items-center justify-between px-6 py-4 bg-white sticky top-0 z-10 ">
         <div className="flex items-center gap-4">
           <button
             type="button"
@@ -372,7 +372,10 @@ export function BookingDetailContent() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[260px] p-2 rounded-[16px]">
-              <DropdownMenuItem className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]">
+              <DropdownMenuItem
+                className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"
+                onSelect={() => window.open('https://shuttle.northsiderentals.com.au/', '_blank')}
+              >
                 <span
                   className="text-[18px] text-black tracking-tight"
                   style={{
@@ -384,12 +387,18 @@ export function BookingDetailContent() {
                   Book Airport Shuttle
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]">
+              <DropdownMenuItem
+                className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"
+                onSelect={() => window.open('https://ptv.northsiderentals.com.au/', '_blank')}
+              >
                 <span className="text-[18px] text-black tracking-tight">
                   Book PTV Inspection
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]">
+              <DropdownMenuItem
+                className="py-4 px-4 focus:bg-gray-50 cursor-pointer rounded-[8px]"
+                onSelect={() => window.open('https://servicing.northsiderentals.com.au/', '_blank')}
+              >
                 <span
                   className="text-[18px] text-black tracking-tight"
                   style={{
@@ -511,7 +520,7 @@ export function BookingDetailContent() {
               </div>
 
               <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm flex flex-col">
-                <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
+                <div className="p-4 sm:p-5 flex flex-row sm:flex-row gap-4">
                   <div className="w-[120px] h-[80px] sm:w-[140px] sm:h-[90px] shrink-0 bg-[#f8f9fc] rounded-[10px] flex items-center justify-center p-2">
                     {normalizeMediaUrl(view.carImage) ? (
                       <img
@@ -630,7 +639,7 @@ export function BookingDetailContent() {
 
       {!loading && !error && view ? (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-[24px] z-20 transition-all duration-300 ease-in-out">
-          <div 
+          <div
             className="flex justify-center pt-3 pb-2 cursor-pointer active:opacity-70 transition-opacity"
             onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
             role="button"

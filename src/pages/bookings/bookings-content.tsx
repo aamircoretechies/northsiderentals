@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search as SearchIcon, Loader2, AlertCircle } from 'lucide-react';
+import { Search as SearchIcon, Loader2, AlertCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/context/auth-context';
@@ -216,55 +216,57 @@ export function BookingsContent() {
 
   return (
     <div className="flex flex-col items-stretch gap-7">
-      <div className="rounded-2xl border border-border bg-muted/20 p-4 sm:p-5 space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Find a booking</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Enter your confirmation or reservation number and the last name on the
-            reservation. Works with or without signing in.
-          </p>
+      {!isAuthed ? (
+        <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Find a booking</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter your confirmation or reservation number and the last name on the
+              reservation.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <Input
+              id="bookings-lookup-reservation"
+              value={lookupReservation}
+              onChange={(e) => setLookupReservation(e.target.value)}
+              placeholder="Confirmation / reservation #"
+              className="flex-1 px-2 py-2 text-[13px]"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleFindBooking();
+              }}
+            />
+            <Input
+              id="bookings-lookup-lastname"
+              value={lookupLastName}
+              onChange={(e) => setLookupLastName(e.target.value)}
+              placeholder="Last name on booking"
+              className="flex-1 sm:max-w-[220px] px-2 py-2 text-[13px]"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleFindBooking();
+              }}
+            />
+            <Button
+              type="button"
+              className="shrink-0 bg-[#0061e0] hover:bg-[#0052cc] text-white"
+              disabled={lookupLoading}
+              onClick={() => void handleFindBooking()}
+            >
+              {lookupLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin me-2 inline" />
+                  Finding…
+                </>
+              ) : (
+                'Find'
+              )}
+            </Button>
+          </div>
+          {lookupError ? (
+            <p className="text-sm text-destructive">{lookupError}</p>
+          ) : null}
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full">
-          <Input
-            id="bookings-lookup-reservation"
-            value={lookupReservation}
-            onChange={(e) => setLookupReservation(e.target.value)}
-            placeholder="Confirmation / reservation #"
-            className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleFindBooking();
-            }}
-          />
-          <Input
-            id="bookings-lookup-lastname"
-            value={lookupLastName}
-            onChange={(e) => setLookupLastName(e.target.value)}
-            placeholder="Last name on booking"
-            className="flex-1 sm:max-w-[220px]"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleFindBooking();
-            }}
-          />
-          <Button
-            type="button"
-            className="shrink-0 bg-[#0061e0] hover:bg-[#0052cc] text-white"
-            disabled={lookupLoading}
-            onClick={() => void handleFindBooking()}
-          >
-            {lookupLoading ? (
-              <>
-                <Loader2 className="size-4 animate-spin me-2 inline" />
-                Finding…
-              </>
-            ) : (
-              'Find'
-            )}
-          </Button>
-        </div>
-        {lookupError ? (
-          <p className="text-sm text-destructive">{lookupError}</p>
-        ) : null}
-      </div>
+      ) : null}
 
       {isAuthed ? (
         <>
@@ -279,8 +281,18 @@ export function BookingsContent() {
                 value={searchInput}
                 placeholder="Filter your list by confirmation #, car, or status…"
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="ps-9 pe-4 w-full"
+                className="ps-9 pe-10 w-full"
               />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput('')}
+                  className="absolute end-3 p-1 rounded-full hover:bg-gray-100/50 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -320,14 +332,16 @@ export function BookingsContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-5 justify-between">
-            {!listAreaLoading ? (
-              <h3 className="text-sm font-medium text-muted-foreground">
-                {`${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`}
-                {searchInput.trim() && items.length !== filtered.length
-                  ? ` (filtered from ${items.length})`
-                  : null}
-              </h3>
-            ) : null}
+            <h3 className="text-sm font-medium text-muted-foreground">
+              {listAreaLoading
+                ? 'Loading…'
+                : `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`}
+              {!listAreaLoading &&
+              searchInput.trim() &&
+              items.length !== filtered.length
+                ? ` (filtered from ${items.length})`
+                : null}
+            </h3>
           </div>
 
           {error ? (
@@ -351,8 +365,8 @@ export function BookingsContent() {
             <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-14 text-center text-muted-foreground">
               <p className="font-medium text-foreground">No bookings in your list</p>
               <p className="text-sm mt-2 max-w-md mx-auto">
-                Use &quot;Find a booking&quot; above with your confirmation number and last
-                name, or try another status filter after you have bookings on this account.
+                Try another status tab or adjust your search. New bookings may take a moment
+                to appear here.
               </p>
             </div>
           ) : null}
@@ -385,8 +399,7 @@ export function BookingsContent() {
         </>
       ) : !authLoading ? (
         <p className="text-sm text-muted-foreground text-center sm:text-start">
-          Sign in to see your booking list here. You can still open any reservation with
-          &quot;Find a booking&quot; above.
+          Sign in to see your bookings here with search and filters.
         </p>
       ) : null}
     </div>

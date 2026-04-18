@@ -11,14 +11,24 @@ export function Promotions({ promotions }: PromotionsProps) {
   }
 
   return (
-    <div className="w-full flex flex-col gap-4">
-      <h2 className="text-[22px] font-extrabold text-black mb-2">Promotions</h2>
+    <section
+      id="promotions"
+      className="w-full flex flex-col gap-4 scroll-mt-28"
+      aria-labelledby="promotions-heading"
+    >
+      <h2
+        id="promotions-heading"
+        className="text-[22px] font-extrabold text-black mb-2"
+      >
+        Promotions
+      </h2>
       <div className="flex gap-4 lg:gap-6 overflow-x-auto snap-x pb-4 no-scrollbar">
         {promotions.map((promo) => (
           <div
             key={String(promo.id)}
             className="shrink-0 snap-center sm:snap-start flex flex-col w-[calc(100%)] md:w-[calc(100%)] lg:w-[calc(70%-0.5rem)] group"
           >
+            {/* Intentionally non-interactive: do not use promo.link for navigation. */}
             <div className="bg-[#f0f4f9] rounded-[24px] overflow-hidden relative shadow-sm hover:shadow-md transition-all duration-300 w-full aspect-[3/1] sm:aspect-[3/1]">
               <img
                 src={promo.image_url.startsWith('http') ? promo.image_url : toAbsoluteUrl(promo.image_url)}
@@ -42,6 +52,6 @@ export function Promotions({ promotions }: PromotionsProps) {
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

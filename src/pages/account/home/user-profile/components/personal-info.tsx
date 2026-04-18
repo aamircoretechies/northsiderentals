@@ -81,6 +81,11 @@ const PersonalInfo = () => {
                     <AvatarInput
                       compact
                       remoteImageUrl={profile.avatarUrl}
+                      fallbackLabel={
+                        profile.displayName ||
+                        user?.email?.split('@')[0] ||
+                        ''
+                      }
                       onPickFile={async (file) => {
                         try {
                           await uploadProfilePicture(file);
@@ -89,21 +94,27 @@ const PersonalInfo = () => {
                           toast.error(getFriendlyError(e, 'Upload failed'));
                         }
                       }}
-                      onRemoveRemote={async () => {
-                        try {
-                          await deleteProfilePicture();
-                          toast.success('Photo removed');
-                        } catch (e) {
-                          toast.error(getFriendlyError(e, 'Could not remove photo'));
-                        }
-                      }}
+                      onRemoveRemote={
+                        profile.avatarUrl
+                          ? async () => {
+                              try {
+                                await deleteProfilePicture();
+                                toast.success('Photo removed');
+                              } catch (e) {
+                                toast.error(
+                                  getFriendlyError(e, 'Could not remove photo'),
+                                );
+                              }
+                            }
+                          : undefined
+                      }
                       busy={profileBusy}
                     />
                   ) : (
-                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500">
+                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500 bg-muted aspect-square">
                       <ProfileAvatarImage
                         src={profile.avatarUrl}
-                        fallbackLabel={fullName}
+                        fallbackLabel={fullName === '—' ? '' : fullName}
                         alt=""
                         className="size-full object-cover"
                         fallbackClassName="size-full"

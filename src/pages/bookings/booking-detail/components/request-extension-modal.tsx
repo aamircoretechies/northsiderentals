@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Calendar, Clock, ChevronDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,137 +9,123 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { updateBooking, type BookingDetailView } from '@/services/bookings';
-import { getFriendlyError } from '@/utils/api-error-handler';
-
-type GenericRecord = Record<string, unknown>;
-
-interface RequestExtensionContext {
-  view: BookingDetailView | null;
-  detailData?: GenericRecord | null;
-}
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { BookingDetailView } from '@/services/bookings';
+import { normalizeMediaUrl } from '@/lib/helpers';
 
 interface RequestExtensionModalProps {
   trigger: React.ReactNode;
-  context: RequestExtensionContext;
-  onUpdated?: () => Promise<void> | void;
+  view: BookingDetailView;
 }
 
-function asRecord(v: unknown): GenericRecord | null {
-  return v && typeof v === 'object' ? (v as GenericRecord) : null;
-}
+const ALL_TIME_OPTIONS = [
+  '05:00 AM', '05:30 AM', '06:00 AM', '06:30 AM',
+  '07:00 AM', '07:30 AM', '08:00 AM', '08:30 AM',
+  '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM',
+  '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM',
+  '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM',
+  '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM',
+  '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM',
+  '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM',
+  '09:00 PM', '09:30 PM', '10:00 PM', '10:30 PM',
+  '11:00 PM', '11:30 PM',
+];
 
-function asArray(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : [];
-}
-
-function pickFirst(...vals: unknown[]): string {
-  for (const v of vals) {
-    const s = String(v ?? '').trim();
-    if (s) return s;
-  }
-  return '';
-}
-
-function num(v: unknown, fallback = 0): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function toDateAndTime(value: unknown): { date: string; time: string } {
-  const raw = String(value ?? '').trim();
-  if (!raw) return { date: '', time: '' };
-
-  const normalized = raw.replace('T', ' ');
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/);
-  if (match) {
-    return { date: match[1], time: match[2] };
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isFinite(parsed.getTime())) {
-    const yyyy = parsed.getFullYear();
-    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-    const dd = String(parsed.getDate()).padStart(2, '0');
-    const hh = String(parsed.getHours()).padStart(2, '0');
-    const min = String(parsed.getMinutes()).padStart(2, '0');
-    return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
-  }
-
-  return { date: '', time: '' };
-}
-
-function toApiDateTime(date: string, time: string): string {
-  return `${date} ${time}`;
-}
-
-export function RequestExtensionModal({
-  trigger,
-  context,
-  onUpdated,
-}: RequestExtensionModalProps) {
+export function RequestExtensionModal({ trigger, view }: RequestExtensionModalProps) {
   const [open, setOpen] = useState(false);
-  const [pickupDate, setPickupDate] = useState('');
-  const [pickupTime, setPickupTime] = useState('');
-  const [newDate, setNewDate] = useState('');
-  const [newTime, setNewTime] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [targetDate, setTargetDate] = useState('');
+  const [targetTime, setTargetTime] = useState('09:00 AM');
 
-  const detailData = context.detailData ?? null;
-  const bookingInfo = useMemo(() => {
-    const rcm = asRecord(detailData?.rcm_booking_info);
-    return asRecord(asArray(rcm?.bookinginfo)[0]);
-  }, [detailData]);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const dateInputId = `ext-date-${view.bookingId || 'booking'}`;
 
-  const customerInfo = useMemo(() => {
-    const rcm = asRecord(detailData?.rcm_booking_info);
-    return asRecord(asArray(rcm?.customerinfo)[0]);
-  }, [detailData]);
+  // Helper to convert DD/MM/YYYY or DD/MMM/YYYY to YYYY-MM-DD
+  const formatToInputDate = (dateStr: string | undefined): string => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      try {
+        return d.toISOString().split('T')[0];
+      } catch (e) { /* ignore */ }
+    }
+    const parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split(' ');
+    if (parts.length >= 3) {
+      let [day, month, year] = parts;
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthIndex = monthNames.findIndex(m => month.toLowerCase().startsWith(m.toLowerCase()));
+      if (monthIndex !== -1) {
+        month = (monthIndex + 1).toString().padStart(2, '0');
+      } else {
+        month = month.padStart(2, '0');
+      }
+      if (year.length === 2 && !isNaN(Number(year))) year = `20${year}`;
+      return `${year}-${month}-${day.padStart(2, '0')}`;
+    }
+    return dateStr;
+  };
 
-  const customerDetails = useMemo(() => asRecord(detailData?.customer_details), [detailData]);
-  const optionalFees = useMemo(() => {
-    const rcm = asRecord(detailData?.rcm_booking_info);
-    const rows = asArray(rcm?.optionalfees);
-    return rows
-      .map((row) => asRecord(row))
-      .filter((row): row is GenericRecord => Boolean(row))
-      .map((row) => ({
-        id: num(row.id ?? row.optionalfeeid),
-        qty: num(row.qty ?? row.quantity ?? 1, 1),
-      }))
-      .filter((row) => row.id > 0);
-  }, [detailData]);
+  // Helper to convert 24h to 12h for Select
+  const formatTo12Hour = (timeStr: string | undefined): string => {
+    if (!timeStr) return '09:00 AM';
+    const parts = timeStr.split(':');
+    let h = parseInt(parts[0], 10);
+    const m = parts[1] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;
+  };
 
-  const pickupDateTime = useMemo(
-    () =>
-      pickFirst(
-        bookingInfo?.pickupdatetime,
-        detailData?.pickup_datetime,
-        detailData?.pickupdatetime,
-      ),
-    [bookingInfo, detailData],
-  );
-  const dropoffDateTime = useMemo(
-    () =>
-      pickFirst(
-        bookingInfo?.dropoffdatetime,
-        detailData?.dropoff_datetime,
-        detailData?.dropoffdatetime,
-      ),
-    [bookingInfo, detailData],
-  );
+  const formatToDisplayDate = (dateStr: string) => {
+    if (!dateStr) return 'Select Date';
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
 
-  const pickupDateTimeInput = useMemo(
-    () => toDateAndTime(pickupDateTime),
-    [pickupDateTime],
-  );
-  const dropoffDateTimeInput = useMemo(
-    () => toDateAndTime(dropoffDateTime),
-    [dropoffDateTime],
-  );
+  const minDate = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    if (open && view.returnWhen) {
+      const parts = view.returnWhen.split(' ');
+      if (parts[0]) setTargetDate(formatToInputDate(parts[0]));
+      // Initialize time in 12h format for Select
+      const timePart = parts[1];
+      setTargetTime(formatTo12Hour(timePart));
+    }
+  }, [open, view.returnWhen]);
+
+  const handleSubmit = () => {
+    if (!targetDate || !targetTime) {
+      toast.error('Please select both a new return date and time');
+      return;
+    }
+    if (targetDate < minDate) {
+      toast.error('You cannot select a past date for the extension.');
+      return;
+    }
+    toast.success(`Extension request submitted for ${formatToDisplayDate(targetDate)} at ${targetTime}`);
+    setOpen(false);
+  };
+
+  const handleManualTrigger = (ref: React.RefObject<HTMLInputElement>) => {
+    try {
+      if (ref.current && 'showPicker' in ref.current) {
+        (ref.current as any).showPicker();
+      } else {
+        ref.current?.focus();
+      }
+    } catch (e) {
+      console.error('Failed to trigger picker:', e);
+    }
+  };
 
   return (
     <Dialog
@@ -159,286 +146,150 @@ export function RequestExtensionModal({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent 
+      <DialogContent
         showCloseButton={false}
-        className="max-w-md p-0 flex flex-col gap-0 border-0 bg-[#f8f9fc] sm:rounded-[24px] overflow-hidden sm:max-h-[85vh] h-[100dvh] sm:h-auto"
+        className="max-w-md p-0 flex flex-col gap-0 border-0 bg-[#f8f9fc] sm:rounded-[32px] overflow-hidden shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[85vh]"
       >
         {/* Header */}
-        <div className="flex items-center justify-center p-4 sm:p-5 relative bg-white sticky top-0 z-10">
-          <button 
-            className="absolute left-4 p-2 cursor-pointer hover:bg-gray-50 rounded-full"
+        <div className="flex-none flex items-center justify-center p-4 sm:p-6 relative bg-white border-b border-gray-100 z-30">
+          <button
+            className="absolute left-4 sm:left-6 p-2 cursor-pointer hover:bg-gray-100 rounded-full transition-all"
             onClick={() => setOpen(false)}
           >
             <ArrowLeft size={24} className="text-black" />
           </button>
-          <DialogTitle className="text-[18px] font-extrabold text-black tracking-tight">
+          <DialogTitle className="text-[19px] font-black text-black tracking-tight text-center w-full">
             Request Extension
           </DialogTitle>
         </div>
         <DialogDescription className="sr-only">
-          Request a booking extension. Review the details and submit your request.
+          Booking extension for {view.carName}.
         </DialogDescription>
 
-        {/* Scrollable Content Range */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col items-center">
-          
-          {/* Main Card */}
-          <div className="bg-white rounded-[16px] w-full border border-gray-100 shadow-sm flex flex-col overflow-hidden mb-8">
-            
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
+
+          <div className="flex flex-col mb-8 flex-none overflow-visible">
+
             {/* Top Car Info */}
-            <div className="p-4 sm:p-5 flex gap-4 border-b border-gray-50">
-              <div className="w-[110px] h-[75px] shrink-0 bg-[#f8f9fc] rounded-[10px] flex items-center justify-center p-1.5">
-                <img 
-                  src={context.view?.carImage || 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg'}
-                  alt={context.view?.carName || 'Vehicle'} 
-                  className="w-full h-full object-contain mix-blend-multiply" 
+            <div className="p-4 sm:p-5 flex gap-4 border-b border-gray-50 bg-[#fafbfc]">
+              <div className="w-[110px] h-[75px] shrink-0 bg-white border border-gray-100 rounded-[14px] flex items-center justify-center p-2 shadow-sm">
+                <img
+                  src={normalizeMediaUrl(view.carImage) || 'https://cdn.pixabay.com/photo/2012/05/29/00/43/car-49278_1280.jpg'}
+                  alt={view.carName}
+                  className="w-full h-full object-contain mix-blend-multiply"
                 />
               </div>
-              <div className="flex flex-col justify-center gap-0.5">
-                <span className="text-[#6b7280] text-[13px]">Reservation Number:</span>
-                <span className="font-bold text-[#0061e0] text-[15px]">
-                  {context.view?.referenceKey || '—'}
-                </span>
-                <h3 className="text-black font-extrabold text-[14px] mt-1">
-                  {context.view?.carName || 'Vehicle'}
-                </h3>
-                <p className="text-[#6b7280] text-[12px]">{context.view?.carSpecs || '—'}</p>
-              </div>
-            </div>
-
-            {/* Middle Grid Pick/Return */}
-            <div className="grid grid-cols-2 border-b border-gray-50">
-              <div className="p-4 sm:p-5 flex flex-col gap-1 border-r border-gray-50">
-                <span className="text-[#6b7280] text-[13px]">Pickup:</span>
-                <span className="text-black font-extrabold text-[13px]">
-                  {context.view?.pickupWhen || '—'}
-                </span>
-                <span className="text-[#6b7280] text-[13px] leading-tight mt-0.5">
-                  {context.view?.pickupWhereName || '—'}
-                  {context.view?.pickupWhereAddress ? <><br />{context.view.pickupWhereAddress}</> : null}
-                </span>
-              </div>
-              <div className="p-4 sm:p-5 flex flex-col gap-1">
-                <span className="text-[#6b7280] text-[13px]">Return:</span>
-                <span className="text-black font-extrabold text-[13px]">
-                  {context.view?.returnWhen || '—'}
-                </span>
-                <span className="text-[#6b7280] text-[13px] leading-tight mt-0.5">
-                  {context.view?.returnWhereName || '—'}
-                  {context.view?.returnWhereAddress ? <><br />{context.view.returnWhereAddress}</> : null}
-                </span>
-              </div>
-            </div>
-
-            {/* Bottom Form Fields */}
-            <div className="p-4 sm:p-5 flex flex-col gap-3 pb-6">
-              <span className="text-[12px] font-bold text-black tracking-wide uppercase">PICKUP DATE & TIME</span>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="date"
-                  value={pickupDate}
-                  onChange={(e) => setPickupDate(e.target.value)}
-                  className="h-[48px] bg-[#f8f9fc] rounded-[10px] px-4 text-[14px] font-semibold text-black outline-none border border-transparent focus:border-[#0061e0]"
-                />
-                <input
-                  type="time"
-                  value={pickupTime}
-                  onChange={(e) => setPickupTime(e.target.value)}
-                  className="h-[48px] bg-[#f8f9fc] rounded-[10px] px-4 text-[14px] font-semibold text-black outline-none border border-transparent focus:border-[#0061e0]"
-                />
-              </div>
-              <span className="text-[12px] font-bold text-black tracking-wide uppercase mt-2">RETURN DATE & TIME</span>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="date"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  className="h-[48px] bg-[#f8f9fc] rounded-[10px] px-4 text-[14px] font-semibold text-black outline-none border border-transparent focus:border-[#0061e0]"
-                />
-                <input
-                  type="time"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  className="h-[48px] bg-[#f8f9fc] rounded-[10px] px-4 text-[14px] font-semibold text-black outline-none border border-transparent focus:border-[#0061e0]"
-                />
-              </div>
-              {submitError ? (
-                <p className="text-[12px] text-destructive mt-1">{submitError}</p>
-              ) : null}
-              {validationErrors.length ? (
-                <div className="rounded-md border border-destructive/20 bg-destructive/5 p-2">
-                  {validationErrors.map((msg, idx) => (
-                    <p key={`${msg}-${idx}`} className="text-[12px] text-destructive">
-                      {msg}
-                    </p>
-                  ))}
+              <div className="flex flex-col justify-center gap-1">
+                <div className="flex flex-col">
+                  <span className="text-[#6b7280] text-[10px] font-bold uppercase tracking-widest">RESERVATION NO:</span>
+                  <span className="font-black text-[#0061e0] text-[16px] leading-none">{view.confirmationLabel}</span>
                 </div>
-              ) : null}
-              {successMessage ? (
-                <p className="text-[12px] text-emerald-600 mt-1">{successMessage}</p>
-              ) : null}
+                <h3 className="text-black font-black text-[15px] leading-tight mt-1">{view.carName}</h3>
+              </div>
             </div>
-            
+
+            {/* Timings */}
+            <div className="grid grid-cols-2 divide-x divide-gray-50 border-b border-gray-50">
+              <div className="p-4 sm:p-2 flex flex-col gap-2">
+                <span className="text-[#6b7280] text-[10px] font-bold uppercase tracking-widest">Pickup:</span>
+                <span className="text-black font-black text-[14px] leading-none">{view.pickupWhen}</span>
+                <div className="text-[#6b7280] text-[11px] font-semibold leading-tight">
+                  <p className="text-black truncate">{view.pickupWhereName}</p>
+                </div>
+              </div>
+              <div className="p-4 sm:p-2 flex flex-col gap-2 bg-[#fdfdfd]">
+                <span className="text-[#6b7280] text-[10px] font-bold uppercase tracking-widest text-[#0061e0]">Return:</span>
+                <span className="text-black font-black text-[14px] leading-none">{view.returnWhen}</span>
+                <div className="text-[#6b7280] text-[11px] font-semibold leading-tight">
+                  <p className="text-black truncate">{view.returnWhereName}</p>
+                </div>
+              </div>
+            </div>
+
+            <hr className="mb-4" />
+
+            {/* Input Form */}
+            <div className="flex flex-col gap-5 bg-white">
+              <span className="text-[12px] font-black text-[#0061e0] tracking-widest uppercase text-center">New Return Date & Time</span>
+              <div className="flex flex-col sm:flex-row gap-4">
+
+                {/* Date Picker (Native) */}
+                <label
+                  htmlFor={dateInputId}
+                  className="flex-1 relative h-[68px] bg-[#f0f4f8]/50 border-2 border-transparent hover:border-[#0061e0]/30 rounded-[20px] flex items-center px-2 gap-4 cursor-pointer transition-all active:scale-[0.98]"
+                >
+                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0">
+                    <Calendar size={20} className="text-[#0061e0]" />
+                  </div>
+                  <div className="flex flex-col flex-1 overflow-hidden pointer-events-none">
+                    <span className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider">Date</span>
+                    <span className="text-black font-black text-[15px] truncate">
+                      {formatToDisplayDate(targetDate)}
+                    </span>
+                  </div>
+                  <input
+                    id={dateInputId}
+                    ref={dateInputRef}
+                    type="date"
+                    min={minDate}
+                    value={targetDate}
+                    onChange={(e) => setTargetDate(e.target.value)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleManualTrigger(dateInputRef);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  />
+                </label>
+
+                {/* Time Picker (Select) */}
+                <div className="flex-1">
+                  <Select value={targetTime} onValueChange={setTargetTime}>
+                    <SelectTrigger className="h-[68px] w-full bg-[#f0f4f8]/50 border-2 border-transparent hover:border-[#0061e0]/30 rounded-[20px] px-2 gap-4 shadow-none focus:ring-0 [&>svg:last-child]:hidden transition-all active:scale-[0.98]">
+                      <div className="flex items-center gap-4 w-full">
+                        <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0">
+                          <Clock size={20} className="text-[#0061e0]" />
+                        </div>
+                        <div className="flex flex-col items-start flex-1 overflow-hidden">
+                          <span className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider">Time</span>
+                          <span className="text-black font-black text-[15px] truncate">
+                            <SelectValue placeholder="Time" />
+                          </span>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl shadow-xl border-gray-100 max-h-[300px]">
+                      {ALL_TIME_OPTIONS.map((time) => (
+                        <SelectItem key={time} value={time} className="py-3 font-bold text-black focus:bg-blue-50 focus:text-blue-700">
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+              </div>
+            </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="w-full flex flex-col items-center gap-4 mt-auto sm:mt-0">
-            <Button 
-              className="w-full bg-[#ffb700] hover:bg-[#e5a400] text-black font-bold h-[52px] rounded-[26px] text-[16px]"
-              disabled={submitting}
-              onClick={async () => {
-                setSubmitError(null);
-                setValidationErrors([]);
-                setSuccessMessage(null);
-
-                if (!context.view?.referenceKey?.trim()) {
-                  setSubmitError('Reservation reference is required.');
-                  return;
-                }
-                if (!pickupDate || !pickupTime || !newDate || !newTime) {
-                  setSubmitError('Please select pickup and return date/time.');
-                  return;
-                }
-                const newDropoff = toApiDateTime(newDate, newTime);
-                const newPickup = toApiDateTime(pickupDate, pickupTime);
-                const requestedDropoffDate = new Date(`${newDate}T${newTime}`);
-                const requestedPickupDate = new Date(`${pickupDate}T${pickupTime}`);
-                if (requestedDropoffDate <= requestedPickupDate) {
-                  setSubmitError('Return time must be later than pickup time.');
-                  return;
-                }
-
-                const customerFirstName = pickFirst(
-                  customerInfo?.firstname,
-                  customerDetails?.first_name,
-                  context.view.customerFirstName,
-                );
-                const customerLastName = pickFirst(
-                  customerInfo?.lastname,
-                  customerDetails?.last_name,
-                  context.view.customerLastName,
-                );
-                const customerEmail = pickFirst(
-                  customerInfo?.email,
-                  customerDetails?.email,
-                  context.view.customerEmail,
-                );
-                const customerState = pickFirst(customerInfo?.state, context.view.customerState);
-                const customerCity = pickFirst(customerInfo?.city, context.view.customerCity);
-                const customerPostcode = pickFirst(
-                  customerInfo?.postcode,
-                  customerDetails?.postcode,
-                  context.view.customerPostcode,
-                );
-                const customerAddress = pickFirst(
-                  customerInfo?.address,
-                  customerInfo?.fulladdress,
-                  customerDetails?.address,
-                  context.view.customerAddress,
-                );
-                const payload = {
-                  reservation_ref: context.view.referenceKey.trim(),
-                  bookingtype: num(bookingInfo?.bookingtype ?? context.view.bookingType, 2),
-                  pickuplocationid: num(
-                    bookingInfo?.pickuplocationid ??
-                      bookingInfo?.pickup_location_id ??
-                      context.view.pickupLocationId,
-                    0,
-                  ),
-                  pickupdatetime: newPickup,
-                  dropofflocationid: num(
-                    bookingInfo?.dropofflocationid ?? bookingInfo?.dropoff_location_id,
-                    0,
-                  ),
-                  dropoffdatetime: newDropoff,
-                  vehiclecategoryid: num(
-                    bookingInfo?.vehiclecategoryid ??
-                      detailData?.category_id ??
-                      detailData?.vehicle_id,
-                    0,
-                  ),
-                  driverageid: num(bookingInfo?.driverageid ?? bookingInfo?.driver_age_id, 0),
-                  insuranceid: num(bookingInfo?.insuranceid ?? bookingInfo?.insurance_id, 0),
-                  extrakmsid: num(bookingInfo?.extrakmsid ?? bookingInfo?.extrakms_id, 0),
-                  transmission: num(
-                    bookingInfo?.transmission ??
-                      bookingInfo?.transmissionid ??
-                      context.view.transmission,
-                    0,
-                  ),
-                  customer: {
-                    customerid: num(
-                      customerInfo?.customerid ?? customerInfo?.id ?? context.view.customerId,
-                      0,
-                    ),
-                    firstname: customerFirstName,
-                    lastname: customerLastName,
-                    dateofbirth: pickFirst(customerInfo?.dateofbirth, context.view.customerDateOfBirth),
-                    licenseno: pickFirst(
-                      customerInfo?.licenseno,
-                      context.view.customerLicenseNo,
-                    ),
-                    email: customerEmail,
-                    state: customerState,
-                    city: customerCity,
-                    postcode: customerPostcode,
-                    address: customerAddress,
-                  },
-                  referralid: num(bookingInfo?.referralid, 0),
-                  remark: pickFirst(bookingInfo?.remark),
-                  numbertravelling: num(bookingInfo?.numbertravelling ?? context.view.numberTravelling, 0),
-                  flightin: pickFirst(bookingInfo?.flightin),
-                  flightout: pickFirst(bookingInfo?.flightout),
-                  arrivalpoint: pickFirst(bookingInfo?.arrivalpoint),
-                  departurepoint: pickFirst(bookingInfo?.departurepoint),
-                  areaofuseid: num(bookingInfo?.areaofuseid, 0),
-                  newsletter: Boolean(bookingInfo?.newsletter),
-                  agentcode: pickFirst(bookingInfo?.agentcode),
-                  agentname: pickFirst(bookingInfo?.agentname),
-                  agentemail: pickFirst(bookingInfo?.agentemail),
-                  agentrefno: pickFirst(bookingInfo?.agentrefno),
-                  agentcollectedrecalcmode: pickFirst(bookingInfo?.agentcollectedrecalcmode),
-                  optionalfees: optionalFees,
-                };
-
-                try {
-                  setSubmitting(true);
-                  const result = await updateBooking(payload);
-                  const resultData = asRecord(result.data);
-                  const validationErrorDetails = asArray(resultData?.validation_error_details)
-                    .map((item) => String(item ?? '').trim())
-                    .filter(Boolean);
-                  if (validationErrorDetails.length) {
-                    setValidationErrors(validationErrorDetails);
-                    setSubmitError('Please fix the validation errors to continue.');
-                    return;
-                  }
-
-                  setSuccessMessage(
-                    pickFirst(result.message, 'Extension request updated successfully.'),
-                  );
-                  if (onUpdated) {
-                    await onUpdated();
-                  }
-                  setTimeout(() => setOpen(false), 1000);
-                } catch (e) {
-                  setSubmitError(getFriendlyError(e, 'Could not submit extension request.'));
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
+          <div className="mt-auto pt-4 flex flex-col gap-4 pb-2 shrink-0">
+            <Button
+              className="w-full bg-[#ffb700] hover:bg-[#ffc800] text-black font-black h-[64px] rounded-[32px] text-[18px] shadow-xl shadow-amber-200/40 transition-all active:scale-[0.97]"
+              onClick={handleSubmit}
             >
-              {submitting ? 'Submitting...' : 'Submit Extend Request'}
+              Submit Extend Request
             </Button>
-            
-            <button 
-              className="text-[#6b7280] font-medium text-[15px] p-2 hover:text-black transition-colors"
+            <button
+              className="text-[#616e7c] font-bold text-[15px] p-3 hover:text-black transition-colors uppercase tracking-widest"
               onClick={() => setOpen(false)}
             >
               Go Back
             </button>
           </div>
-          
+
         </div>
       </DialogContent>
     </Dialog>

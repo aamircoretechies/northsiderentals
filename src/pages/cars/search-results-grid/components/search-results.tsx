@@ -437,6 +437,7 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
   };
 
   const filterText = searchInput.trim().toLowerCase();
+  const hasSearchText = filterText.length > 0;
   const matchSearch = (it: CarCardProps) =>
     it.title.toLowerCase().includes(filterText) ||
     (it.subtitle?.toLowerCase().includes(filterText) ?? false);
@@ -505,7 +506,7 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
           <h3 className="text-sm font-medium text-muted-foreground">
             {items.length === bookableItems.length
               ? `${items.length} vehicle${items.length === 1 ? '' : 's'} available`
-              : `${items.length} of ${bookableItems.length} vehicles match your search`}
+              : `${items.length} of ${bookableItems.length} vehicles match ${hasSearchText ? 'your search' : 'your filters'}`}
           </h3>
         ) : null}
 

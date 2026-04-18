@@ -56,6 +56,7 @@ import {
   Home,
   BriefcaseBusiness,
   LifeBuoyIcon,
+  CircleQuestionMark
 } from 'lucide-react';
 import { type MenuConfig } from './types';
 
@@ -110,7 +111,7 @@ export const MENU_SIDEBAR: MenuConfig = [
     ],
   },
   {
-    title: 'Bookings',
+    title: 'Booking',
     icon: LayoutGrid,
     children: [
       { title: 'Express Check-in', path: '/express-checkin' },
@@ -449,8 +450,8 @@ export const MENU_SIDEBAR: MenuConfig = [
             title: 'Stock Planner',
             path: '/store-admin/inventory/stock-planner',
           },
-          { title: 'Track Shipping', path: '/' },
-          { title: 'Create Shipping Label', path: '/' },
+          /* { title: 'Track Shipping', path: '/' }, */
+          /* { title: 'Create Shipping Label', path: '/' }, */
         ],
       },
     ],
@@ -811,7 +812,7 @@ export const MENU_SIDEBAR_COMPACT: MenuConfig = [
 
 export const MENU_MEGA: MenuConfig = [
   { title: 'Home', path: '/home' },
-  /*  { title: 'Home', path: '/' }, */
+
   {
     title: 'Profiles',
     children: [
@@ -1261,11 +1262,11 @@ export const MENU_MEGA: MenuConfig = [
 ];
 
 export const MENU_MEGA_MOBILE: MenuConfig = [
-  /*  {
-     title: 'Home',
-     icon: Home,
-     path: '/'
-   }, */
+  {
+    title: 'Home',
+    icon: Home,
+    path: '/'
+  },
 
   {
     title: 'Home',
@@ -1278,7 +1279,11 @@ export const MENU_MEGA_MOBILE: MenuConfig = [
     icon: BriefcaseBusiness,
     path: '/bookings'
   },
-
+  {
+    title: 'Help',
+    icon: CircleQuestionMark,
+    path: '/help'
+  },
   {
     title: 'Support',
     icon: LifeBuoyIcon,

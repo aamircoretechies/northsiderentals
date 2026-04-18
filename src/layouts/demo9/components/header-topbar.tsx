@@ -29,9 +29,10 @@ export function HeaderTopbar() {
                 variant="ghost"
                 mode="icon"
                 shape="circle"
-                className="hidden sm:block text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                className="hidden text-center item-center sm:block text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
                 title="SOS / Emergency"
                 onClick={() => navigate('/help')}
+
               >
                 <Siren className="size-[22px]!" />
               </Button>

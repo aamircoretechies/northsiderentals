@@ -95,30 +95,54 @@ export function SupportIssueModal({
         </DialogDescription>
 
         <div className="px-5 pb-8 pt-4 overflow-y-auto max-h-[85vh] flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder="Subject"
-            value={title}
-            disabled={submitting}
-            onChange={(e) => setTitle(e.target.value)}
-            className={inputClass}
-          />
-          <textarea
-            placeholder="Describe your issue"
-            value={description}
-            disabled={submitting}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            className={`${inputClass} resize-none min-h-[120px]`}
-          />
-          <input
-            type="text"
-            placeholder="Reservation reference (optional)"
-            value={reservationRef}
-            disabled={submitting}
-            onChange={(e) => setReservationRef(e.target.value)}
-            className={inputClass}
-          />
+          <div className="relative">
+            <div className="flex justify-end mb-1 px-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {title.length}/100
+              </span>
+            </div>
+            <input
+              type="text"
+              placeholder="Subject"
+              value={title}
+              disabled={submitting}
+              maxLength={100}
+              onChange={(e) => setTitle(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div className="relative">
+            <div className="flex justify-end mb-1 px-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {description.length}/500
+              </span>
+            </div>
+            <textarea
+              placeholder="Describe your issue"
+              value={description}
+              disabled={submitting}
+              maxLength={500}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className={`${inputClass} resize-none min-h-[120px]`}
+            />
+          </div>
+          <div className="relative">
+            <div className="flex justify-end mb-1 px-1">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {reservationRef.length}/50
+              </span>
+            </div>
+            <input
+              type="text"
+              placeholder="Reservation reference (optional)"
+              value={reservationRef}
+              disabled={submitting}
+              maxLength={50}
+              onChange={(e) => setReservationRef(e.target.value)}
+              className={inputClass}
+            />
+          </div>
 
           <div className="mt-4 mb-2">
             <Button

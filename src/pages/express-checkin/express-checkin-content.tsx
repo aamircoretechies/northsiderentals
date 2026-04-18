@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLocation, useNavigate } from 'react-router';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -300,6 +301,7 @@ export function ExpressCheckinContent() {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [launchingPayment, setLaunchingPayment] = useState(false);
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
+  const { rcmProfile } = useDashboardData();
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
   const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
 
@@ -1538,6 +1540,29 @@ export function ExpressCheckinContent() {
         {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
         <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
 
+          <CollapsibleCard
+            title={stepName(steps, 'customerdetails', 'CUSTOMER DETAILS')}
+            isOpen={openCard === 'customer'}
+            onToggle={() => toggleCard('customer')}
+          >
+            <CustomerDetailsCard
+              value={customerForm}
+              onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+              countries={rcmProfile?.countries ?? []}
+            />
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={() => void saveCustomerStep()}
+                disabled={savingStep === 'customer' || Boolean(bookingLockedReason)}
+                className="bg-[#ffc107] text-black"
+              >
+                {savingStep === 'customer' ? 'Saving...' : 'Save'}
+              </Button>
+              <Button variant="outline" onClick={() => setCustomerForm(initialCustomerForm)}>
+                Cancel
+              </Button>
+            </div>
+          </CollapsibleCard>
           {isUpdateMode ? (
             <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">MODIFY BOOKING</h3>

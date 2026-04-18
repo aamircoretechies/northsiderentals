@@ -229,56 +229,75 @@ export function CarsCheckoutDetailsContent() {
             <h2 className="text-[#6b7280] font-bold text-[13px] tracking-wide uppercase">Customer Details</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <input
-                type="text"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                placeholder="First Name"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                placeholder="Last Name"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="Email"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleChange}
-                placeholder="Phone (with country code)"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <div className="relative md:col-span-1">
-                <span className="sr-only">Number of people traveling</span>
-                <select
-                  name="numberOfPeople"
-                  value={formData.numberOfPeople}
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="firstName" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">First Name</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
                   onChange={handleChange}
-                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
-                >
-                  <option value="1">1 person</option>
-                  <option value="2">2 people</option>
-                  <option value="3">3 people</option>
-                  <option value="4">4 people</option>
-                  <option value="5+">5+ people</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
-                  <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  placeholder="First Name"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="lastName" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Last Name</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  placeholder="Last Name"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="email" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="Email"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="phone" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Phone</label>
+                <input
+                  id="phone"
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="Phone (with country code)"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1 md:col-span-1">
+                <label htmlFor="numberOfPeople" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Number of travellers</label>
+                <div className="relative">
+                  <select
+                    id="numberOfPeople"
+                    name="numberOfPeople"
+                    value={formData.numberOfPeople}
+                    onChange={handleChange}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                  >
+                    <option value="1">1 person</option>
+                    <option value="2">2 people</option>
+                    <option value="3">3 people</option>
+                    <option value="4">4 people</option>
+                    <option value="5+">5+ people</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
@@ -302,31 +321,45 @@ export function CarsCheckoutDetailsContent() {
                   name="dob"
                   value={formData.dob}
                   onChange={handleChange}
-                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  onKeyDown={(e) => e.preventDefault()}
+                  onClick={(e) => (e.target as any).showPicker?.()}
+                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none cursor-pointer"
                 />
               </div>
 
-              <input
-                type="text"
-                name="licenseNumber"
-                value={formData.licenseNumber}
-                onChange={handleChange}
-                placeholder="License Number"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="licenseNumber" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">License Number</label>
+                <input
+                  id="licenseNumber"
+                  type="text"
+                  name="licenseNumber"
+                  value={formData.licenseNumber}
+                  onChange={handleChange}
+                  placeholder="License Number"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
 
-              <div className="relative">
-                <span className="absolute left-4 top-2 text-[10px] text-[#8e95a5] font-medium leading-tight z-10">License Issuing Country</span>
-                <select name="licenseCountry" value={formData.licenseCountry} onChange={handleChange} className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 pt-5 pb-2 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10">
-                  <option value="Australia">Australia</option>
-                  <option value="USA">USA</option>
-                  <option value="UK">UK</option>
-                  <option value="Other">Other</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5] mt-1">
-                  <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="licenseCountry" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">License Issuing Country</label>
+                <div className="relative">
+                  <select
+                    id="licenseCountry"
+                    name="licenseCountry"
+                    value={formData.licenseCountry}
+                    onChange={handleChange}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                  >
+                    <option value="Australia">Australia</option>
+                    <option value="USA">USA</option>
+                    <option value="UK">UK</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
               </div>
 
@@ -343,78 +376,118 @@ export function CarsCheckoutDetailsContent() {
                   name="licenseExpiry"
                   value={formData.licenseExpiry}
                   onChange={handleChange}
-                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  onKeyDown={(e) => e.preventDefault()}
+                  onClick={(e) => (e.target as any).showPicker?.()}
+                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none cursor-pointer"
                 />
               </div>
 
-              <div className="relative">
-                <select name="licenseState" value={formData.licenseState} onChange={handleChange} className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10">
-                  <option value="Australia">Australia (Country)</option>
-                  <option value="USA">USA</option>
-                  <option value="UK">UK</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
-                  <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="licenseState" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">License State/Country</label>
+                <div className="relative">
+                  <select
+                    id="licenseState"
+                    name="licenseState"
+                    value={formData.licenseState}
+                    onChange={handleChange}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                  >
+                    <option value="Australia">Australia (Country)</option>
+                    <option value="USA">USA</option>
+                    <option value="UK">UK</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
               </div>
 
-              <div className="relative">
-                <select name="areaOfUse" value={formData.areaOfUse} onChange={handleChange} className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3.5 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10">
-                  <option value="" disabled>Area of use</option>
-                  <option value="metro">Metro</option>
-                  <option value="regional">Regional</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
-                  <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="areaOfUse" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Area of use</label>
+                <div className="relative">
+                  <select
+                    id="areaOfUse"
+                    name="areaOfUse"
+                    value={formData.areaOfUse}
+                    onChange={handleChange}
+                    className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                  >
+                    <option value="" disabled>Area of use</option>
+                    <option value="metro">Metro</option>
+                    <option value="regional">Regional</option>
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
+                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
                 </div>
               </div>
 
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Address"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none md:col-span-3"
-              />
+              <div className="relative flex flex-col gap-1 md:col-span-3">
+                <label htmlFor="address" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Address</label>
+                <input
+                  id="address"
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Address"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
 
-              <input
-                type="text"
-                name="city"
-                value={formData.city}
-                onChange={handleChange}
-                placeholder="City"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="stateRegion"
-                value={formData.stateRegion}
-                onChange={handleChange}
-                placeholder="State"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="postCode"
-                value={formData.postCode}
-                onChange={handleChange}
-                placeholder="Post Code"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="city" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">City</label>
+                <input
+                  id="city"
+                  type="text"
+                  name="city"
+                  value={formData.city}
+                  onChange={handleChange}
+                  placeholder="City"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="stateRegion" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">State</label>
+                <input
+                  id="stateRegion"
+                  type="text"
+                  name="stateRegion"
+                  value={formData.stateRegion}
+                  onChange={handleChange}
+                  placeholder="State"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="postCode" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Post Code</label>
+                <input
+                  id="postCode"
+                  type="text"
+                  name="postCode"
+                  value={formData.postCode}
+                  onChange={handleChange}
+                  placeholder="Post Code"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
 
-              <textarea
-                name="note"
-                value={formData.note}
-                onChange={handleChange}
-                placeholder="Comments / special requests (maps to remark & comments)"
-                rows={4}
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none resize-none md:col-span-3"
-              ></textarea>
+              <div className="relative flex flex-col gap-1 md:col-span-3">
+                <label htmlFor="note" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Comments / special requests</label>
+                <textarea
+                  id="note"
+                  name="note"
+                  value={formData.note}
+                  onChange={handleChange}
+                  placeholder="Comments / special requests"
+                  rows={4}
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none resize-none"
+                ></textarea>
+              </div>
             </div>
           </div>
 
@@ -426,38 +499,54 @@ export function CarsCheckoutDetailsContent() {
               Flight and arrival information for the booking API when you have it.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                name="flightin"
-                value={formData.flightin}
-                onChange={handleChange}
-                placeholder="Inbound flight (e.g. VB123)"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="flightout"
-                value={formData.flightout}
-                onChange={handleChange}
-                placeholder="Outbound flight"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="arrivalpoint"
-                value={formData.arrivalpoint}
-                onChange={handleChange}
-                placeholder="Arrival point"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
-              <input
-                type="text"
-                name="departurepoint"
-                value={formData.departurepoint}
-                onChange={handleChange}
-                placeholder="Departure point"
-                className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
-              />
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="flightin" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Inbound flight</label>
+                <input
+                  id="flightin"
+                  type="text"
+                  name="flightin"
+                  value={formData.flightin}
+                  onChange={handleChange}
+                  placeholder="Inbound flight (e.g. VB123)"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="flightout" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Outbound flight</label>
+                <input
+                  id="flightout"
+                  type="text"
+                  name="flightout"
+                  value={formData.flightout}
+                  onChange={handleChange}
+                  placeholder="Outbound flight"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="arrivalpoint" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Arrival point</label>
+                <input
+                  id="arrivalpoint"
+                  type="text"
+                  name="arrivalpoint"
+                  value={formData.arrivalpoint}
+                  onChange={handleChange}
+                  placeholder="Arrival point"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
+              <div className="relative flex flex-col gap-1">
+                <label htmlFor="departurepoint" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Departure point</label>
+                <input
+                  id="departurepoint"
+                  type="text"
+                  name="departurepoint"
+                  value={formData.departurepoint}
+                  onChange={handleChange}
+                  placeholder="Departure point"
+                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -468,7 +557,7 @@ export function CarsCheckoutDetailsContent() {
               onCheckedChange={(checked) => setNewsletter(!!checked)}
               className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]"
             />
-            <label htmlFor="newsletter" className="text-[13px] text-gray-700 leading-tight">
+            <label htmlFor="newsletter" className="text-[13px] text-gray-700 leading-tight" style={{ lineHeight: '24px' }}>
               Email me news and offers from Northside Rentals
             </label>
           </div>
@@ -486,7 +575,7 @@ export function CarsCheckoutDetailsContent() {
 
             <div className="flex items-start gap-3 px-1">
               <Checkbox id="terms" checked={agreed} onCheckedChange={(checked) => setAgreed(!!checked)} className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]" />
-              <label htmlFor="terms" className="text-[13px] text-gray-700 leading-tight">
+              <label htmlFor="terms" className="text-[13px] text-gray-700 leading-tight" style={{ lineHeight: '24px' }}>
                 I have read and accept the <a href="#" onClick={openTermsModal} className="text-[#0061e0]">Terms and Condition</a>
               </label>
             </div>

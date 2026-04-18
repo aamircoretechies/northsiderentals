@@ -20,28 +20,20 @@ export function AppRouting() {
   const path = location.pathname.trim();
 
   useEffect(() => {
-    if (firstLoad) {
-      verify().finally(() => {
-        setLoading(false);
-        setFirstLoad(false);
-      });
-    }
-  });
+    if (!firstLoad) return;
+    void verify().finally(() => {
+      setLoading(false);
+      setFirstLoad(false);
+    });
+  }, [firstLoad, verify, setLoading]);
 
   useEffect(() => {
-    if (!firstLoad) {
-      start('static');
-      verify()
-        .catch(() => {
-          throw new Error('User verify request failed!');
-        })
-        .finally(() => {
-          setPreviousLocation(path);
-          complete();
-          if (path === previousLocation) {
-            setPreviousLocation('');
-          }
-        });
+    if (firstLoad) return;
+    start('static');
+    complete();
+    setPreviousLocation(path);
+    if (path === previousLocation) {
+      setPreviousLocation('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
