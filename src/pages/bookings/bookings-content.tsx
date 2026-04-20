@@ -118,7 +118,7 @@ export function BookingsContent() {
       const res = await fetchBookingsList({
         page: pageParam,
         limit: PAGE_SIZE,
-          status: 'all',
+        status: 'all',
       });
       const raw = res.data?.bookings;
       const list = Array.isArray(raw) ? raw : [];
@@ -314,7 +314,7 @@ export function BookingsContent() {
                 </Button>
               ))}
             </div>
-            <Select
+            {/*   <Select
               value={statusFilter}
               onValueChange={(value) =>
                 setStatusFilter(value as 'active' | 'upcoming' | 'completed')
@@ -328,7 +328,7 @@ export function BookingsContent() {
                 <SelectItem value="upcoming">Upcoming</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
-            </Select>
+            </Select> */}
           </div>
 
           <div className="flex flex-wrap items-center gap-5 justify-between">
@@ -337,8 +337,8 @@ export function BookingsContent() {
                 ? 'Loading…'
                 : `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`}
               {!listAreaLoading &&
-              searchInput.trim() &&
-              items.length !== filtered.length
+                searchInput.trim() &&
+                items.length !== filtered.length
                 ? ` (filtered from ${items.length})`
                 : null}
             </h3>

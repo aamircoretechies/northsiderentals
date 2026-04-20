@@ -1262,11 +1262,11 @@ export const MENU_MEGA: MenuConfig = [
 ];
 
 export const MENU_MEGA_MOBILE: MenuConfig = [
-  {
-    title: 'Home',
-    icon: Home,
-    path: '/'
-  },
+  /*  {
+     title: 'Home',
+     icon: Home,
+     path: '/'
+   }, */
 
   {
     title: 'Home',

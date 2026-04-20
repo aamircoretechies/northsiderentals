@@ -202,7 +202,7 @@ export function RequestExtensionModal({
                   <p className="text-black truncate">{view.pickupWhereName}</p>
                 </div>
               </div>
-              <div className="p-4 sm:p-2 flex flex-col gap-2 bg-[#fdfdfd]">
+              <div className="p-4 sm:p-2 flex flex-col gap-2 ">
                 <span className="text-[#6b7280] text-[10px] font-bold uppercase tracking-widest text-[#0061e0]">Return:</span>
                 <span className="text-black font-black text-[14px] leading-none">{view.returnWhen}</span>
                 <div className="text-[#6b7280] text-[11px] font-semibold leading-tight">
@@ -214,7 +214,7 @@ export function RequestExtensionModal({
             <hr className="mb-4" />
 
             {/* Input Form */}
-            <div className="flex flex-col gap-5 bg-white">
+            <div className="flex flex-col gap-5 ">
               <span className="text-[12px] font-black text-[#0061e0] tracking-widest uppercase text-center">New Return Date & Time</span>
               <div className="flex flex-col sm:flex-row gap-4">
 
@@ -223,7 +223,7 @@ export function RequestExtensionModal({
                   htmlFor={dateInputId}
                   className="flex-1 relative h-[68px] bg-[#f0f4f8]/50 border-2 border-transparent hover:border-[#0061e0]/30 rounded-[20px] flex items-center px-2 gap-4 cursor-pointer transition-all active:scale-[0.98]"
                 >
-                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm shrink-0">
+                  <div className="w-10 h-10  rounded-full flex items-center justify-center shadow-sm shrink-0">
                     <Calendar size={20} className="text-[#0061e0]" />
                   </div>
                   <div className="flex flex-col flex-1 overflow-hidden pointer-events-none">
