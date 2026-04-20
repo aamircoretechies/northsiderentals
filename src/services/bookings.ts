@@ -1162,22 +1162,12 @@ function resolveUploadsUrl(pathOrUrl: string): string {
 function resolveAgreementUrl(pathOrUrl: string): string {
   const s = pathOrUrl.trim();
   if (!s) return '';
-  if (!/^https?:\/\//i.test(s)) {
-    const origin = apiOrigin();
-    const path = s.startsWith('/') ? s : `/${s}`;
-    return origin ? `${origin}${path}` : path;
-  }
-  if (/\/documents\/agreement\.aspx/i.test(s)) {
-    const origin = apiOrigin();
-    if (!origin) return s;
-    try {
-      const url = new URL(s);
-      return `${origin}${url.pathname}${url.search}`;
-    } catch {
-      return s;
-    }
-  }
-  return s;
+  // Absolute links (including RCM Agreement.aspx URLs) must keep their original host.
+  if (/^https?:\/\//i.test(s)) return s;
+
+  const origin = apiOrigin();
+  const path = s.startsWith('/') ? s : `/${s}`;
+  return origin ? `${origin}${path}` : path;
 }
 
 const RECEIPT_URL_KEYS = [
