@@ -77,6 +77,43 @@ function BookingReceiptButton({
   );
 }
 
+function BookingAgreementButton({
+  agreementUrl,
+}: {
+  agreementUrl: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const openAgreement = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const target = agreementUrl.trim();
+      if (!target) throw new Error('Agreement link not available');
+      window.open(target, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      setErr(getFriendlyError(e, 'Could not open agreement right now.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => void openAgreement()}
+        className="font-medium text-[#0061e0] text-[14px] hover:underline disabled:opacity-60 disabled:pointer-events-none bg-transparent border-0 p-0"
+      >
+        {loading ? 'Opening agreement…' : 'View Agreement'}
+      </button>
+      {err ? <p className="text-[12px] text-destructive mt-1">{err}</p> : null}
+    </div>
+  );
+}
+
 function RentalFeeSummaryBlock({
   view,
   compact,
@@ -596,14 +633,9 @@ export function BookingDetailContent() {
 
                 <div className="border-t border-gray-100 p-4 flex justify-center items-center">
                   {view.rentalAgreementUrl ? (
-                    <a
-                      href={view.rentalAgreementUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-[#0061e0] text-[14px] hover:underline"
-                    >
-                      View Agreement
-                    </a>
+                    <BookingAgreementButton
+                      agreementUrl={view.rentalAgreementUrl}
+                    />
                   ) : (
                     <span className="text-[14px] text-[#6b7280]">
                       Agreement link not available

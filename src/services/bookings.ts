@@ -4,6 +4,11 @@ import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
+const RCM_AGREEMENT_BASE_URL =
+  (import.meta.env.VITE_RCM_AGREEMENT_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    '',
+  ) || 'https://bookings.rentalcarmanager.com';
 const BOOKING_LIST_TTL_MS = 60_000;
 const BOOKING_DETAIL_TTL_MS = 60_000;
 const WORKFLOW_TTL_MS = 30_000;
@@ -1159,11 +1164,42 @@ function resolveUploadsUrl(pathOrUrl: string): string {
   return origin ? `${origin}${path}` : path;
 }
 
-function resolveAgreementUrl(pathOrUrl: string): string {
+function documentOriginFromBase(documentsBaseUrl?: string): string {
+  const base = String(documentsBaseUrl ?? '').trim();
+  if (!base || !/^https?:\/\//i.test(base)) return '';
+  try {
+    return new URL(base).origin;
+  } catch {
+    return '';
+  }
+}
+
+function rcmAgreementOrigin(): string {
+  const base = RCM_AGREEMENT_BASE_URL.trim();
+  if (!base || !/^https?:\/\//i.test(base)) return '';
+  try {
+    return new URL(base).origin;
+  } catch {
+    return '';
+  }
+}
+
+function resolveAgreementUrl(pathOrUrl: string, documentsBaseUrl?: string): string {
   const s = pathOrUrl.trim();
   if (!s) return '';
   // Absolute links (including RCM Agreement.aspx URLs) must keep their original host.
   if (/^https?:\/\//i.test(s)) return s;
+
+  const agreementOrigin = rcmAgreementOrigin();
+  if (agreementOrigin) {
+    const path = s.startsWith('/') ? s : `/${s}`;
+    return `${agreementOrigin}${path}`;
+  }
+
+  if (s.startsWith('/public/')) {
+    const docOrigin = documentOriginFromBase(documentsBaseUrl);
+    if (docOrigin) return `${docOrigin}${s}`;
+  }
 
   const origin = apiOrigin();
   const path = s.startsWith('/') ? s : `/${s}`;
@@ -1259,6 +1295,10 @@ function resolveInvoiceTargetUrl(
     /^\/?api\/v1\/uploads\/invoice\//i.test(s)
   ) {
     return resolveUploadsUrl(s.startsWith('/') ? s : `/${s}`);
+  }
+  if (s.startsWith('/public/')) {
+    const docOrigin = documentOriginFromBase(documentsBaseUrl);
+    if (docOrigin) return `${docOrigin}${s}`;
   }
   const base = documentsBaseUrl?.replace(/\/$/, '') ?? '';
   if (base && !s.startsWith('/api')) {
@@ -1518,23 +1558,22 @@ export function mapBookingDetailToView(
       '',
   );
 
-  const agreementRaw = String(data.rental_agreement_url ?? '');
-  let rentalAgreementUrl = resolveAgreementUrl(agreementRaw);
-  if (agreementRaw && !/^https?:\/\//i.test(agreementRaw)) {
-    const docBase = String(bookingInfo?.urlpathfordocuments ?? '').replace(
-      /\/$/,
-      '',
-    );
-    rentalAgreementUrl = docBase ? `${docBase}/${agreementRaw.replace(/^\//, '')}` : agreementRaw;
-    rentalAgreementUrl = resolveAgreementUrl(rentalAgreementUrl);
-  }
-
-  const receiptPath = String(data.payment_invoice_url ?? '');
-  const receiptUrl = receiptPath ? resolveApiAssetUrl(receiptPath) : '';
+  const agreementRaw = pickNonEmpty(
+    bookingInfo?.agreementpage,
+    bookingInfo?.agreementurl,
+    data.agreementpage,
+    data.agreementurl,
+  );
   const documentsBaseUrl = String(bookingInfo?.urlpathfordocuments ?? '').replace(
     /\/$/,
     '',
   );
+  // Always use VITE_RCM_AGREEMENT_BASE_URL for relative paths.
+  // Do NOT join with urlpathfordocuments — that is a blob storage root, not the RCM booking portal.
+  const rentalAgreementUrl = resolveAgreementUrl(agreementRaw);
+
+  const receiptPath = String(data.payment_invoice_url ?? '');
+  const receiptUrl = receiptPath ? resolveApiAssetUrl(receiptPath) : '';
 
   const totalCost =
     data.totalcost != null ? num(data.totalcost) : num(pricing.total);
