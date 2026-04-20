@@ -604,13 +604,13 @@ export function CarsCheckoutDetailsContent() {
 
         {/* Terms Modal */}
         <Dialog open={isTermsOpen} onOpenChange={setIsTermsOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh]">
             <DialogHeader>
-              <DialogTitle className="text-[20px] font-bold text-black" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
+              <DialogTitle className="text-[20px] font-bold text-black max-w-[80%] text-left" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
             </DialogHeader>
-            <div className="mt-2 text-[14px] text-gray-700">
+            <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
               {termsLoading ? (
-                <div className="flex justify-center items-center py-20">
+                <div className="flex justify-center items-center py-20 pe-0">
                   <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
                 </div>
               ) : (
@@ -619,17 +619,18 @@ export function CarsCheckoutDetailsContent() {
                   className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
                 />
               )}
+              <Button className='bg-[#0061e0] w-full mt-4 rounded-full' onClick={() => setIsTermsOpen(false)}>Done</Button>
             </div>
           </DialogContent>
         </Dialog>
 
         {/* Notice Modal */}
         <Dialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[85vh]">
             <DialogHeader>
-              <DialogTitle className="text-[20px] font-bold text-black" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
+              <DialogTitle className="text-[20px] font-bold text-black text-left max-w-[80%]" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
             </DialogHeader>
-            <div className="mt-2 text-[14px] text-gray-700">
+            <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
               {noticeLoading ? (
                 <div className="flex justify-center items-center py-20">
                   <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
@@ -640,6 +641,7 @@ export function CarsCheckoutDetailsContent() {
                   className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
                 />
               )}
+              <Button className='bg-[#0061e0] w-full mt-4 rounded-full' onClick={() => setIsNoticeOpen(false)}>Done</Button>
             </div>
           </DialogContent>
         </Dialog>

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { CircleHelp, Circle, CircleCheck } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface DamageCoverItem {
   id: string;
@@ -12,6 +13,38 @@ export interface DamageCoverOptionsProps {
   options: DamageCoverItem[];
   selectedOptionId: string;
   onSelect: (id: string) => void;
+}
+
+function InfoPopover({ description }: { description: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center outline-hidden"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((prev) => !prev);
+          }}
+        >
+          <CircleHelp size={14} className="text-[#0061e0]" strokeWidth={2} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        className="max-w-xs whitespace-pre-wrap text-[12px] leading-relaxed p-3 bg-zinc-900 text-white border-zinc-800 shadow-xl z-[100]"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        {description}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function DamageCoverOptions({
@@ -38,16 +71,7 @@ export function DamageCoverOptions({
                 <div className="flex flex-wrap items-center gap-1.5 leading-tight">
                   <span className="text-black font-medium text-[13px]">{option.name}</span>
                   {option.description ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="inline-flex items-center">
-                          <CircleHelp size={14} className="text-[#0061e0]" strokeWidth={2} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs whitespace-pre-wrap text-[12px] leading-relaxed">
-                        {option.description}
-                      </TooltipContent>
-                    </Tooltip>
+                    <InfoPopover description={option.description} />
                   ) : (
                     <CircleHelp size={14} className="text-[#0061e0]" strokeWidth={2} />
                   )}

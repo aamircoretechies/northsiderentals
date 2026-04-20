@@ -48,12 +48,12 @@ export function NotificationsSheet({ trigger }: { trigger: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <SheetContent className="p-0 gap-0 sm:w-[500px] sm:max-w-none inset-5 start-auto h-auto rounded-lg p-0 sm:max-w-none [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
+      <SheetContent className="p-0 gap-0 w-[calc(100vw-1rem)] sm:w-[500px] inset-2 sm:inset-5 start-auto h-auto max-h-[calc(100vh-1rem)] rounded-lg p-0 sm:max-w-none [&_[data-slot=sheet-close]]:top-4.5 [&_[data-slot=sheet-close]]:end-5">
         <SheetHeader className="mb-0">
           <SheetTitle className="p-3">Notifications</SheetTitle>
         </SheetHeader>
-        <SheetBody className="grow p-0">
-          <ScrollArea className="h-[calc(100vh-10.5rem)]">
+        <SheetBody className="grow p-0 overflow-hidden">
+          <ScrollArea className="h-full max-h-[calc(100vh-14rem)] sm:max-h-[calc(100vh-10.5rem)]">
             <Tabs defaultValue="all" className="w-full relative">
               <TabsList variant="line" className="w-full px-5 mb-3">
                 <TabsTrigger value="all">All ({notifications.length})</TabsTrigger>
