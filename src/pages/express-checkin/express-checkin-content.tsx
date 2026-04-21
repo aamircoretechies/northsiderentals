@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { parse, format, isValid } from 'date-fns';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLocation, useNavigate } from 'react-router';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -100,7 +102,7 @@ function firstText(...vals: Array<unknown>): string {
 }
 
 function stripHtmlTags(input: string): string {
-  return input
+  const stripped = input
     .replace(/<li[^>]*>/gi, '- ')
     .replace(/<\/li>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -110,6 +112,46 @@ function stripHtmlTags(input: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .replace(/\s{2,}/g, ' ')
     .trim();
+  // Decode common entities returned by backend content snippets.
+  return stripped
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function toHtmlDate(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = parse(raw, 'dd/MMM/yyyy', new Date());
+  if (isValid(parsed)) return format(parsed, 'yyyy-MM-dd');
+  return '';
+}
+
+function normalizeDateForApi(value: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  if (/^\d{2}\/[A-Za-z]{3}\/\d{4}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const parsed = parse(raw, 'yyyy-MM-dd', new Date());
+    if (isValid(parsed)) return format(parsed, 'dd/MMM/yyyy');
+  }
+  return raw;
+}
+
+function isRecognizedDate(value: string): boolean {
+  const raw = String(value ?? '').trim();
+  if (!raw) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return isValid(parse(raw, 'yyyy-MM-dd', new Date()));
+  }
+  if (/^\d{2}\/[A-Za-z]{3}\/\d{4}$/.test(raw)) {
+    return isValid(parse(raw, 'dd/MMM/yyyy', new Date()));
+  }
+  return false;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -154,7 +196,13 @@ function validateCustomerDetailsForm(form: CustomerDetailsForm): string | null {
     return 'Number of people traveling must be at least 1.';
   }
   if (!dob) return 'Date of birth is required.';
+  if (!isRecognizedDate(dob)) {
+    return 'Please enter a valid date of birth.';
+  }
   if (!licenseNo) return 'Licence number is required.';
+  if (form.licenseExpires.trim() && !isRecognizedDate(form.licenseExpires.trim())) {
+    return 'Please enter a valid driver licence expiry date.';
+  }
   if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
   if ((city && !LOCATION_ALLOWED_PATTERN.test(city)) || (state && !LOCATION_ALLOWED_PATTERN.test(state))) {
     return 'City and state contain invalid characters.';
@@ -412,6 +460,7 @@ export function ExpressCheckinContent() {
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
   const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
+  const { rcmProfile } = useDashboardData();
 
   useEffect(() => {
     const st = (location.state as ExpressCheckinRouteState | null) ?? null;
@@ -649,10 +698,12 @@ export function ExpressCheckinContent() {
         bookingInfo?.numbertravelling,
         customerSnapshot?.numberTravelling,
       ),
-      dateOfBirth: firstText(customerInfo?.dateofbirth, customerSnapshot?.dateOfBirth),
+      dateOfBirth: toHtmlDate(firstText(customerInfo?.dateofbirth, customerSnapshot?.dateOfBirth)),
       licenseNo: firstText(customerInfo?.licenseno, customerSnapshot?.licenseNo),
       licenseIssued: firstText(customerInfo?.licenseissued, customerSnapshot?.licenseIssued),
-      licenseExpires: firstText(customerInfo?.licenseexpires, customerSnapshot?.licenseExpires),
+      licenseExpires: toHtmlDate(
+        firstText(customerInfo?.licenseexpires, customerSnapshot?.licenseExpires),
+      ),
       address: firstText(customerInfo?.address, customerSnapshot?.address),
       city: firstText(customerInfo?.city, customerSnapshot?.city),
       state: firstText(customerInfo?.state, customerSnapshot?.state),
@@ -725,7 +776,16 @@ export function ExpressCheckinContent() {
           'dateofbirth',
           'dateOfBirth',
           'date_of_birth',
-        ),
+        )
+          ? toHtmlDate(
+            pickRowString(
+              row,
+              'dateofbirth',
+              'dateOfBirth',
+              'date_of_birth',
+            ),
+          )
+          : '',
         licenseno: pickRowString(
           row,
           'licenseno',
@@ -1028,14 +1088,14 @@ export function ExpressCheckinContent() {
         ),
         firstname: customerForm.firstName,
         lastname: customerForm.lastName,
-        dateofbirth: customerForm.dateOfBirth,
+        dateofbirth: normalizeDateForApi(customerForm.dateOfBirth),
         licenseno: customerForm.licenseNo,
         licenseissued: firstText(
           customerForm.licenseIssued,
           customerInfo?.licenseissued,
         ),
         licenseexpires: firstText(
-          customerForm.licenseExpires,
+          normalizeDateForApi(customerForm.licenseExpires),
           customerInfo?.licenseexpires,
         ),
         email: customerForm.email,
@@ -1248,7 +1308,7 @@ export function ExpressCheckinContent() {
           customer: {
             firstname: d.firstname.trim() || 'Driver',
             lastname: d.lastname.trim() || 'User',
-            dateofbirth: d.dateofbirth.trim() || '01/Jan/1980',
+            dateofbirth: normalizeDateForApi(d.dateofbirth.trim()) || '01/Jan/1980',
             licenseno: d.licenseno.trim(),
             email: d.email.trim() || ownerEmail,
             state: d.state.trim() || ownerState,
@@ -1283,6 +1343,18 @@ export function ExpressCheckinContent() {
         toast.success('Extra drivers saved');
       }
       invalidateBookingsCache(reservationRefValue);
+      // Reload workflow so newly added drivers receive real backend customer ids.
+      // Without this, local rows can keep customerid=0 and later "Remove" only
+      // updates UI (no API delete payload can be built).
+      try {
+        const latestWorkflow = await fetchWorkflowChecklist(reservationRefValue, 'checkin');
+        const latestData = latestWorkflow?.data;
+        if (latestData && typeof latestData === 'object') {
+          setWorkflow(latestData as Record<string, unknown>);
+        }
+      } catch {
+        // Non-fatal: keep saved state and let user continue.
+      }
       markSaved('drivers');
     } catch (e) {
       toast.error(friendlyBookingErrorMessage(e, 'Could not save extra drivers'));
@@ -1750,6 +1822,7 @@ export function ExpressCheckinContent() {
                 <CustomerDetailsCard
                   value={customerForm}
                   onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                  countries={rcmProfile?.countries ?? []}
                 />
               </div>
               {loadingWorkflow ? (
@@ -1782,6 +1855,7 @@ export function ExpressCheckinContent() {
                 <CustomerDetailsCard
                   value={customerForm}
                   onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                  countries={rcmProfile?.countries ?? []}
                 />
                 <div className="flex gap-2 mt-4">
                   <Button

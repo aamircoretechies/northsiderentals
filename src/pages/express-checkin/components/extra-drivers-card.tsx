@@ -112,10 +112,13 @@ export function ExtraDriversCard({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <input
+                type="date"
                 value={d.dateofbirth ?? ''}
                 onChange={(e) => update(d.id, { dateofbirth: e.target.value })}
-                placeholder="Date of birth (01/Jan/1980)"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
+                onKeyDown={(e) => e.preventDefault()}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px] cursor-pointer"
+                aria-label="Extra driver date of birth"
               />
               <input
                 value={d.licenseno ?? ''}

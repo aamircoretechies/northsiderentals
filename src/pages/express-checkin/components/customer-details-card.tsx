@@ -97,58 +97,77 @@ export function CustomerDetailsCard({
         inputMode="tel"
         maxLength={20}
       />
-      <input
-        type="number"
-        inputMode="numeric"
-        min={1}
-        placeholder="Number of People Traveling"
-        value={value.numberTravelling}
-        onChange={(e) => {
-          const raw = e.target.value.trim();
-          if (!raw) {
-            onChange({ numberTravelling: '' });
-            return;
-          }
-          const parsed = Number(raw);
-          if (!Number.isFinite(parsed)) return;
-          onChange({ numberTravelling: String(Math.max(1, Math.floor(parsed))) });
-        }}
-        className={inputClass}
-        max={99}
-      />
+      <div className="flex items-center justify-between rounded-[8px] border border-[#e2e8f0] bg-white px-3 py-2.5">
+        <span className="text-[14px] text-[#2c3e50]">Number of People Traveling</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Decrease travellers"
+            onClick={() => {
+              const current = Math.min(20, Math.max(1, Number(value.numberTravelling || 1)));
+              onChange({ numberTravelling: String(Math.max(1, current - 1)) });
+            }}
+            disabled={Number(value.numberTravelling || 1) <= 1}
+            className="size-8 rounded-full border border-[#d0d7e2] bg-white text-[18px] leading-none font-bold text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            -
+          </button>
+          <span className="min-w-[2rem] text-center text-[15px] font-semibold tabular-nums text-[#2c3e50]">
+            {Math.min(20, Math.max(1, Number(value.numberTravelling || 1)))}
+          </span>
+          <button
+            type="button"
+            aria-label="Increase travellers"
+            onClick={() => {
+              const current = Math.min(20, Math.max(1, Number(value.numberTravelling || 1)));
+              onChange({ numberTravelling: String(Math.min(20, current + 1)) });
+            }}
+            disabled={Number(value.numberTravelling || 1) >= 20}
+            className="size-8 rounded-full border border-[#d0d7e2] bg-white text-[18px] leading-none font-bold text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            +
+          </button>
+        </div>
+      </div>
       <input
         type="date"
-        placeholder="Date of Birth"
+        placeholder="Date of Birth (Driver)"
         value={value.dateOfBirth}
         onChange={(e) => onChange({ dateOfBirth: e.target.value })}
         onKeyDown={(e) => e.preventDefault()}
         onClick={(e) => (e.target as any).showPicker?.()}
         className={cn(inputClass, "cursor-pointer")}
+        aria-label="Driver date of birth"
+        title="Driver date of birth"
       />
       <input
         type="text"
-        placeholder="License Number"
+        placeholder="Driver Licence Number"
         value={value.licenseNo}
         onChange={(e) => onChange({ licenseNo: e.target.value.slice(0, 30) })}
         maxLength={30}
         className={inputClass}
+        aria-label="Driver licence number"
       />
       <input
         type="text"
-        placeholder="License Issuing Country"
+        placeholder="Driver Licence Issuing Country/State"
         value={value.licenseIssued}
         onChange={(e) => onChange({ licenseIssued: e.target.value.slice(0, 80) })}
         maxLength={80}
         className={inputClass}
+        aria-label="Driver licence issuing country or state"
       />
       <input
         type="date"
-        placeholder="License Expiry"
+        placeholder="Driver Licence Expiry Date"
         value={value.licenseExpires}
         onChange={(e) => onChange({ licenseExpires: e.target.value })}
         onKeyDown={(e) => e.preventDefault()}
         onClick={(e) => (e.target as any).showPicker?.()}
         className={cn(inputClass, "cursor-pointer")}
+        aria-label="Driver licence expiry date"
+        title="Driver licence expiry date"
       />
       <input
         type="text"
