@@ -90,21 +90,30 @@ export function BookingDetailsCard({
                     <span className="text-[12px] text-gray-500">Quantity for this rental</span>
                   </div>
                   <div className="ml-auto flex items-center gap-2 shrink-0">
-                    <label htmlFor={`optional-fee-qty-${f.id}`} className="sr-only">
-                      Quantity for {f.label}
-                    </label>
-                    <select
-                      id={`optional-fee-qty-${f.id}`}
-                      value={qty}
-                      onChange={(e) => setQty(Number(e.target.value))}
-                      className="h-9 min-w-[4.5rem] rounded border border-[#d0d7e2] bg-white px-2 text-center text-[14px] font-semibold tabular-nums outline-none focus:ring-1 focus:ring-[#0061e0]"
+                    <button
+                      type="button"
+                      aria-label={`Decrease quantity for ${f.label}`}
+                      onClick={() => setQty(qty - 1)}
+                      disabled={qty <= 0}
+                      className="size-8 rounded-full border border-[#d0d7e2] bg-white text-[18px] leading-none font-bold text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {Array.from({ length: upper + 1 }, (_, i) => (
-                        <option key={i} value={i}>
-                          {i}
-                        </option>
-                      ))}
-                    </select>
+                      -
+                    </button>
+                    <span
+                      className="min-w-[2.25rem] text-center text-[15px] font-semibold tabular-nums"
+                      aria-live="polite"
+                    >
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Increase quantity for ${f.label}`}
+                      onClick={() => setQty(qty + 1)}
+                      disabled={qty >= upper}
+                      className="size-8 rounded-full border border-[#d0d7e2] bg-white text-[18px] leading-none font-bold text-[#374151] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               );

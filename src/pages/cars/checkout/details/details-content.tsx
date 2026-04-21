@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
@@ -27,6 +28,87 @@ import {
 } from '@/lib/checkout-vehicle-details';
 
 type CheckoutCountry = CheckoutCountryOption;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_ALLOWED_CHARS = /^[+()\-\s\d]+$/;
+const NAME_PATTERN = /^[a-zA-Z\s'-]+$/;
+const ADDRESS_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'/#-]*$/;
+const LOCATION_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'-]*$/;
+const POSTCODE_PATTERN = /^[a-zA-Z0-9\s-]{3,10}$/;
+const FLIGHT_PATTERN = /^[a-zA-Z0-9-]{2,20}$/;
+const FIELD_LIMITS: Record<string, number> = {
+  firstName: 50,
+  lastName: 50,
+  email: 100,
+  phone: 20,
+  licenseNumber: 30,
+  address: 160,
+  city: 80,
+  stateRegion: 80,
+  postCode: 10,
+  note: 500,
+  flightin: 20,
+  flightout: 20,
+  arrivalpoint: 80,
+  departurepoint: 80,
+};
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_PATTERN.test(email.trim());
+}
+
+function isValidPhone(phone: string): boolean {
+  const raw = phone.trim();
+  if (!raw || !PHONE_ALLOWED_CHARS.test(raw)) return false;
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+function validateBookingCustomerForm(
+  formData: Record<string, string>,
+): string | null {
+  const firstName = formData.firstName?.trim() ?? '';
+  const lastName = formData.lastName?.trim() ?? '';
+  const email = formData.email?.trim() ?? '';
+  const phone = formData.phone?.trim() ?? '';
+  const numberOfPeople = formData.numberOfPeople?.trim() ?? '';
+  const dob = formData.dob?.trim() ?? '';
+  const licenseNumber = formData.licenseNumber?.trim() ?? '';
+  const address = formData.address?.trim() ?? '';
+  const city = formData.city?.trim() ?? '';
+  const stateRegion = formData.stateRegion?.trim() ?? '';
+  const postCode = formData.postCode?.trim() ?? '';
+  const flightin = formData.flightin?.trim() ?? '';
+  const flightout = formData.flightout?.trim() ?? '';
+  const arrivalpoint = formData.arrivalpoint?.trim() ?? '';
+  const departurepoint = formData.departurepoint?.trim() ?? '';
+
+  if (!firstName || !lastName) return 'First name and last name are required.';
+  if (!NAME_PATTERN.test(firstName) || !NAME_PATTERN.test(lastName)) {
+    return 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+  }
+  if (!isValidEmail(email)) return 'Please enter a valid email address.';
+  if (!isValidPhone(phone)) return 'Please enter a valid phone number.';
+  if (!numberOfPeople) return 'Number of travellers is required.';
+  if (!dob) return 'Date of birth is required.';
+  if (!licenseNumber) return 'Licence number is required.';
+  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
+  if (
+    (city && !LOCATION_ALLOWED_PATTERN.test(city)) ||
+    (stateRegion && !LOCATION_ALLOWED_PATTERN.test(stateRegion))
+  ) {
+    return 'City and state contain invalid characters.';
+  }
+  if (postCode && !POSTCODE_PATTERN.test(postCode)) return 'Please enter a valid post code.';
+  if (flightin && !FLIGHT_PATTERN.test(flightin)) return 'Inbound flight format looks invalid.';
+  if (flightout && !FLIGHT_PATTERN.test(flightout)) return 'Outbound flight format looks invalid.';
+  if (arrivalpoint && !LOCATION_ALLOWED_PATTERN.test(arrivalpoint)) {
+    return 'Arrival point contains invalid characters.';
+  }
+  if (departurepoint && !LOCATION_ALLOWED_PATTERN.test(departurepoint)) {
+    return 'Departure point contains invalid characters.';
+  }
+  return null;
+}
 
 function normalizeCountriesFromNavigationState(raw: unknown): CheckoutCountry[] {
   if (!Array.isArray(raw)) return [];
@@ -57,6 +139,7 @@ function normalizeAreaOfUseFromNavigationState(raw: unknown): CheckoutAreaOfUseO
 export function CarsCheckoutDetailsContent() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { profile, rcmProfile, apiProfile } = useDashboardData();
   const {
     carData,
     extras,
@@ -216,8 +299,46 @@ export function CarsCheckoutDetailsContent() {
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const limit = FIELD_LIMITS[name];
+    const nextValue =
+      typeof limit === 'number' ? String(value ?? '').slice(0, limit) : value;
+    setFormData(prev => ({ ...prev, [name]: nextValue }));
   };
+
+  useEffect(() => {
+    const fullName = String(profile?.displayName ?? '').trim();
+    const [firstFromDisplay = '', ...rest] = fullName.split(/\s+/).filter(Boolean);
+    const lastFromDisplay = rest.join(' ');
+    const addr = rcmProfile?.address;
+
+    setFormData((prev) => ({
+      ...prev,
+      firstName:
+        prev.firstName ||
+        String(rcmProfile?.first_name ?? apiProfile?.first_name ?? firstFromDisplay).slice(0, FIELD_LIMITS.firstName),
+      lastName:
+        prev.lastName ||
+        String(rcmProfile?.last_name ?? apiProfile?.last_name ?? lastFromDisplay).slice(0, FIELD_LIMITS.lastName),
+      email:
+        prev.email ||
+        String(rcmProfile?.email ?? profile?.email ?? '').slice(0, FIELD_LIMITS.email),
+      phone:
+        prev.phone ||
+        String(rcmProfile?.mobile ?? apiProfile?.phone ?? profile?.phone ?? '').slice(0, FIELD_LIMITS.phone),
+      address:
+        prev.address ||
+        String(addr?.local_address ?? apiProfile?.local_address ?? '').slice(0, FIELD_LIMITS.address),
+      city:
+        prev.city ||
+        String(addr?.city ?? '').slice(0, FIELD_LIMITS.city),
+      stateRegion:
+        prev.stateRegion ||
+        String(addr?.state ?? '').slice(0, FIELD_LIMITS.stateRegion),
+      postCode:
+        prev.postCode ||
+        String(addr?.postal_code ?? '').slice(0, FIELD_LIMITS.postCode),
+    }));
+  }, [profile, rcmProfile, apiProfile]);
 
   const openTermsModal = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -283,16 +404,9 @@ export function CarsCheckoutDetailsContent() {
       return;
     }
 
-    const missing: string[] = [];
-    if (!formData.firstName.trim()) missing.push('first name');
-    if (!formData.lastName.trim()) missing.push('last name');
-    if (!formData.email.trim()) missing.push('email');
-    if (!formData.phone.trim()) missing.push('phone');
-    if (!formData.numberOfPeople?.trim()) missing.push('number of travellers');
-    if (!formData.dob.trim()) missing.push('date of birth');
-    if (!formData.licenseNumber.trim()) missing.push('licence number');
-    if (missing.length > 0) {
-      toast.error(`Please complete: ${missing.join(', ')}.`);
+    const formError = validateBookingCustomerForm(formData as Record<string, string>);
+    if (formError) {
+      toast.error(formError);
       return;
     }
 
@@ -312,6 +426,8 @@ export function CarsCheckoutDetailsContent() {
     const licenseExpiresApi = formData.licenseExpiry.trim()
       ? formatDobForApi(formData.licenseExpiry)
       : '';
+    const dobRaw = formData.dob.trim();
+    const dobApi = formatDobForApi(dobRaw);
     const areaParsed = parseInt(String(formData.areaOfUse).trim(), 10);
     const areaofuseid =
       Number.isFinite(areaParsed) && areaParsed > 0 ? areaParsed : 0;
@@ -333,17 +449,26 @@ export function CarsCheckoutDetailsContent() {
       customer_details: {
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
+        firstname: formData.firstName.trim(),
+        lastname: formData.lastName.trim(),
         email: formData.email.trim(),
         phone: formData.phone.trim(),
-        date_of_birth: formatDobForApi(formData.dob),
+        mobile: formData.phone.trim(),
+        // Send both variants because different backend readers use different keys.
+        date_of_birth: dobRaw,
+        dateofbirth: dobApi,
         driver_license_number: formData.licenseNumber.trim(),
+        licenseno: formData.licenseNumber.trim(),
         country_id: licenseCountryToId(formData.licenseCountry),
         address: formData.address.trim(),
+        local_address: formData.address.trim(),
         city: formData.city.trim(),
         state: formData.stateRegion.trim(),
         postcode: formData.postCode.trim(),
         postal_code: formData.postCode.trim(),
         licenseexpires: licenseExpiresApi,
+        license_expiry: licenseExpiresApi,
+        licenseissued: formData.licenseState.trim(),
         license_state: formData.licenseState,
       },
       number_of_persons: parseTravellerCount(formData.numberOfPeople),
@@ -361,6 +486,15 @@ export function CarsCheckoutDetailsContent() {
       rateperiod_typeid: Number(car?.rateperiod_typeid ?? 1) || 1,
       areaofuseid,
     });
+
+    // Debug payload for backend reconciliation:
+    // compare this exact request body with `rcm_booking_info.customerinfo` response.
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.log('[CreateBooking] Outgoing payload', payload);
+      // eslint-disable-next-line no-console
+      console.log('[CreateBooking] customer_details subset', payload.customer_details);
+    }
 
     setLoading(true);
     try {
@@ -444,6 +578,7 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Email"
+                  autoComplete="email"
                   className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
                 />
               </div>
@@ -454,8 +589,16 @@ export function CarsCheckoutDetailsContent() {
                   type="tel"
                   name="phone"
                   value={formData.phone}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (!next || PHONE_ALLOWED_CHARS.test(next)) {
+                      setFormData((prev) => ({ ...prev, phone: next }));
+                    }
+                  }}
                   placeholder="Phone (with country code)"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength={20}
                   className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
                 />
               </div>

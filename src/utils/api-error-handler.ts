@@ -21,6 +21,16 @@ const ERROR_MAP: Record<string, string> = {
   'slot not available': 'The selected time slot is no longer available.',
   'modification not allowed': 'This booking cannot be modified at this stage.',
   'payment failed': 'Payment could not be processed. Please try again.',
+  'quotation is no longer available':
+    'Your quotation is no longer available. Please contact us to check current vehicle availability.',
+  'unable to update reservation':
+    'We could not update this reservation. Please refresh and try again, or contact support.',
+  'number of people traveling':
+    'Please enter a valid number of passengers.',
+  'numbertravelling':
+    'Please enter a valid number of passengers.',
+  'is too big':
+    'Please enter a smaller number of passengers.',
 
   // Rental / Driver
   'age not eligible': 'Driver does not meet the minimum age requirement.',
@@ -42,6 +52,10 @@ function normalize(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
+function asCleanMessage(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
 export function getFriendlyErrorMessage(input: {
   status?: number;
   message?: unknown;
@@ -58,6 +72,12 @@ export function getFriendlyErrorMessage(input: {
     }
   }
 
+  // Dynamic backend-first behavior:
+  // if backend provided a non-empty message and we don't have a specific
+  // mapping override, surface it directly instead of falling back to generic.
+  const direct = asCleanMessage(input.message);
+  if (direct) return direct;
+
   return input.fallback || GENERIC_ERROR;
 }
 
@@ -69,12 +89,19 @@ export function getFriendlyError(error: unknown, fallback?: string): string {
         obj.status ??
         0,
     );
-    const apiMessage =
+    const responseData =
       (obj.response as Record<string, unknown> | undefined)?.data &&
       typeof (obj.response as Record<string, unknown>).data === 'object'
         ? ((obj.response as Record<string, unknown>).data as Record<string, unknown>)
-            .message
-        : obj.message;
+        : undefined;
+    const directData =
+      obj.data && typeof obj.data === 'object'
+        ? (obj.data as Record<string, unknown>)
+        : undefined;
+    const apiMessage =
+      responseData?.message ??
+      directData?.message ??
+      obj.message;
     return getFriendlyErrorMessage({
       status: Number.isFinite(status) && status > 0 ? status : undefined,
       message: apiMessage,

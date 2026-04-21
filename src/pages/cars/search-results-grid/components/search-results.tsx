@@ -167,6 +167,31 @@ function extractCurrencyFromData(data: Record<string, unknown> | undefined) {
   return { symbol, name };
 }
 
+function sanitizeApiText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const raw = value.trim();
+  if (!raw) return '';
+
+  // Browser-safe decode for HTML entities and tag stripping from API fields.
+  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+    const el = window.document.createElement('div');
+    el.innerHTML = raw;
+    return (el.textContent ?? el.innerText ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  // SSR/test fallback: strip tags and decode the common entities we receive.
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function buildSearchMeta(
   data: Record<string, unknown> | undefined,
   currency: { symbol: string; name: string },
@@ -216,8 +241,8 @@ function carFeaturesFromApi(
   if (min > 0 && max > 0) out.push(`Driver age ${min}–${max} years`);
   const sipp = car.sippcode;
   if (typeof sipp === 'string' && sipp.trim()) out.push(`SIPP ${sipp.trim()}`);
-  const off = car.offerdescription;
-  if (typeof off === 'string' && off.trim()) out.push(off.trim());
+  const off = sanitizeApiText(car.offerdescription);
+  if (off) out.push(off);
   if (seasonName) out.push(seasonName);
   const pct = Number(car.vehiclesbookedpercent);
   if (pct >= 85 && Number(car.available) > 0) {
@@ -274,23 +299,19 @@ function mapApiCarToCard(
       : undefined;
 
   const desc1 =
-    typeof car.vehicledescription1 === 'string' ? car.vehicledescription1 : '';
+    sanitizeApiText(car.vehicledescription1);
   const yearMatch = desc1.match(/\d{4}/);
   const transmission = desc1.split(',')[0]?.trim() || '';
 
   const imageRaw = typeof car.imageurl === 'string' ? car.imageurl : '';
 
   const title =
-    (typeof car.categoryfriendlydescription === 'string' &&
-      car.categoryfriendlydescription.trim()) ||
-    (typeof car.vehiclecategory === 'string' && car.vehiclecategory.trim()) ||
-    (typeof car.categoryname === 'string' && car.categoryname.trim()) ||
+    sanitizeApiText(car.categoryfriendlydescription) ||
+    sanitizeApiText(car.vehiclecategory) ||
+    sanitizeApiText(car.categoryname) ||
     '';
 
-  const subtitle =
-    typeof car.vehiclecategorytype === 'string'
-      ? car.vehiclecategorytype.trim()
-      : '';
+  const subtitle = sanitizeApiText(car.vehiclecategorytype);
 
   const ratePeriod =
     typeof car.rateperiod_typename === 'string'

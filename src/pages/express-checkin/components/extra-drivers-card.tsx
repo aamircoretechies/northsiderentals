@@ -21,10 +21,12 @@ export function ExtraDriversCard({
   value,
   onChange,
   maxDrivers = 5,
+  onRemoveDriver,
 }: {
   value: ExtraDriversForm;
   onChange: (next: ExtraDriversForm) => void;
   maxDrivers?: number;
+  onRemoveDriver?: (driver: ExtraDriverItem) => Promise<void>;
 }) {
   const drivers = value.drivers ?? [];
   const removedCustomerIds = value.removedCustomerIds ?? [];
@@ -36,10 +38,16 @@ export function ExtraDriversCard({
     });
   };
 
-  const remove = (id: string) => {
+  const remove = async (id: string) => {
     const target = drivers.find((d) => d.id === id);
+    if (!target) return;
+    if (target.customerid > 0 && onRemoveDriver) {
+      await onRemoveDriver(target);
+    }
     const nextRemoved = [...removedCustomerIds];
-    if (target && target.customerid > 0 && !nextRemoved.includes(target.customerid)) {
+    // If removal is persisted immediately, don't queue a second delete for Save.
+    const shouldQueueDelete = target.customerid > 0 && !onRemoveDriver;
+    if (shouldQueueDelete && !nextRemoved.includes(target.customerid)) {
       nextRemoved.push(target.customerid);
     }
     onChange({
@@ -82,7 +90,7 @@ export function ExtraDriversCard({
             <button
               type="button"
               className="text-[12px] text-red-600"
-              onClick={() => remove(d.id)}
+              onClick={() => void remove(d.id)}
             >
               Remove
             </button>

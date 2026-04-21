@@ -89,11 +89,13 @@ export interface BuildBookingPayloadInput {
     country_id: number;
     /** Address / licence fields collected on checkout passenger step */
     address?: string;
+    local_address?: string;
     city?: string;
     state?: string;
     postcode?: string;
     postal_code?: string;
     licenseexpires?: string;
+    license_expiry?: string;
     licenseissued?: string;
     license_state?: string;
     /** RCM-style duplicates some stacks still read */
@@ -162,7 +164,7 @@ export function buildCreateBookingPayload(
     refno = '',
   } = input;
 
-  const nonEmpty = (v: string, fallback: string) => {
+  const nonEmpty = (v: string, fallback = '') => {
     const t = String(v ?? '').trim();
     return t || fallback;
   };
@@ -173,13 +175,22 @@ export function buildCreateBookingPayload(
   const cd = customer_details as Record<string, unknown>;
   const mergedCustomerDetails: Record<string, unknown> = { ...cd };
   // Common RCM aliases so backends that read snake_case or flat licence fields still receive data.
-  if (cd.first_name) mergedCustomerDetails.firstname = cd.first_name;
-  if (cd.last_name) mergedCustomerDetails.lastname = cd.last_name;
-  if (cd.date_of_birth) mergedCustomerDetails.dateofbirth = cd.date_of_birth;
-  if (cd.phone) mergedCustomerDetails.mobile = cd.phone;
-  if (cd.driver_license_number) mergedCustomerDetails.licenseno = cd.driver_license_number;
+  if (cd.first_name && !cd.firstname) mergedCustomerDetails.firstname = cd.first_name;
+  if (cd.last_name && !cd.lastname) mergedCustomerDetails.lastname = cd.last_name;
+  if (cd.date_of_birth && !cd.dateofbirth) mergedCustomerDetails.dateofbirth = cd.date_of_birth;
+  if (cd.phone) {
+    if (!cd.mobile) mergedCustomerDetails.mobile = cd.phone;
+  }
+  if (cd.driver_license_number && !cd.licenseno) mergedCustomerDetails.licenseno = cd.driver_license_number;
+  if (cd.driver_license_number && !cd.licence_no) mergedCustomerDetails.licence_no = cd.driver_license_number;
+  if (cd.address && !cd.local_address) mergedCustomerDetails.local_address = cd.address;
+  if (cd.postcode && !cd.postal_code) mergedCustomerDetails.postal_code = cd.postcode;
+  if (cd.postal_code && !cd.postcode) mergedCustomerDetails.postcode = cd.postal_code;
+  if (cd.country_id != null && cd.countryid == null) mergedCustomerDetails.countryid = cd.country_id;
+  if (cd.licenseexpires && !cd.license_expiry) mergedCustomerDetails.license_expiry = cd.licenseexpires;
+  if (cd.license_state && !cd.licenseissued) mergedCustomerDetails.licenseissued = cd.license_state;
 
-  return {
+  const payload: Record<string, unknown> = {
     vehicle_id: parsePositiveInt(vehicle_id, 0),
     category_id: parsePositiveInt(category_id, 0),
     pickup_location_id: parsePositiveInt(pickup_location_id, 0),
@@ -196,26 +207,14 @@ export function buildCreateBookingPayload(
     transmission: parsePositiveInt(transmission, 1),
     numbertravelling: parsePositiveInt(number_of_persons, 1),
     emailoption: 1,
-    referralid: 0,
-    campaigncode: nonEmpty(campaigncode, 'N/A'),
-    agentcode: 'RCMAgent',
-    agentname: nonEmpty(agentname, 'N/A'),
-    agentemail: nonEmpty(agentemail, 'na@example.com'),
-    agentrefno: nonEmpty(agentrefno, 'N/A'),
-    agentcollectedamount: 1,
-    rental_source_id: 73,
-    remark: nonEmpty(remark, 'N/A'),
-    flightin: nonEmpty(flightin, 'N/A'),
-    flightout: nonEmpty(flightout, 'N/A'),
-    arrivalpoint: nonEmpty(arrivalpoint, 'N/A'),
-    departurepoint: nonEmpty(departurepoint, 'N/A'),
+    remark: nonEmpty(remark),
+    flightin: nonEmpty(flightin),
+    flightout: nonEmpty(flightout),
+    arrivalpoint: nonEmpty(arrivalpoint),
+    departurepoint: nonEmpty(departurepoint),
     areaofuseid: parsePositiveInt(areaOfUseIdInput ?? 0, 0),
     newsletter: Boolean(newsletter),
-    refno: nonEmpty(refno, 'N/A'),
-    relocationspecialid: 1,
-    packageid: 1,
     rateperiod_typeid: parsePositiveInt(rateperiod_typeid, 1),
-    urlid: 1,
     extra_fees: extra_fees.map((e) => ({
       id: parsePositiveInt(e.id, 0),
       qty: Math.min(
@@ -227,8 +226,22 @@ export function buildCreateBookingPayload(
     // Backend expects numeric booking type (1=quote, 2=booking).
     bookingtype: bookingTypeCode,
     booking_type: bookingTypeCode,
-    comments,
+    comments: nonEmpty(comments),
   };
+
+  const campaign = nonEmpty(campaigncode);
+  if (campaign) payload.campaigncode = campaign;
+
+  const agName = nonEmpty(agentname);
+  if (agName) payload.agentname = agName;
+  const agEmail = nonEmpty(agentemail);
+  if (agEmail) payload.agentemail = agEmail;
+  const agRef = nonEmpty(agentrefno);
+  if (agRef) payload.agentrefno = agRef;
+  const ref = nonEmpty(refno);
+  if (ref) payload.refno = ref;
+
+  return payload;
 }
 
 /** Map checkout “extras” UI rows to API extra_fees */

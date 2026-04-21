@@ -35,6 +35,11 @@ export interface CustomerDetailsForm {
 
 const inputClass =
   'w-full bg-white border border-[#e2e8f0] rounded-[8px] px-4 py-3 text-[14px] text-[#2c3e50] focus:ring-1 focus:ring-[#0061e0] outline-none';
+const PHONE_ALLOWED_CHARS = /^[+()\-\s\d]+$/;
+const NAME_PATTERN = /^[a-zA-Z\s'-]*$/;
+const ADDRESS_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'/#-]*$/;
+const LOCATION_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'-]*$/;
+const POSTCODE_ALLOWED_PATTERN = /^[a-zA-Z0-9\s-]*$/;
 
 export function CustomerDetailsCard({
   value,
@@ -53,33 +58,44 @@ export function CustomerDetailsCard({
         type="text"
         placeholder="First Name"
         value={value.firstName}
-        onChange={(e) => onChange({ firstName: e.target.value })}
+        onChange={(e) => {
+          const next = e.target.value.slice(0, 50);
+          if (NAME_PATTERN.test(next)) onChange({ firstName: next });
+        }}
+        maxLength={50}
         className={inputClass}
       />
       <input
         type="text"
         placeholder="Last Name"
         value={value.lastName}
-        onChange={(e) => onChange({ lastName: e.target.value })}
+        onChange={(e) => {
+          const next = e.target.value.slice(0, 50);
+          if (NAME_PATTERN.test(next)) onChange({ lastName: next });
+        }}
+        maxLength={50}
         className={inputClass}
       />
       <input
         type="email"
         placeholder="Email"
         value={value.email}
-        onChange={(e) => onChange({ email: e.target.value })}
+        onChange={(e) => onChange({ email: e.target.value.slice(0, 100) })}
+        maxLength={100}
         className={inputClass}
       />
       <input
         type="tel"
-        placeholder="Phone (digits only)"
+        placeholder="Phone (with country code)"
         value={value.phone}
         onChange={(e) => {
           const val = e.target.value;
-          if (/^\d*$/.test(val)) onChange({ phone: val });
+          if (!val || PHONE_ALLOWED_CHARS.test(val)) onChange({ phone: val });
         }}
         className={inputClass}
         autoComplete="tel"
+        inputMode="tel"
+        maxLength={20}
       />
       <input
         type="number"
@@ -98,6 +114,7 @@ export function CustomerDetailsCard({
           onChange({ numberTravelling: String(Math.max(1, Math.floor(parsed))) });
         }}
         className={inputClass}
+        max={99}
       />
       <input
         type="date"
@@ -112,14 +129,16 @@ export function CustomerDetailsCard({
         type="text"
         placeholder="License Number"
         value={value.licenseNo}
-        onChange={(e) => onChange({ licenseNo: e.target.value })}
+        onChange={(e) => onChange({ licenseNo: e.target.value.slice(0, 30) })}
+        maxLength={30}
         className={inputClass}
       />
       <input
         type="text"
         placeholder="License Issuing Country"
         value={value.licenseIssued}
-        onChange={(e) => onChange({ licenseIssued: e.target.value })}
+        onChange={(e) => onChange({ licenseIssued: e.target.value.slice(0, 80) })}
+        maxLength={80}
         className={inputClass}
       />
       <input
@@ -135,7 +154,11 @@ export function CustomerDetailsCard({
         type="text"
         placeholder="Address"
         value={value.address}
-        onChange={(e) => onChange({ address: e.target.value })}
+        onChange={(e) => {
+          const next = e.target.value.slice(0, 160);
+          if (ADDRESS_ALLOWED_PATTERN.test(next)) onChange({ address: next });
+        }}
+        maxLength={160}
         className={inputClass}
       />
       <div className="grid grid-cols-2 gap-3">
@@ -143,14 +166,22 @@ export function CustomerDetailsCard({
           type="text"
           placeholder="City"
           value={value.city}
-          onChange={(e) => onChange({ city: e.target.value })}
+          onChange={(e) => {
+            const next = e.target.value.slice(0, 80);
+            if (LOCATION_ALLOWED_PATTERN.test(next)) onChange({ city: next });
+          }}
+          maxLength={80}
           className={inputClass}
         />
         <input
           type="text"
           placeholder="State"
           value={value.state}
-          onChange={(e) => onChange({ state: e.target.value })}
+          onChange={(e) => {
+            const next = e.target.value.slice(0, 80);
+            if (LOCATION_ALLOWED_PATTERN.test(next)) onChange({ state: next });
+          }}
+          maxLength={80}
           className={inputClass}
         />
       </div>
@@ -219,9 +250,10 @@ export function CustomerDetailsCard({
           placeholder="Post Code"
           value={value.postcode}
           onChange={(e) => {
-            const val = e.target.value;
-            if (/^\d*$/.test(val)) onChange({ postcode: val });
+            const val = e.target.value.slice(0, 10);
+            if (POSTCODE_ALLOWED_PATTERN.test(val)) onChange({ postcode: val });
           }}
+          maxLength={10}
           className={inputClass}
         />
       </div>

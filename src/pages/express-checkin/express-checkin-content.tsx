@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLocation, useNavigate } from 'react-router';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -111,6 +110,115 @@ function stripHtmlTags(input: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_ALLOWED_CHARS = /^[+()\-\s\d]+$/;
+const NAME_PATTERN = /^[a-zA-Z\s'-]+$/;
+const ADDRESS_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'/#-]*$/;
+const LOCATION_ALLOWED_PATTERN = /^[a-zA-Z0-9\s,.'-]*$/;
+const POSTCODE_PATTERN = /^[a-zA-Z0-9\s-]{3,10}$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_PATTERN.test(email.trim());
+}
+
+function isValidPhone(phone: string): boolean {
+  const raw = phone.trim();
+  if (!raw || !PHONE_ALLOWED_CHARS.test(raw)) return false;
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+function validateCustomerDetailsForm(form: CustomerDetailsForm): string | null {
+  const firstName = form.firstName.trim();
+  const lastName = form.lastName.trim();
+  const email = form.email.trim();
+  const phone = form.phone.trim();
+  const travellers = Number(form.numberTravelling || 0);
+  const dob = form.dateOfBirth.trim();
+  const licenseNo = form.licenseNo.trim();
+  const address = form.address.trim();
+  const city = form.city.trim();
+  const state = form.state.trim();
+  const country = form.country.trim();
+  const postcode = form.postcode.trim();
+
+  if (!firstName || !lastName) return 'First name and last name are required.';
+  if (!NAME_PATTERN.test(firstName) || !NAME_PATTERN.test(lastName)) {
+    return 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+  }
+  if (!isValidEmail(email)) return 'Please enter a valid email address.';
+  if (!isValidPhone(phone)) return 'Please enter a valid phone number.';
+  if (!Number.isFinite(travellers) || travellers <= 0) {
+    return 'Number of people traveling must be at least 1.';
+  }
+  if (!dob) return 'Date of birth is required.';
+  if (!licenseNo) return 'Licence number is required.';
+  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
+  if ((city && !LOCATION_ALLOWED_PATTERN.test(city)) || (state && !LOCATION_ALLOWED_PATTERN.test(state))) {
+    return 'City and state contain invalid characters.';
+  }
+  if (country && !LOCATION_ALLOWED_PATTERN.test(country)) {
+    return 'Country contains invalid characters.';
+  }
+  if (postcode && !POSTCODE_PATTERN.test(postcode)) return 'Please enter a valid post code.';
+  return null;
+}
+
+function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
+  const raw = getFriendlyError(error, fallback);
+  const msg = raw.toLowerCase();
+  if (msg.includes('number') && (msg.includes('travelling') || msg.includes('passenger'))) {
+    return 'Please enter a valid number of passengers (at least 1).';
+  }
+  if (msg.includes('email')) return 'Please enter a valid email address.';
+  if (msg.includes('phone') || msg.includes('mobile')) {
+    return 'Please enter a valid phone number (8 to 15 digits).';
+  }
+  if (msg.includes('postcode') || msg.includes('postal')) {
+    return 'Please enter a valid post code.';
+  }
+  if (msg.includes('date of birth') || msg.includes('dob')) {
+    return 'Please enter a valid date of birth.';
+  }
+  if (msg.includes('license') || msg.includes('licence')) {
+    return 'Please enter a valid licence number.';
+  }
+  if (msg.includes('first name') || msg.includes('last name')) {
+    return 'Please enter both first name and last name.';
+  }
+  return raw;
+}
+
+function validateExtraDriverInput(
+  d: ExtraDriversForm['drivers'][number],
+  index: number,
+  ownerEmail: string,
+): string | null {
+  const label = `Driver ${index + 1}`;
+  const first = d.firstname.trim();
+  const last = d.lastname.trim();
+  const dob = d.dateofbirth.trim();
+  const lic = d.licenseno.trim();
+  const email = d.email.trim() || ownerEmail.trim();
+  const state = d.state.trim();
+  const city = d.city.trim();
+  const postcode = d.postcode.trim();
+  const address = d.address.trim();
+
+  if (!first || !last) return `${label}: first name and last name are required.`;
+  if (!NAME_PATTERN.test(first) || !NAME_PATTERN.test(last)) {
+    return `${label}: name contains invalid characters.`;
+  }
+  if (!dob) return `${label}: date of birth is required.`;
+  if (!lic) return `${label}: licence number is required.`;
+  if (!email || !isValidEmail(email)) return `${label}: please enter a valid email address.`;
+  if (state && !LOCATION_ALLOWED_PATTERN.test(state)) return `${label}: state contains invalid characters.`;
+  if (city && !LOCATION_ALLOWED_PATTERN.test(city)) return `${label}: city contains invalid characters.`;
+  if (postcode && !POSTCODE_PATTERN.test(postcode)) return `${label}: please enter a valid post code.`;
+  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return `${label}: address contains invalid characters.`;
+  return null;
 }
 
 function workflowOptionalExtraId(f: Record<string, unknown>, i: number): string {
@@ -302,7 +410,6 @@ export function ExpressCheckinContent() {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [launchingPayment, setLaunchingPayment] = useState(false);
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
-  const { rcmProfile } = useDashboardData();
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
   const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
 
@@ -471,6 +578,31 @@ export function ExpressCheckinContent() {
   const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
   const [savingStep, setSavingStep] = useState<string | null>(null);
 
+  // Refresh documents whenever Upload Images card opens so driver/document data stays in sync.
+  useEffect(() => {
+    if (isUpdateMode) return;
+    if (openCard !== 'images') return;
+    if (!reservationRef) return;
+    let cancelled = false;
+    setLoadingDocuments(true);
+    void listRcmDocuments(reservationRef, 'checkin')
+      .then((res) => {
+        if (cancelled) return;
+        const rows = Array.isArray(res?.data) ? res.data : [];
+        hydrateUploadDocsFromApi(rows);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        toast.error(getFriendlyError(e, 'Could not refresh document list'));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDocuments(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [openCard, isUpdateMode, reservationRef]);
+
   const isStepLocked = (id: StepId) => {
     if (isUpdateMode) return false;
     const idx = stepOrder.indexOf(id);
@@ -493,31 +625,9 @@ export function ExpressCheckinContent() {
       toast.error(bookingLockedReason);
       return;
     }
-    const firstName = customerForm.firstName.trim();
-    const lastName = customerForm.lastName.trim();
-    const email = customerForm.email.trim();
-    const phone = customerForm.phone.trim();
-    const travellerCount = toFiniteNumber(customerForm.numberTravelling, 0);
-
-    if (!firstName || !lastName) {
-      toast.error('First name and last name are required.');
-      return;
-    }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Please enter a valid email address.');
-      return;
-    }
-    if (!phone) {
-      toast.error('Phone number is required.');
-      return;
-    }
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
-      toast.error('Please enter a valid phone number.');
-      return;
-    }
-    if (travellerCount <= 0) {
-      toast.error('Number of people traveling must be at least 1.');
+    const formError = validateCustomerDetailsForm(customerForm);
+    if (formError) {
+      toast.error(formError);
       return;
     }
 
@@ -662,6 +772,33 @@ export function ExpressCheckinContent() {
     };
   }, [documentLinkData]);
   const [uploadForm, setUploadForm] = useState<UploadImagesForm>(initialUploadForm);
+  const hydrateUploadDocsFromApi = (rows: unknown[]) => {
+    setUploadForm({
+      docs: rows.map((d, i) => {
+        const row = d as Record<string, unknown>;
+        const who = [row.customerfirstname, row.customerlastname]
+          .map((x) => String(x ?? '').trim())
+          .filter(Boolean)
+          .join(' ');
+        const baseTitle = String(row.title ?? 'Document');
+        return {
+          id: documentUploadRowId(row, i),
+          customerId: Number(row.customerid ?? 0),
+          documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
+          documentLinkId: documentLinkIdFromRow(row),
+          seqno: Number(row.seqno ?? 0),
+          doctype: String(row.doctype ?? 'other').trim() || 'other',
+          storageprovider:
+            String(row.storageprovider ?? 'cloudinary').trim() || 'cloudinary',
+          description: String(row.text ?? '').trim(),
+          title: who ? `${baseTitle} (${who})` : baseTitle,
+          uploaded: Number(row.isuploaded ?? 0) > 0,
+          pendingStore: null,
+          notes: String(row.notes ?? '').trim(),
+        };
+      }),
+    });
+  };
 
   const initialFormsRef = useRef({
     customer: initialCustomerForm,
@@ -916,6 +1053,10 @@ export function ExpressCheckinContent() {
         mailinglist: Boolean(customerInfo?.mailinglist),
         loyaltycardno: firstText(customerInfo?.loyaltycardno),
       };
+      const formError = validateCustomerDetailsForm(customerForm);
+      if (formError) {
+        throw new Error(formError);
+      }
       const travellerCount = toFiniteNumber(customerForm.numberTravelling, 0);
       if (travellerCount <= 0) {
         throw new Error('Number of people traveling must be at least 1.');
@@ -1038,7 +1179,7 @@ export function ExpressCheckinContent() {
         markSaved('booking');
       }
     } catch (e) {
-      const msg = getFriendlyError(e, 'Could not save booking details');
+      const msg = friendlyBookingErrorMessage(e, 'Could not save booking details');
       setBookingSaveError(msg);
       toast.error(msg);
     } finally {
@@ -1092,6 +1233,13 @@ export function ExpressCheckinContent() {
         markSaved('drivers');
         return;
       }
+      for (let i = 0; i < driversToSave.length; i += 1) {
+        const err = validateExtraDriverInput(driversToSave[i], i, ownerEmail);
+        if (err) {
+          toast.error(err);
+          return;
+        }
+      }
 
       for (const d of driversToSave) {
         await addExtraDriver({
@@ -1137,10 +1285,54 @@ export function ExpressCheckinContent() {
       invalidateBookingsCache(reservationRefValue);
       markSaved('drivers');
     } catch (e) {
-      toast.error(getFriendlyError(e, 'Could not save extra drivers'));
+      toast.error(friendlyBookingErrorMessage(e, 'Could not save extra drivers'));
     } finally {
       setSavingStep(null);
     }
+  };
+
+  const removeExtraDriverNow = async (driver: ExtraDriversForm['drivers'][number]) => {
+    if (bookingLockedReason) {
+      toast.error(bookingLockedReason);
+      return;
+    }
+    if (!(Number(driver.customerid) > 0)) return;
+
+    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    if (!reservationRefValue) {
+      toast.error('Missing reservation reference');
+      return;
+    }
+
+    const ownerEmail = firstText(customerForm.email, customerSnapshot?.email);
+    const ownerState = firstText(customerForm.state, customerSnapshot?.state) || 'NA';
+    const ownerCity = firstText(customerForm.city, customerSnapshot?.city) || 'NA';
+    const ownerPostcode = firstText(
+      customerForm.postcode,
+      customerSnapshot?.postcode,
+    ) || '0000';
+    const ownerAddress = firstText(
+      customerForm.address,
+      customerSnapshot?.address,
+    ) || 'NA';
+
+    await addExtraDriver({
+      reservation_ref: reservationRefValue,
+      customerid: -Math.abs(Number(driver.customerid)),
+      customer: {
+        firstname: 'Delete',
+        lastname: 'Driver',
+        dateofbirth: '01/Jan/1980',
+        licenseno: '',
+        email: ownerEmail || 'no-reply@northsiderentals.local',
+        state: ownerState,
+        city: ownerCity,
+        postcode: ownerPostcode,
+        address: ownerAddress,
+      },
+    });
+    toast.success('Extra driver removed');
+    invalidateBookingsCache(reservationRefValue);
   };
 
   /** Binary upload only; `POST /documents/rcm/store` runs on Save. */
@@ -1374,7 +1566,8 @@ export function ExpressCheckinContent() {
     try {
       await deleteRcmDocument({
         reservation_ref: reservationRefValue,
-        document_link_id: -Math.abs(linkId),
+        // API expects real document link id for delete (positive identifier).
+        document_link_id: Math.abs(linkId),
       });
       setUploadForm((prev) => ({
         docs: prev.docs.map((d) =>
@@ -1550,29 +1743,6 @@ export function ExpressCheckinContent() {
         {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
         <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
 
-          <CollapsibleCard
-            title={stepName(steps, 'customerdetails', 'CUSTOMER DETAILS')}
-            isOpen={openCard === 'customer'}
-            onToggle={() => toggleCard('customer')}
-          >
-            <CustomerDetailsCard
-              value={customerForm}
-              onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
-              countries={rcmProfile?.countries ?? []}
-            />
-            <div className="flex gap-2 mt-4">
-              <Button
-                onClick={() => void saveCustomerStep()}
-                disabled={savingStep === 'customer' || Boolean(bookingLockedReason)}
-                className="bg-[#ffc107] text-black"
-              >
-                {savingStep === 'customer' ? 'Saving...' : 'Save'}
-              </Button>
-              <Button variant="outline" onClick={() => setCustomerForm(initialCustomerForm)}>
-                Cancel
-              </Button>
-            </div>
-          </CollapsibleCard>
           {isUpdateMode ? (
             <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">MODIFY BOOKING</h3>
@@ -1675,6 +1845,7 @@ export function ExpressCheckinContent() {
                 value={driversForm}
                 onChange={setDriversForm}
                 maxDrivers={MAX_EXTRA_DRIVERS}
+                onRemoveDriver={removeExtraDriverNow}
               />
               <div className="flex gap-2 mt-4">
                 <Button
