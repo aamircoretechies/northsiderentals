@@ -122,6 +122,75 @@ export function resolveRcmPublicUrl(path: string): string {
   return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
 }
 
+/** Origin used for RCM-hosted static/media files (API base with `/api/v1` stripped, or `VITE_BASE_URL`). */
+function getRcmMediaOrigin(): string | null {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    '',
+  );
+  const envOrigin = (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(
+    /\/$/,
+    '',
+  );
+
+  const fromApi = apiBase?.replace(/\/api\/v1\/?$/i, '') || '';
+  const candidate = fromApi || envOrigin || '';
+  if (!candidate) return null;
+
+  if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+    try {
+      return new URL(candidate).origin;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      return new URL(candidate, window.location.origin).origin;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether profile/media URLs should be loaded with `Authorization` via `fetch` + blob URL.
+ * Relative `/uploads/...` always; absolute `https` only when same origin as RCM media host and
+ * path contains `/uploads/` (plain `<img>` cannot send Bearer, so direct URLs often 403).
+ */
+export function shouldAuthFetchMediaUrl(url: string): boolean {
+  const raw = url?.trim();
+  if (!raw) return false;
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) return false;
+
+  let abs = raw;
+  if (raw.startsWith('//')) abs = `https:${raw}`;
+
+  const pathnameHasUploads = (pathname: string) => {
+    const p = pathname.toLowerCase();
+    return p.startsWith('/uploads/') || p.includes('/uploads/');
+  };
+
+  if (!abs.startsWith('http://') && !abs.startsWith('https://')) {
+    const path = abs.startsWith('/') ? abs : `/${abs}`;
+    return pathnameHasUploads(path);
+  }
+
+  try {
+    const u = new URL(abs);
+    if (!pathnameHasUploads(u.pathname)) return false;
+    const mediaOrigin = getRcmMediaOrigin();
+    if (mediaOrigin) return u.origin === mediaOrigin;
+    if (typeof window !== 'undefined' && u.origin === window.location.origin) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function timeAgo(date: Date | string): string {
   const now = new Date();
   const inputDate = typeof date === 'string' ? new Date(date) : date;

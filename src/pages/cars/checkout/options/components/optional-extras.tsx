@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { MAX_CHECKOUT_EXTRA_FEE_QTY } from '@/services/booking-payload';
 
 export interface OptionalExtraItem {
   id: string;
@@ -11,6 +12,8 @@ export interface OptionalExtraItem {
   quantity?: number;
   selected?: boolean;
   description?: string;
+  /** Max units user may select (capped in UI, default 10). */
+  maxQty?: number;
 }
 
 export interface OptionalExtrasProps {
@@ -78,39 +81,42 @@ export function OptionalExtras({ extras, onUpdateQuantity, onToggle }: OptionalE
             </div>
 
             <div>
-              {extra.type === 'quantity' && (
-                <div className="flex items-center border border-[#0061e0] rounded-full overflow-hidden h-9">
-                  <button
-                    className="w-10 flex items-center justify-center text-[#0061e0] font-bold text-lg cursor-pointer hover:bg-gray-50"
-                    onClick={() => onUpdateQuantity(extra.id, Math.max(0, (extra.quantity || 0) - 1))}
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={extra.quantity || 0}
-                    onChange={(e) => {
-                      const raw = e.target.value.trim();
-                      if (!raw) {
-                        onUpdateQuantity(extra.id, 0);
-                        return;
-                      }
-                      const parsed = Number(raw);
-                      if (!Number.isFinite(parsed)) return;
-                      onUpdateQuantity(extra.id, Math.max(0, Math.floor(parsed)));
-                    }}
-                    className="w-12 text-center text-black font-extrabold text-[14px] outline-none bg-transparent"
-                  />
-                  <button
-                    className="w-10 flex items-center justify-center text-[#0061e0] font-bold text-lg cursor-pointer hover:bg-gray-50"
-                    onClick={() => onUpdateQuantity(extra.id, (extra.quantity || 0) + 1)}
-                  >
-                    +
-                  </button>
-                </div>
-              )}
+              {extra.type === 'quantity' && (() => {
+                const cap = Math.min(
+                  MAX_CHECKOUT_EXTRA_FEE_QTY,
+                  Math.max(
+                    1,
+                    Number(extra.maxQty ?? MAX_CHECKOUT_EXTRA_FEE_QTY) ||
+                      MAX_CHECKOUT_EXTRA_FEE_QTY,
+                  ),
+                );
+                const qty = Math.max(0, Math.min(cap, Number(extra.quantity ?? 0)));
+                return (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label={`Decrease quantity for ${extra.name}`}
+                      onClick={() => onUpdateQuantity(extra.id, qty - 1)}
+                      disabled={qty <= 0}
+                      className="w-9 h-9 rounded-full border border-[#0061e0] text-[#0061e0] flex items-center justify-center text-xl font-bold hover:bg-[#0061e0] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[1.5rem] text-center text-[15px] font-extrabold text-black">
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Increase quantity for ${extra.name}`}
+                      onClick={() => onUpdateQuantity(extra.id, qty + 1)}
+                      disabled={qty >= cap}
+                      className="w-9 h-9 rounded-full border border-[#0061e0] text-[#0061e0] flex items-center justify-center text-xl font-bold hover:bg-[#0061e0] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      +
+                    </button>
+                  </div>
+                );
+              })()}
 
               {extra.type === 'toggle' && extra.selected && (
                 <Button

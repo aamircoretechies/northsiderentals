@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { BookingOverview } from './components/booking-overview';
@@ -9,6 +8,16 @@ import { RentalFeeSummary } from './components/rental-fee-summary';
 import { EmailQuoteModal } from './components/email-quote-modal';
 import { carsService } from '@/services/cars';
 import { ContentLoader } from '@/components/common/content-loader';
+import { MAX_CHECKOUT_EXTRA_FEE_QTY } from '@/services/booking-payload';
+import {
+  type CheckoutAreaOfUseOption,
+  type CheckoutCountryOption,
+  extractCheckoutAreaOfUseOptions,
+  extractCheckoutCountriesFromVehicleDetails,
+  extractVehicleDetailsData,
+} from '@/lib/checkout-vehicle-details';
+
+export type CheckoutApiCountry = CheckoutCountryOption;
 
 function gstIncludedInTotal(total: number, taxRate: number): number {
   if (total <= 0 || taxRate <= 0) return 0;
@@ -81,6 +90,8 @@ export function CarsCheckoutOptionsContent() {
   const [damageOptions, setDamageOptions] = useState<DamageCoverItem[]>([]);
   const [selectedDamageOption, setSelectedDamageOption] = useState('std');
   const [loadingDetails, setLoadingDetails] = useState(true);
+  const [countries, setCountries] = useState<CheckoutApiCountry[]>([]);
+  const [areaOfUseOptions, setAreaOfUseOptions] = useState<CheckoutAreaOfUseOption[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -103,23 +114,56 @@ export function CarsCheckoutOptionsContent() {
           age_id: searchParams.age_id || 0
         };
         const response = await carsService.getVehicleDetails(requestData);
-        if (active && response.data) {
-          const fetchedExtras = response.data.optionalfees || [];
-          setExtras(fetchedExtras.map((fee: any) => {
-            const feeDays = fee.numberofdays || rentalDays || 1;
-            const price = fee.type === 'Daily' ? (fee.fees || 0) * feeDays : (fee.totalfeeamount || fee.fees || 0);
+        if (active && response != null) {
+          const data = extractVehicleDetailsData(response);
+          const mappedCountries = extractCheckoutCountriesFromVehicleDetails(data);
+          setCountries(mappedCountries);
+          setAreaOfUseOptions(
+            extractCheckoutAreaOfUseOptions(
+              data,
+              Number(searchParams?.pickup_location_id),
+            ),
+          );
+
+          const fetchedExtras = (data.optionalfees as unknown[]) || [];
+          setExtras(fetchedExtras.map((feeUnknown) => {
+            const fee = feeUnknown as Record<string, unknown>;
+            const feeDays = Number(fee.numberofdays) || rentalDays || 1;
+            const dailyFees = Number(fee.fees) || 0;
+            const totalFromApi = fee.totalfeeamount != null ? Number(fee.totalfeeamount) : null;
+            const price =
+              String(fee.type ?? '').toLowerCase() === 'daily'
+                ? dailyFees * feeDays
+                : totalFromApi ?? dailyFees;
+            const isQuantity =
+              Boolean(fee.qtyapply) ||
+              String(fee.name ?? '')
+                .toLowerCase()
+                .includes('driver');
             return {
-              id: String(fee.id),
-              name: fee.name,
-              price: price,
-              type: fee.name.toLowerCase().includes('driver') ? 'quantity' : 'toggle',
+              id: String(fee.id ?? ''),
+              name: String(fee.name ?? ''),
+              price: Number.isFinite(price) ? price : 0,
+              type: isQuantity ? ('quantity' as const) : ('toggle' as const),
               quantity: 0,
               selected: false,
-              description: concatFeeDescription(fee as Record<string, unknown>),
+              description: concatFeeDescription(fee),
+              maxQty: Math.min(
+                MAX_CHECKOUT_EXTRA_FEE_QTY,
+                Math.max(
+                  1,
+                  Number(
+                    fee.maxqty ??
+                      fee.max_qty ??
+                      fee.MaxQty ??
+                      MAX_CHECKOUT_EXTRA_FEE_QTY,
+                  ) || MAX_CHECKOUT_EXTRA_FEE_QTY,
+                ),
+              ),
             };
           }));
 
-          const fetchedDamage = response.data.insuranceoptions || [];
+          const fetchedDamage = (data.insuranceoptions as unknown[]) || [];
           const mappedDamage = fetchedDamage.map((ins: any) => {
             const insDays = ins.numberofdays || rentalDays || 1;
             const perDay = Number(ins.fees ?? ins.price ?? 0);
@@ -157,7 +201,18 @@ export function CarsCheckoutOptionsContent() {
 
   const updateQuantity = (id: string, qty: number) => {
     setExtras((current) =>
-      current.map((e) => (e.id === id ? { ...e, quantity: qty } : e))
+      current.map((e) => {
+        if (e.id !== id || e.type !== 'quantity') return e;
+        const cap = Math.min(
+          MAX_CHECKOUT_EXTRA_FEE_QTY,
+          Math.max(
+            1,
+            Number(e.maxQty ?? MAX_CHECKOUT_EXTRA_FEE_QTY) || MAX_CHECKOUT_EXTRA_FEE_QTY,
+          ),
+        );
+        const q = Math.max(0, Math.min(cap, Math.floor(Number(qty))));
+        return { ...e, quantity: q };
+      }),
     );
   };
 
@@ -219,7 +274,20 @@ export function CarsCheckoutOptionsContent() {
       />
       <Button
         className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-4 sm:py-6 rounded-full shadow-md"
-        onClick={() => navigate('/cars/checkout/details', { state: { carData, extras, damageOptions, selectedDamageOption, searchParams, locations } })}
+        onClick={() =>
+          navigate('/cars/checkout/details', {
+            state: {
+              carData,
+              extras,
+              damageOptions,
+              selectedDamageOption,
+              searchParams,
+              locations,
+              countries,
+              areaOfUseOptions,
+            },
+          })
+        }
       >
         Make a Booking
       </Button>

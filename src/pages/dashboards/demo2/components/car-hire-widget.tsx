@@ -71,6 +71,21 @@ export function CarHireWidget({
   const [returnLocation, setReturnLocation] = useState('');
   const [selectedDriverAge, setSelectedDriverAge] = useState('');
 
+  /** Sync with defaults in render so Radix Select stays controlled when data arrives before useEffect runs. */
+  const defaultLocationId = useMemo(() => {
+    if (!locations.length) return '';
+    return String(locations.find((l) => l.isdefault)?.id ?? locations[0].id);
+  }, [locations]);
+
+  const defaultDriverAgeId = useMemo(() => {
+    if (!driverAges.length) return '';
+    return String(driverAges[driverAges.length - 1].id);
+  }, [driverAges]);
+
+  const resolvedPickupLocation = pickupLocation || defaultLocationId;
+  const resolvedReturnLocation = returnLocation || defaultLocationId;
+  const resolvedDriverAge = selectedDriverAge || defaultDriverAgeId;
+
   useEffect(() => {
     if (!locations.length) {
       setPickupLocation('');
@@ -104,8 +119,8 @@ export function CarHireWidget({
   const { searchCars, loading } = useCarSearch();
 
   const pickupLoc = useMemo(
-    () => locations.find((l) => String(l.id) === pickupLocation),
-    [locations, pickupLocation],
+    () => locations.find((l) => String(l.id) === resolvedPickupLocation),
+    [locations, resolvedPickupLocation],
   );
 
   const minPickupDate = useMemo(() => {
@@ -119,14 +134,14 @@ export function CarHireWidget({
   }, [pickupLoc, pickupDate]);
 
   const pickupSlot = useMemo(() => {
-    if (!pickupLocation || !officetimes.length) return null;
-    return pickOfficeSlot(officetimes, Number(pickupLocation), pickupDate);
-  }, [officetimes, pickupLocation, pickupDate]);
+    if (!resolvedPickupLocation || !officetimes.length) return null;
+    return pickOfficeSlot(officetimes, Number(resolvedPickupLocation), pickupDate);
+  }, [officetimes, resolvedPickupLocation, pickupDate]);
 
   const returnSlot = useMemo(() => {
-    if (!returnLocation || !officetimes.length) return null;
-    return pickOfficeSlot(officetimes, Number(returnLocation), returnDate);
-  }, [officetimes, returnLocation, returnDate]);
+    if (!resolvedReturnLocation || !officetimes.length) return null;
+    return pickOfficeSlot(officetimes, Number(resolvedReturnLocation), returnDate);
+  }, [officetimes, resolvedReturnLocation, returnDate]);
 
   const pickupTimeOptions = useMemo(() => {
     if (!pickupSlot) return ALL_TIME_OPTIONS;
@@ -152,6 +167,16 @@ export function CarHireWidget({
     }
   }, [returnTimeOptions, returnTime]);
 
+  const resolvedPickupTime = useMemo(() => {
+    if (pickupTimeOptions.includes(pickupTime)) return pickupTime;
+    return pickupTimeOptions[0] ?? '09:00 AM';
+  }, [pickupTimeOptions, pickupTime]);
+
+  const resolvedReturnTime = useMemo(() => {
+    if (returnTimeOptions.includes(returnTime)) return returnTime;
+    return returnTimeOptions[0] ?? '09:00 AM';
+  }, [returnTimeOptions, returnTime]);
+
   useEffect(() => {
     if (!pickupDate || !returnDate) return;
     if (returnDate < minReturnDate) {
@@ -162,28 +187,28 @@ export function CarHireWidget({
   const handleFindCars = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!pickupDate || !returnDate) return;
-    if (!pickupLocation || !returnLocation || !selectedDriverAge) return;
+    if (!resolvedPickupLocation || !resolvedReturnLocation || !resolvedDriverAge) return;
     if (returnDate < minReturnDate) return;
 
     try {
       const formattedPickupTime = format(
-        parse(pickupTime, 'hh:mm a', new Date()),
+        parse(resolvedPickupTime, 'hh:mm a', new Date()),
         'HH:mm',
       );
       const formattedReturnTime = format(
-        parse(returnTime, 'hh:mm a', new Date()),
+        parse(resolvedReturnTime, 'hh:mm a', new Date()),
         'HH:mm',
       );
 
       const params = {
-        pickup_location_id: parseInt(pickupLocation, 10),
-        dropoff_location_id: parseInt(returnLocation, 10),
+        pickup_location_id: parseInt(resolvedPickupLocation, 10),
+        dropoff_location_id: parseInt(resolvedReturnLocation, 10),
         pickup_date: format(pickupDate, 'yyyy-MM-dd'),
         pickup_time: formattedPickupTime,
         dropoff_date: format(returnDate, 'yyyy-MM-dd'),
         dropoff_time: formattedReturnTime,
         category_id: 0,
-        age_id: parseInt(selectedDriverAge, 10),
+        age_id: parseInt(resolvedDriverAge, 10),
         campaigncode: promoCode,
         promocode: promoCode,
         couponcode: promoCode,
@@ -222,9 +247,9 @@ export function CarHireWidget({
   };
 
   const canSearch =
-    Boolean(pickupLocation) &&
-    Boolean(returnLocation) &&
-    Boolean(selectedDriverAge) &&
+    Boolean(resolvedPickupLocation) &&
+    Boolean(resolvedReturnLocation) &&
+    Boolean(resolvedDriverAge) &&
     Boolean(pickupDate) &&
     Boolean(returnDate) &&
     returnDate >= minReturnDate;
@@ -236,73 +261,92 @@ export function CarHireWidget({
 
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <Select
-              value={pickupLocation || undefined}
-              onValueChange={setPickupLocation}
-              disabled={!locations.length}
-            >
-              <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
-                <div className="flex min-w-0 flex-1 items-center gap-4">
-                  <div className="shrink-0 text-[#0061e0]">
-                    <MapPin className="h-6 w-6" strokeWidth={2.5} />
-                  </div>
+            {locations.length === 0 ? (
+              <>
+                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-4 text-left font-sans opacity-80">
+                  <MapPin className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2.5} />
                   <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                    <div className="mb-0.5 text-[12px] font-bold uppercase tracking-wide text-slate-500">
                       Pickup Location
                     </div>
-                    <div className="truncate text-[16px] font-bold text-black">
-                      <SelectValue
-                        placeholder={
-                          locations.length ? 'Select location' : 'No locations'
-                        }
-                      />
+                    <div className="truncate text-[16px] font-bold text-slate-600">
+                      No locations
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={String(location.id)} value={String(location.id)}>
-                    {location.location}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={returnLocation || undefined}
-              onValueChange={setReturnLocation}
-              disabled={!locations.length}
-            >
-              <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
-                <div className="flex min-w-0 flex-1 items-center gap-4">
-                  <div className="shrink-0 text-[#0061e0]">
-                    <MapPin className="h-6 w-6" strokeWidth={2.5} />
-                  </div>
+                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-4 text-left font-sans opacity-80">
+                  <MapPin className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2.5} />
                   <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                    <div className="mb-0.5 text-[12px] font-bold uppercase tracking-wide text-slate-500">
                       Return Location
                     </div>
-                    <div className="truncate text-[16px] font-bold text-black">
-                      <SelectValue
-                        placeholder={
-                          locations.length ? 'Select location' : 'No locations'
-                        }
-                      />
+                    <div className="truncate text-[16px] font-bold text-slate-600">
+                      No locations
                     </div>
                   </div>
                 </div>
-                <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={String(location.id)} value={String(location.id)}>
-                    {location.location}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              </>
+            ) : (
+              <>
+                <Select
+                  value={resolvedPickupLocation}
+                  onValueChange={setPickupLocation}
+                >
+                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div className="shrink-0 text-[#0061e0]">
+                        <MapPin className="h-6 w-6" strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                          Pickup Location
+                        </div>
+                        <div className="truncate text-[16px] font-bold text-black">
+                          <SelectValue placeholder="Select location" />
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((location) => (
+                      <SelectItem key={String(location.id)} value={String(location.id)}>
+                        {location.location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={resolvedReturnLocation}
+                  onValueChange={setReturnLocation}
+                >
+                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div className="shrink-0 text-[#0061e0]">
+                        <MapPin className="h-6 w-6" strokeWidth={2.5} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 truncate text-[12px] font-bold uppercase tracking-wide text-slate-500">
+                          Return Location
+                        </div>
+                        <div className="truncate text-[16px] font-bold text-black">
+                          <SelectValue placeholder="Select location" />
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronDown className="h-5 w-5 shrink-0 text-gray-400" strokeWidth={2.5} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((location) => (
+                      <SelectItem key={String(location.id)} value={String(location.id)}>
+                        {location.location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -340,7 +384,7 @@ export function CarHireWidget({
 
                   <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
-                  <Select value={pickupTime} onValueChange={setPickupTime}>
+                  <Select value={resolvedPickupTime} onValueChange={setPickupTime}>
                     <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
                       <Clock
                         className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
@@ -394,7 +438,7 @@ export function CarHireWidget({
 
                   <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
-                  <Select value={returnTime} onValueChange={setReturnTime}>
+                  <Select value={resolvedReturnTime} onValueChange={setReturnTime}>
                     <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
                       <Clock
                         className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
@@ -417,33 +461,37 @@ export function CarHireWidget({
             </div>
 
             <div className="mt-1">
-              <Select
-                value={selectedDriverAge || undefined}
-                onValueChange={setSelectedDriverAge}
-                disabled={!driverAges.length}
-              >
-                <SelectTrigger className="h-auto w-auto cursor-pointer gap-3 border-none bg-transparent p-0 pl-1 shadow-none hover:bg-transparent focus:ring-0 [&>svg:last-child]:hidden">
+              {driverAges.length === 0 ? (
+                <div className="flex h-auto w-auto cursor-not-allowed items-center gap-3 p-0 pl-1 opacity-70">
                   <User className="h-7 w-7 shrink-0 text-black" strokeWidth={2} />
                   <span className="text-[16px] text-black capitalize">DRIVER&apos;S AGE</span>
-                  <span className="ml-1 text-[18px] font-extrabold text-black">
-                    <SelectValue placeholder="Select" />
-                  </span>
-                  <ChevronDown className="ml-1 h-5 w-5 shrink-0 text-black" />
-                </SelectTrigger>
-                <SelectContent>
-                  {driverAges.map((age, index) => {
-                    const isLast = index === driverAges.length - 1;
-                    const ageStr = String(age.driverage);
-                    const displayAge =
-                      isLast && !ageStr.endsWith('+') ? `${ageStr}+` : ageStr;
-                    return (
-                      <SelectItem key={String(age.id)} value={String(age.id)}>
-                        {displayAge}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                  <span className="ml-1 text-[18px] font-extrabold text-slate-600">—</span>
+                </div>
+              ) : (
+                <Select value={resolvedDriverAge} onValueChange={setSelectedDriverAge}>
+                  <SelectTrigger className="h-auto w-auto cursor-pointer gap-3 border-none bg-transparent p-0 pl-1 shadow-none hover:bg-transparent focus:ring-0 [&>svg:last-child]:hidden">
+                    <User className="h-7 w-7 shrink-0 text-black" strokeWidth={2} />
+                    <span className="text-[16px] text-black capitalize">DRIVER&apos;S AGE</span>
+                    <span className="ml-1 text-[18px] font-extrabold text-black">
+                      <SelectValue placeholder="Select" />
+                    </span>
+                    <ChevronDown className="ml-1 h-5 w-5 shrink-0 text-black" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {driverAges.map((age, index) => {
+                      const isLast = index === driverAges.length - 1;
+                      const ageStr = String(age.driverage);
+                      const displayAge =
+                        isLast && !ageStr.endsWith('+') ? `${ageStr}+` : ageStr;
+                      return (
+                        <SelectItem key={String(age.id)} value={String(age.id)}>
+                          {displayAge}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="flex h-[64px] items-center gap-4 rounded-xl bg-white p-4 shadow-sm">

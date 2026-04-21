@@ -108,7 +108,6 @@ export function SignInPage() {
     }
   }
 
-  // Handle Google Sign In with Firebase and backend API exchange
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);

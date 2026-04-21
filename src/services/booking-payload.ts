@@ -5,6 +5,9 @@
 
 import { format, isValid, parseISO } from 'date-fns';
 
+/** Max quantity per optional extra line (e.g. additional driver fee) — UI and payload clamp to this. */
+export const MAX_CHECKOUT_EXTRA_FEE_QTY = 10;
+
 export type BookingType = 'Booking' | 'Quote' | 'Quotation';
 
 /** HTML date (yyyy-MM-dd) → API format e.g. 01/Jan/1990 */
@@ -57,8 +60,11 @@ export function parseTravellerCount(raw: string): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-export function licenseCountryToId(countryLabel: string): number {
-  return LICENSE_COUNTRY_ID[countryLabel] ?? 7;
+export function licenseCountryToId(countryValue: string): number {
+  const trimmed = countryValue?.trim() ?? '';
+  const asNum = parseInt(trimmed, 10);
+  if (Number.isFinite(asNum) && asNum > 0) return asNum;
+  return LICENSE_COUNTRY_ID[trimmed] ?? 7;
 }
 
 export interface BuildBookingPayloadInput {
@@ -81,6 +87,21 @@ export interface BuildBookingPayloadInput {
     date_of_birth: string;
     driver_license_number: string;
     country_id: number;
+    /** Address / licence fields collected on checkout passenger step */
+    address?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    postal_code?: string;
+    licenseexpires?: string;
+    licenseissued?: string;
+    license_state?: string;
+    /** RCM-style duplicates some stacks still read */
+    licenseno?: string;
+    firstname?: string;
+    lastname?: string;
+    dateofbirth?: string;
+    mobile?: string;
   };
   number_of_persons: number;
   insurance_id: number;
@@ -93,6 +114,8 @@ export interface BuildBookingPayloadInput {
   arrivalpoint: string;
   departurepoint: string;
   newsletter: boolean;
+  /** When set (e.g. metro/regional from UI), sent instead of hardcoded 0 */
+  areaofuseid?: number;
   /** From selected vehicle search row when present */
   transmission?: number;
   rateperiod_typeid?: number;
@@ -132,6 +155,7 @@ export function buildCreateBookingPayload(
     newsletter,
     transmission = 1,
     rateperiod_typeid = 1,
+    areaofuseid: areaOfUseIdInput,
     agentname = '',
     agentemail = '',
     agentrefno = '',
@@ -146,6 +170,15 @@ export function buildCreateBookingPayload(
   const bookingTypeCode =
     bookingType === 'Quotation' || bookingType === 'Quote' ? 1 : 2;
 
+  const cd = customer_details as Record<string, unknown>;
+  const mergedCustomerDetails: Record<string, unknown> = { ...cd };
+  // Common RCM aliases so backends that read snake_case or flat licence fields still receive data.
+  if (cd.first_name) mergedCustomerDetails.firstname = cd.first_name;
+  if (cd.last_name) mergedCustomerDetails.lastname = cd.last_name;
+  if (cd.date_of_birth) mergedCustomerDetails.dateofbirth = cd.date_of_birth;
+  if (cd.phone) mergedCustomerDetails.mobile = cd.phone;
+  if (cd.driver_license_number) mergedCustomerDetails.licenseno = cd.driver_license_number;
+
   return {
     vehicle_id: parsePositiveInt(vehicle_id, 0),
     category_id: parsePositiveInt(category_id, 0),
@@ -157,7 +190,7 @@ export function buildCreateBookingPayload(
     dropoff_time,
     age_id: parsePositiveInt(age_id, 0),
     number_of_persons: parsePositiveInt(number_of_persons, 1),
-    customer_details,
+    customer_details: mergedCustomerDetails,
     insurance_id: parsePositiveInt(insurance_id, 0),
     extrakmsid: 0,
     transmission: parsePositiveInt(transmission, 1),
@@ -176,7 +209,7 @@ export function buildCreateBookingPayload(
     flightout: nonEmpty(flightout, 'N/A'),
     arrivalpoint: nonEmpty(arrivalpoint, 'N/A'),
     departurepoint: nonEmpty(departurepoint, 'N/A'),
-    areaofuseid: 0,
+    areaofuseid: parsePositiveInt(areaOfUseIdInput ?? 0, 0),
     newsletter: Boolean(newsletter),
     refno: nonEmpty(refno, 'N/A'),
     relocationspecialid: 1,
@@ -185,7 +218,10 @@ export function buildCreateBookingPayload(
     urlid: 1,
     extra_fees: extra_fees.map((e) => ({
       id: parsePositiveInt(e.id, 0),
-      qty: parsePositiveInt(e.qty, 1),
+      qty: Math.min(
+        MAX_CHECKOUT_EXTRA_FEE_QTY,
+        Math.max(1, parsePositiveInt(e.qty, 1)),
+      ),
     })),
     extradriver,
     // Backend expects numeric booking type (1=quote, 2=booking).
@@ -213,7 +249,10 @@ export function mapUiExtrasToPayload(
       id: parsePositiveInt(e.id, 0),
       qty:
         e.type === 'quantity'
-          ? parsePositiveInt(e.quantity, 1)
+          ? Math.min(
+              MAX_CHECKOUT_EXTRA_FEE_QTY,
+              Math.max(1, parsePositiveInt(e.quantity, 1)),
+            )
           : 1,
     }))
     .filter((e) => e.id > 0);

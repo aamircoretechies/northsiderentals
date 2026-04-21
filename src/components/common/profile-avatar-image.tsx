@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getInitials } from '@/lib/helpers';
+import { getInitials, resolveRcmPublicUrl, shouldAuthFetchMediaUrl } from '@/lib/helpers';
 import { cn } from '@/lib/utils';
 import { apiBlob } from '@/utils/api-client';
 
@@ -12,18 +12,14 @@ type Props = {
   fallbackClassName?: string;
 };
 
-/**
- * Only relative (or path-only) `/uploads/...` URLs may need Authorization on some stacks.
- * Full `https://…/uploads/…` links are public static files — use them as normal `<img src>`.
- */
-function needsBearerFetch(url: string): boolean {
-  if (!url) return false;
-  if (url.startsWith('data:') || url.startsWith('blob:')) return false;
-  const u = url.trim().toLowerCase();
-  if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('//')) {
-    return false;
-  }
-  return u.startsWith('/uploads/') || u.includes('/uploads/');
+/** Normalize to a displayable absolute URL (or data/blob URL). */
+function profileImageAbsoluteUrl(raw: string): string {
+  const t = raw.trim();
+  if (!t) return '';
+  if (t.startsWith('data:') || t.startsWith('blob:')) return t;
+  if (t.startsWith('//')) return `https:${t}`;
+  if (t.startsWith('http://') || t.startsWith('https://')) return t;
+  return resolveRcmPublicUrl(t);
 }
 
 export function ProfileAvatarImage({
@@ -34,11 +30,14 @@ export function ProfileAvatarImage({
   fallbackClassName,
 }: Props) {
   const trimmed = src?.trim() ?? '';
+  const absoluteFromTrimmed = trimmed ? profileImageAbsoluteUrl(trimmed) : '';
   const [resolved, setResolved] = useState<string | null>(() =>
-    trimmed && !needsBearerFetch(trimmed) ? trimmed : null,
+    absoluteFromTrimmed && !shouldAuthFetchMediaUrl(absoluteFromTrimmed)
+      ? absoluteFromTrimmed
+      : null,
   );
   const [pending, setPending] = useState(
-    () => Boolean(trimmed && needsBearerFetch(trimmed)),
+    () => Boolean(absoluteFromTrimmed && shouldAuthFetchMediaUrl(absoluteFromTrimmed)),
   );
 
   useEffect(() => {
@@ -49,8 +48,15 @@ export function ProfileAvatarImage({
       return;
     }
 
-    if (!needsBearerFetch(u)) {
-      setResolved(u);
+    const absolute = profileImageAbsoluteUrl(u);
+    if (!absolute) {
+      setResolved(null);
+      setPending(false);
+      return;
+    }
+
+    if (!shouldAuthFetchMediaUrl(absolute)) {
+      setResolved(absolute);
       setPending(false);
       return;
     }
@@ -62,7 +68,7 @@ export function ProfileAvatarImage({
 
     void (async () => {
       try {
-        const blob = await apiBlob(u, {
+        const blob = await apiBlob(absolute, {
           method: 'GET',
           auth: 'optional',
           fallbackError: 'Could not load profile image.',
@@ -78,7 +84,7 @@ export function ProfileAvatarImage({
         setPending(false);
       } catch {
         if (!cancelled) {
-          setResolved(u);
+          setResolved(null);
           setPending(false);
         }
       }
@@ -115,9 +121,19 @@ export function ProfileAvatarImage({
     return fallbackShell;
   }
 
+  const displaySrc =
+    resolved ??
+    (!absoluteFromTrimmed || shouldAuthFetchMediaUrl(absoluteFromTrimmed)
+      ? null
+      : absoluteFromTrimmed);
+
+  if (!displaySrc) {
+    return fallbackShell;
+  }
+
   return (
     <img
-      src={resolved || trimmed}
+      src={displaySrc}
       alt={alt}
       className={cn(
         'block size-full max-h-full max-w-full min-h-0 min-w-0 rounded-full object-cover',

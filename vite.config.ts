@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => {
   plugins: [react(), tailwindcss()],
   base: '/',
   server: {
+    headers: {
+      // Allow popups opened by this page (e.g. Firebase Google sign-in) to
+      // communicate back via window.closed without COOP blocking them.
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
     proxy: {
       // Browser → same origin `/api/...` (no CORS). Dev server forwards to the real API.
       '/api': {
@@ -23,6 +28,9 @@ export default defineConfig(({ mode }) => {
     },
   },
   preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
     proxy: {
       '/api': {
         target: proxyTarget,

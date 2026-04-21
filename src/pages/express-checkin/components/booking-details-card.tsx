@@ -1,6 +1,9 @@
 import { CircleHelp } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
+/** Hard cap for quantity-based optional extras (e.g. additional driver fee); API max is clamped to this. */
+const MAX_OPTIONAL_EXTRA_QTY = 10;
+
 export interface BookingDetailsForm {
   selectedInsurance: string;
   selectedOptionalFees: string[];
@@ -54,11 +57,14 @@ export function BookingDetailsCard({
             </p>
           ) : null}
           {optionalFees.map((f) => {
-            const upper = Math.max(1, Number(f.maxQty ?? 10));
+            const upper = Math.min(
+              MAX_OPTIONAL_EXTRA_QTY,
+              Math.max(1, Number(f.maxQty ?? MAX_OPTIONAL_EXTRA_QTY)),
+            );
             if (f.qtyEnabled) {
               const qty = Math.max(0, Math.min(upper, Number(optionalFeeQuantities[f.id] ?? 0)));
               const setQty = (nextRaw: number) => {
-                const q = Math.max(0, Math.min(upper, nextRaw));
+                const q = Math.max(0, Math.min(upper, Math.floor(nextRaw)));
                 const nextQtyMap = { ...optionalFeeQuantities, [f.id]: q };
                 let nextSel = [...selectedOptionalFees];
                 if (q > 0) {
@@ -84,38 +90,21 @@ export function BookingDetailsCard({
                     <span className="text-[12px] text-gray-500">Quantity for this rental</span>
                   </div>
                   <div className="ml-auto flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      className="h-8 w-8 rounded border border-[#d0d7e2] text-[15px] leading-none font-medium"
-                      onClick={() => setQty(qty - 1)}
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={upper}
+                    <label htmlFor={`optional-fee-qty-${f.id}`} className="sr-only">
+                      Quantity for {f.label}
+                    </label>
+                    <select
+                      id={`optional-fee-qty-${f.id}`}
                       value={qty}
-                      onChange={(e) => {
-                        const raw = e.target.value.trim();
-                        if (!raw) {
-                          setQty(0);
-                          return;
-                        }
-                        const parsed = Number(raw);
-                        if (!Number.isFinite(parsed)) return;
-                        setQty(Math.floor(parsed));
-                      }}
-                      className="h-8 w-14 rounded border border-[#d0d7e2] bg-white text-center text-[14px] font-semibold tabular-nums outline-none focus:ring-1 focus:ring-[#0061e0]"
-                    />
-                    <button
-                      type="button"
-                      className="h-8 w-8 rounded border border-[#d0d7e2] text-[15px] leading-none font-medium"
-                      onClick={() => setQty(qty + 1)}
+                      onChange={(e) => setQty(Number(e.target.value))}
+                      className="h-9 min-w-[4.5rem] rounded border border-[#d0d7e2] bg-white px-2 text-center text-[14px] font-semibold tabular-nums outline-none focus:ring-1 focus:ring-[#0061e0]"
                     >
-                      +
-                    </button>
+                      {Array.from({ length: upper + 1 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               );

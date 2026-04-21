@@ -275,6 +275,7 @@ function workflowFeeDescription(row: Record<string, unknown>): string {
 
 export function ExpressCheckinContent() {
   const MAX_EXTRA_DRIVERS = 5;
+  const MAX_OPTIONAL_EXTRA_QTY = 10;
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = useMemo(
@@ -443,7 +444,10 @@ export function ExpressCheckinContent() {
         id: workflowOptionalExtraId(f, i),
         label: workflowOptionalExtraLabel(f),
         qtyEnabled: Boolean(f.qtyapply),
-        maxQty: Number(f.maxqty ?? 10) || 10,
+        maxQty: Math.min(
+          MAX_OPTIONAL_EXTRA_QTY,
+          Math.max(1, Number(f.maxqty ?? MAX_OPTIONAL_EXTRA_QTY) || MAX_OPTIONAL_EXTRA_QTY),
+        ),
         description: workflowFeeDescription(f as Record<string, unknown>),
       })),
     [optionalFeesRaw],
@@ -568,8 +572,11 @@ export function ExpressCheckinContent() {
       const match = findExtraFeeRowForOptional(row, extraFeesRaw);
       const qtyApply = Boolean(row.qtyapply);
       if (qtyApply) {
-        const q = match ? Math.max(0, Number(match.qty ?? 0)) : 0;
-        optionalFeeQuantities[id] = Number.isFinite(q) ? q : 0;
+        const rawQ = match ? Math.max(0, Number(match.qty ?? 0)) : 0;
+        const q = Number.isFinite(rawQ)
+          ? Math.min(MAX_OPTIONAL_EXTRA_QTY, rawQ)
+          : 0;
+        optionalFeeQuantities[id] = q;
         if (q > 0) selectedOptionalFees.push(id);
       } else if (match && Boolean(match.isoptionalfee) && !Boolean(match.isinsurancefee)) {
         selectedOptionalFees.push(id);
@@ -851,7 +858,10 @@ export function ExpressCheckinContent() {
           const row = optionalFeesRaw[idx] as Record<string, unknown>;
           const id = toFiniteNumber(row.id ?? row.optionalfeeid ?? row.extrafeeid, 0);
           if (id <= 0) return null;
-          const qty = Math.max(1, toFiniteNumber(bookingForm.optionalFeeQuantities[selectedId], 1));
+          const qty = Math.min(
+            MAX_OPTIONAL_EXTRA_QTY,
+            Math.max(1, toFiniteNumber(bookingForm.optionalFeeQuantities[selectedId], 1)),
+          );
           return { id, qty };
         })
         .filter((x): x is { id: number; qty: number } => Boolean(x));

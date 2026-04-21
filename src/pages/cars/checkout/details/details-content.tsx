@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'sonner';
@@ -17,11 +17,164 @@ import {
   mergeCreateBookingForUiState,
 } from '@/services/booking-payload';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  type CheckoutAreaOfUseOption,
+  type CheckoutCountryOption,
+  extractCheckoutAreaOfUseOptions,
+  extractCheckoutCountriesFromVehicleDetails,
+  extractVehicleDetailsData,
+  mapCheckoutCountryRow,
+} from '@/lib/checkout-vehicle-details';
+
+type CheckoutCountry = CheckoutCountryOption;
+
+function normalizeCountriesFromNavigationState(raw: unknown): CheckoutCountry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => mapCheckoutCountryRow(row))
+    .filter((x): x is CheckoutCountry => x != null);
+}
+
+function normalizeAreaOfUseFromNavigationState(raw: unknown): CheckoutAreaOfUseOption[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CheckoutAreaOfUseOption[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const id = Number(r.id ?? 0);
+    const label = String(r.label ?? r.areaofuse ?? r.area_of_use ?? '').trim();
+    const locationid = Number(r.locationid ?? r.location_id ?? 0);
+    if (!Number.isFinite(id) || id <= 0 || !label) continue;
+    out.push({
+      id,
+      label,
+      locationid: Number.isFinite(locationid) ? locationid : 0,
+    });
+  }
+  return out;
+}
 
 export function CarsCheckoutDetailsContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { carData, extras, selectedDamageOption, searchParams, locations } = location.state || {};
+  const {
+    carData,
+    extras,
+    selectedDamageOption,
+    searchParams,
+    locations,
+    countries: countriesFromOptions = [],
+    areaOfUseOptions: areaOfUseOptionsFromNav = [],
+  } = (location.state || {}) as {
+    carData?: unknown;
+    extras?: unknown[];
+    selectedDamageOption?: string;
+    searchParams?: Record<string, unknown>;
+    locations?: unknown[];
+    countries?: CheckoutCountry[];
+    areaOfUseOptions?: CheckoutAreaOfUseOption[];
+  };
+
+  const [countriesList, setCountriesList] = useState<CheckoutCountry[]>(() =>
+    normalizeCountriesFromNavigationState(countriesFromOptions),
+  );
+  const [areaOfUseList, setAreaOfUseList] = useState<CheckoutAreaOfUseOption[]>(() =>
+    normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav),
+  );
+  const [countriesLoading, setCountriesLoading] = useState(false);
+
+  const useApiCountries = countriesList.length > 0;
+  const useApiAreaOfUse = areaOfUseList.length > 0;
+
+  useEffect(() => {
+    if (countriesList.length > 0 && areaOfUseList.length > 0) return;
+    const car = carData as Record<string, unknown> | undefined;
+    const sp = (searchParams ?? {}) as Record<string, unknown>;
+    if (car == null || car.id == null || car.id === '') return;
+    if (
+      sp.pickup_date == null ||
+      sp.pickup_time == null ||
+      sp.dropoff_date == null ||
+      sp.dropoff_time == null ||
+      sp.pickup_location_id == null ||
+      sp.dropoff_location_id == null
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setCountriesLoading(true);
+    void (async () => {
+      try {
+        const response = await carsService.getVehicleDetails({
+          vehicle_reference: car.id as string | number,
+          category_id: Number(sp.category_id) || 0,
+          pickup_location_id: Number(sp.pickup_location_id),
+          dropoff_location_id: Number(sp.dropoff_location_id),
+          pickup_date: String(sp.pickup_date),
+          pickup_time: String(sp.pickup_time),
+          dropoff_date: String(sp.dropoff_date),
+          dropoff_time: String(sp.dropoff_time),
+          age_id: Number(sp.age_id) || 0,
+        });
+        if (cancelled) return;
+        const data = extractVehicleDetailsData(response);
+        if (countriesList.length === 0) {
+          const list = extractCheckoutCountriesFromVehicleDetails(data);
+          setCountriesList(list);
+          if (list.length > 0) {
+            const pick = String(list[0].id);
+            setFormData((prev) => {
+              const legacy = new Set(['', 'Australia', 'USA', 'UK', 'Other']);
+              const lic = prev.licenseCountry.trim();
+              const st = prev.licenseState.trim();
+              return {
+                ...prev,
+                licenseCountry: legacy.has(lic) ? pick : lic,
+                licenseState: legacy.has(st) ? pick : st,
+              };
+            });
+          }
+        }
+        if (areaOfUseList.length === 0) {
+          const areas = extractCheckoutAreaOfUseOptions(
+            data,
+            Number(sp.pickup_location_id),
+          );
+          setAreaOfUseList(areas);
+          if (areas.length > 0) {
+            setFormData((prev) => {
+              const current = prev.areaOfUse.trim();
+              const valid =
+                current &&
+                areas.some((a) => String(a.id) === current);
+              if (valid) return prev;
+              return { ...prev, areaOfUse: String(areas[0].id) };
+            });
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          if (countriesList.length === 0) setCountriesList([]);
+          if (areaOfUseList.length === 0) setAreaOfUseList([]);
+        }
+      } finally {
+        if (!cancelled) setCountriesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [carData, searchParams, countriesList.length, areaOfUseList.length]);
+
+  useEffect(() => {
+    if (areaOfUseList.length === 0) return;
+    setFormData((prev) => {
+      const v = prev.areaOfUse.trim();
+      if (v && areaOfUseList.some((a) => String(a.id) === v)) return prev;
+      return { ...prev, areaOfUse: String(areaOfUseList[0].id) };
+    });
+  }, [areaOfUseList]);
 
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -31,27 +184,33 @@ export function CarsCheckoutDetailsContent() {
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
   const [noticeData, setNoticeData] = useState<{ title: string; content: string } | null>(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    numberOfPeople: '1',
-    dob: '',
-    licenseNumber: '',
-    licenseCountry: 'Australia',
-    licenseExpiry: '',
-    licenseState: 'Australia',
-    areaOfUse: '',
-    address: '',
-    city: '',
-    stateRegion: '',
-    postCode: '',
-    note: '',
-    flightin: '',
-    flightout: '',
-    arrivalpoint: '',
-    departurepoint: '',
+  const [formData, setFormData] = useState(() => {
+    const fromNav = normalizeCountriesFromNavigationState(countriesFromOptions);
+    const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : 'Australia';
+    const areaNav = normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
+    const defaultArea = areaNav.length > 0 ? String(areaNav[0].id) : '';
+    return {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      numberOfPeople: '1',
+      dob: '',
+      licenseNumber: '',
+      licenseCountry: defaultCountry,
+      licenseExpiry: '',
+      licenseState: defaultCountry,
+      areaOfUse: defaultArea,
+      address: '',
+      city: '',
+      stateRegion: '',
+      postCode: '',
+      note: '',
+      flightin: '',
+      flightout: '',
+      arrivalpoint: '',
+      departurepoint: '',
+    };
   });
   const [newsletter, setNewsletter] = useState(true);
 
@@ -111,6 +270,14 @@ export function CarsCheckoutDetailsContent() {
   };
 
   const handleContinue = async () => {
+    const car = (carData ?? {}) as Record<string, unknown>;
+    const extrasList = (extras ?? []) as Array<{
+      id: string;
+      type?: string;
+      selected?: boolean;
+      quantity?: number;
+    }>;
+
     if (!agreed) {
       toast.error('Please agree to the Terms and Conditions.');
       return;
@@ -134,7 +301,7 @@ export function CarsCheckoutDetailsContent() {
     const categoryId =
       categoryFromSearch > 0
         ? categoryFromSearch
-        : parseInt(String(carData?.vehiclecategorytypeid ?? '0'), 10) || 0;
+        : parseInt(String(car?.vehiclecategorytypeid ?? '0'), 10) || 0;
 
     const insuranceId =
       selectedDamageOption && selectedDamageOption !== 'std'
@@ -142,9 +309,16 @@ export function CarsCheckoutDetailsContent() {
         : 0;
 
     const note = formData.note.trim();
+    const licenseExpiresApi = formData.licenseExpiry.trim()
+      ? formatDobForApi(formData.licenseExpiry)
+      : '';
+    const areaParsed = parseInt(String(formData.areaOfUse).trim(), 10);
+    const areaofuseid =
+      Number.isFinite(areaParsed) && areaParsed > 0 ? areaParsed : 0;
+
     const payload = buildCreateBookingPayload({
       bookingType: 'Booking',
-      vehicle_id: parseInt(String(carData?.id ?? '0'), 10),
+      vehicle_id: parseInt(String(car?.id ?? '0'), 10),
       category_id: categoryId,
       pickup_location_id: parseInt(String(sp.pickup_location_id ?? '0'), 10),
       dropoff_location_id: parseInt(String(sp.dropoff_location_id ?? '0'), 10),
@@ -164,10 +338,17 @@ export function CarsCheckoutDetailsContent() {
         date_of_birth: formatDobForApi(formData.dob),
         driver_license_number: formData.licenseNumber.trim(),
         country_id: licenseCountryToId(formData.licenseCountry),
+        address: formData.address.trim(),
+        city: formData.city.trim(),
+        state: formData.stateRegion.trim(),
+        postcode: formData.postCode.trim(),
+        postal_code: formData.postCode.trim(),
+        licenseexpires: licenseExpiresApi,
+        license_state: formData.licenseState,
       },
       number_of_persons: parseTravellerCount(formData.numberOfPeople),
       insurance_id: Number.isFinite(insuranceId) ? insuranceId : 0,
-      extra_fees: mapUiExtrasToPayload(extras ?? []),
+      extra_fees: mapUiExtrasToPayload(extrasList),
       extradriver: [],
       remark: note,
       comments: note,
@@ -177,7 +358,8 @@ export function CarsCheckoutDetailsContent() {
       departurepoint: formData.departurepoint.trim(),
       newsletter,
       transmission: 1,
-      rateperiod_typeid: carData?.rateperiod_typeid ?? 1,
+      rateperiod_typeid: Number(car?.rateperiod_typeid ?? 1) || 1,
+      areaofuseid,
     });
 
     setLoading(true);
@@ -341,19 +523,35 @@ export function CarsCheckoutDetailsContent() {
               </div>
 
               <div className="relative flex flex-col gap-1">
-                <label htmlFor="licenseCountry" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">License Issuing Country</label>
+                <label htmlFor="licenseCountry" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">
+                  License Issuing Country
+                  {countriesLoading ? (
+                    <span className="ms-1 font-normal normal-case text-[#0061e0]">(loading…)</span>
+                  ) : null}
+                </label>
                 <div className="relative">
                   <select
                     id="licenseCountry"
                     name="licenseCountry"
                     value={formData.licenseCountry}
                     onChange={handleChange}
-                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                    disabled={countriesLoading}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10 disabled:opacity-60"
                   >
-                    <option value="Australia">Australia</option>
-                    <option value="USA">USA</option>
-                    <option value="UK">UK</option>
-                    <option value="Other">Other</option>
+                    {useApiCountries && !countriesLoading ? (
+                      countriesList.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.country}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Australia">Australia</option>
+                        <option value="USA">USA</option>
+                        <option value="UK">UK</option>
+                        <option value="Other">Other</option>
+                      </>
+                    )}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
                     <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -383,18 +581,34 @@ export function CarsCheckoutDetailsContent() {
               </div>
 
               <div className="relative flex flex-col gap-1">
-                <label htmlFor="licenseState" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">License State/Country</label>
+                <label htmlFor="licenseState" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">
+                  License State/Country
+                  {countriesLoading ? (
+                    <span className="ms-1 font-normal normal-case text-[#0061e0]">(loading…)</span>
+                  ) : null}
+                </label>
                 <div className="relative">
                   <select
                     id="licenseState"
                     name="licenseState"
                     value={formData.licenseState}
                     onChange={handleChange}
-                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                    disabled={countriesLoading}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10 disabled:opacity-60"
                   >
-                    <option value="Australia">Australia (Country)</option>
-                    <option value="USA">USA</option>
-                    <option value="UK">UK</option>
+                    {useApiCountries && !countriesLoading ? (
+                      countriesList.map((c) => (
+                        <option key={`st-${c.id}`} value={String(c.id)}>
+                          {c.country}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Australia">Australia (Country)</option>
+                        <option value="USA">USA</option>
+                        <option value="UK">UK</option>
+                      </>
+                    )}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
                     <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -405,18 +619,32 @@ export function CarsCheckoutDetailsContent() {
               </div>
 
               <div className="relative flex flex-col gap-1">
-                <label htmlFor="areaOfUse" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Area of use</label>
+                <label htmlFor="areaOfUse" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">
+                  Area of use
+                  {countriesLoading && !useApiAreaOfUse ? (
+                    <span className="ms-1 font-normal normal-case text-[#0061e0]">(loading…)</span>
+                  ) : null}
+                </label>
                 <div className="relative">
                   <select
                     id="areaOfUse"
                     name="areaOfUse"
                     value={formData.areaOfUse}
                     onChange={handleChange}
-                    className="w-full bg-[#f4f5f8] text-[#8e95a5] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                    disabled={countriesLoading && !useApiAreaOfUse}
+                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10 disabled:opacity-60"
                   >
-                    <option value="" disabled>Area of use</option>
-                    <option value="metro">Metro</option>
-                    <option value="regional">Regional</option>
+                    {!useApiAreaOfUse ? (
+                      <option value="" disabled>
+                        {countriesLoading ? 'Loading options…' : 'Area options unavailable'}
+                      </option>
+                    ) : (
+                      areaOfUseList.map((a) => (
+                        <option key={a.id} value={String(a.id)}>
+                          {a.label}
+                        </option>
+                      ))
+                    )}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
                     <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">

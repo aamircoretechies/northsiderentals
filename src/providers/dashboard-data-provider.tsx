@@ -22,6 +22,7 @@ import {
   RcmNotification,
 } from '@/services/notifications';
 import {
+  normalizeProfilePicturePath,
   profileService,
   RcmProfile,
   UpdateProfilePayload,
@@ -114,9 +115,9 @@ function mergeProfile(
       : rawDisplayName;
 
   const rawPic =
-    rcm?.profile_picture?.trim() ||
-    dash?.profile_image_url?.trim() ||
-    user?.pic?.trim() ||
+    normalizeProfilePicturePath(rcm?.profile_picture) ||
+    normalizeProfilePicturePath(dash?.profile_image_url) ||
+    normalizeProfilePicturePath(user?.pic) ||
     '';
 
   const avatarUrl = rawPic ? resolveRcmPublicUrl(rawPic) : null;

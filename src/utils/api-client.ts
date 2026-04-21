@@ -144,7 +144,13 @@ export async function apiBlob(
   input: string | URL,
   options: RequestOptions = {},
 ): Promise<Blob> {
-  const response = await apiRequest(input, options);
+  const response = await apiRequest(input, {
+    ...options,
+    headers: {
+      Accept: '*/*',
+      ...(options.headers || {}),
+    },
+  });
   return response.blob();
 }
 
