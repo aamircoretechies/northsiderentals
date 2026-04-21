@@ -26,16 +26,12 @@ export function SignInPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { auth, login, loginWithGoogleIdToken } = useAuth();
+  const nextPath = searchParams.get('next') || '/home';
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-
-  if (auth?.access_token) {
-    const nextPath = searchParams.get('next') || '/home';
-    return <Navigate to={nextPath} replace />;
-  }
 
   // Check for success message from password reset or error messages
   useEffect(() => {
@@ -96,9 +92,6 @@ export function SignInPage() {
       // Sign in using the auth context
       await login(values.email, values.password);
 
-      // Get the 'next' parameter from URL if it exists
-      const nextPath = searchParams.get('next') || '/';
-
       // Use navigate for navigation
       navigate(nextPath);
     } catch (err) {
@@ -129,7 +122,6 @@ export function SignInPage() {
 
       await loginWithGoogleIdToken(idToken);
 
-      const nextPath = searchParams.get('next') || '/';
       navigate(nextPath);
     } catch (err) {
       console.error('Google sign-in error:', err);
@@ -154,6 +146,10 @@ export function SignInPage() {
       setIsGoogleLoading(false);
     }
   };
+
+  if (auth?.access_token) {
+    return <Navigate to={nextPath} replace />;
+  }
 
   return (
     <Form {...form}>
