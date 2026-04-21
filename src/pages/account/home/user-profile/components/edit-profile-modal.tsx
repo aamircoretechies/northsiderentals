@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Check, ChevronDown, ArrowLeft } from 'lucide-react';
@@ -25,7 +25,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { normalizeDobToIso } from '@/lib/dob';
-import { getFriendlyError } from '@/utils/api-error-handler';
 import { ProfileAvatarImage } from '@/components/common/profile-avatar-image';
 import { useAuth } from '@/auth/context/auth-context';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
@@ -88,7 +87,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     apiProfile,
     profileBusy,
     updateProfile,
-    uploadProfilePicture,
   } = useDashboardData();
 
   const [open, setOpen] = useState(false);
@@ -105,8 +103,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
   const [countryId, setCountryId] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [comboboxOpen, setComboboxOpen] = useState(false);
-
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -254,8 +250,8 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
         </DialogDescription>
 
         <div className="px-5 pb-6 overflow-y-auto max-h-[85vh]">
-          <div className="flex items-center gap-5 mt-4 mb-8">
-            <div className="size-[100px] shrink-0 overflow-hidden rounded-full border border-gray-100 shadow-sm relative bg-muted aspect-square">
+          <div className="flex items-center gap-4 mt-4 mb-8">
+            <div className="size-[72px] shrink-0 overflow-hidden rounded-full border border-gray-100 shadow-sm bg-muted">
               <ProfileAvatarImage
                 src={profile.avatarUrl}
                 fallbackLabel={profile.displayName}
@@ -264,38 +260,9 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
                 fallbackClassName="size-full"
               />
             </div>
-            <div className="flex flex-col gap-3">
-              <span className="text-[#8692a6] text-[13px] leading-tight">
-                Upload jpg or png format image
-              </span>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (!f) return;
-                  try {
-                    await uploadProfilePicture(f);
-                    toast.success('Photo updated');
-                  } catch (err) {
-                    toast.error(getFriendlyError(err, 'Upload failed'));
-                  }
-                }}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  className="bg-[#0061e0] hover:bg-[#0051ba] text-white font-medium px-4 py-2 h-9 rounded-[6px] w-fit shadow-sm"
-                  disabled={profileBusy}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  Change Picture
-                </Button>
-              </div>
-            </div>
+            <span className="text-[#8692a6] text-[13px] leading-snug">
+              Change your profile photo from the Personal Info card.
+            </span>
           </div>
 
           <div className="flex flex-col gap-3">

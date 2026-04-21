@@ -87,7 +87,7 @@ export function AvatarInput(props: AvatarInputProps = {}) {
     >
       {({ onImageUpload }) => (
         <div
-          className={`relative aspect-square cursor-pointer shrink-0 overflow-hidden rounded-full ${compact ? 'size-10' : 'size-16'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
+          className={`relative aspect-square cursor-pointer shrink-0 rounded-full ${compact ? 'size-10' : 'size-16'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
           onClick={onImageUpload}
         >
           <TooltipProvider>
@@ -97,7 +97,7 @@ export function AvatarInput(props: AvatarInputProps = {}) {
                   <Button
                     variant="outline"
                     mode="icon"
-                    className={`shadow-xs text-secondary-foreground/80 hover:text-foreground absolute z-1 rounded-full ${compact ? 'size-3.5 -top-0.5 -end-0.5' : 'size-5 -top-0.5 -end-0.5'}`}
+                    className={`shadow-xs text-secondary-foreground/80 hover:text-foreground absolute z-10 rounded-full bg-white border border-gray-200 ${compact ? 'size-4 top-0 end-0' : 'size-5 top-0 end-0'}`}
                     onClick={async (e) => {
                       e.stopPropagation();
                       if (isApiMode && remoteImageUrl && onRemoveRemote) {

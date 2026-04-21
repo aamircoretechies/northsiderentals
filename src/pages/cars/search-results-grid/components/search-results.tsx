@@ -344,9 +344,11 @@ function mapApiCarToCard(
 export function SearchResults({ mode }: { mode: SearchResultsType }) {
   const [searchInput, setSearchInput] = useState('');
   const [activeTab, setActiveTab] = useState<SearchResultsType>(mode);
+  // maxPricePerDay: 9999 = "no restriction" sentinel — avoids silently hiding
+  // cars above any hard-coded cap before we know the actual price range.
   const [filters, setFilters] = useState<CarsSearchFilters>({
-    activeType: 'All',
-    maxPricePerDay: 100,
+    activeTypes: ['All'],
+    maxPricePerDay: 9999,
     showAvailable: true,
   });
 
@@ -407,31 +409,48 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
       ),
   );
 
+  // Compute the highest daily price across all cars so the slider can scale
+  // to cover the actual data instead of a hard-coded cap.
+  const maxPossiblePrice = (() => {
+    const allPrices = [...bookableItems, ...soldOutItems].map(
+      (c) => Number(c.discount_price) || 0,
+    );
+    if (!allPrices.length) return 300;
+    return Math.ceil(Math.max(...allPrices) / 10) * 10;
+  })();
+
   const matchesVehicleType = (item: CarCardProps): boolean => {
-    if (filters.activeType === 'All') return true;
+    const { activeTypes } = filters;
+    // "All" selected or nothing selected → show everything
+    if (!activeTypes.length || activeTypes.includes('All')) return true;
     const hay = `${item.subtitle ?? ''} ${item.title}`.toLowerCase();
-    const type = filters.activeType.toLowerCase();
-    if (type.includes('small to mid')) {
-      return (
-        hay.includes('small') ||
-        hay.includes('mid') ||
-        hay.includes('compact') ||
-        hay.includes('sedan') ||
-        hay.includes('hatch')
-      );
-    }
-    if (type.includes('large/suv')) {
-      return hay.includes('large') || hay.includes('suv') || hay.includes('4wd');
-    }
-    if (type.includes('people movers')) {
-      return hay.includes('people') || hay.includes('mover') || hay.includes('minivan');
-    }
-    if (type.includes('light trucks')) return hay.includes('truck');
-    if (type.includes('utes/vans')) return hay.includes('ute') || hay.includes('van');
-    return hay.includes(type);
+    // At least one of the selected types must match
+    return activeTypes.some((activeType) => {
+      const type = activeType.toLowerCase();
+      if (type.includes('small to mid')) {
+        return (
+          hay.includes('small') ||
+          hay.includes('mid') ||
+          hay.includes('compact') ||
+          hay.includes('sedan') ||
+          hay.includes('hatch')
+        );
+      }
+      if (type.includes('large/suv')) {
+        return hay.includes('large') || hay.includes('suv') || hay.includes('4wd');
+      }
+      if (type.includes('people movers')) {
+        return hay.includes('people') || hay.includes('mover') || hay.includes('minivan');
+      }
+      if (type.includes('light trucks')) return hay.includes('truck');
+      if (type.includes('utes/vans')) return hay.includes('ute') || hay.includes('van');
+      return hay.includes(type);
+    });
   };
 
   const withinPrice = (item: CarCardProps): boolean => {
+    // 9999 is the sentinel for "no restriction"
+    if (filters.maxPricePerDay >= 9999) return true;
     const perDay = Number(item.discount_price) || 0;
     return perDay <= filters.maxPricePerDay;
   };
@@ -486,10 +505,11 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
         <CarsFiltersSheet
           value={filters}
           onApply={setFilters}
+          maxPossiblePrice={maxPossiblePrice}
           onReset={() =>
             setFilters({
-              activeType: 'All',
-              maxPricePerDay: 100,
+              activeTypes: ['All'],
+              maxPricePerDay: 9999,
               showAvailable: true,
             })
           }

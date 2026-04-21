@@ -280,16 +280,25 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   const uploadProfilePicture = useCallback(async (file: File) => {
     try {
       setProfileBusy(true);
-      const updated = await profileService.uploadProfilePicture(file);
+      const hasExistingPicture = Boolean(
+        rcmProfile?.profile_picture || data?.profile?.profile_image_url || user?.pic,
+      );
+      const updated = await profileService.uploadProfilePicture(
+        file,
+        hasExistingPicture,
+      );
+      const nextPicture = updated.profile_picture
+        ? `${updated.profile_picture}${updated.profile_picture.includes('?') ? '&' : '?'}v=${Date.now()}`
+        : updated.profile_picture;
       setRcmProfile((prev) => ({
         ...(prev ?? updated),
         ...updated,
-        profile_picture: updated.profile_picture ?? prev?.profile_picture ?? null,
+        profile_picture: nextPicture ?? prev?.profile_picture ?? null,
       }));
     } finally {
       setProfileBusy(false);
     }
-  }, []);
+  }, [data?.profile?.profile_image_url, rcmProfile?.profile_picture, user?.pic]);
 
   const deleteProfilePicture = useCallback(async () => {
     try {

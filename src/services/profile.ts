@@ -220,40 +220,51 @@ export const profileService = {
     return parsed;
   },
 
-  async uploadProfilePicture(file: File): Promise<RcmProfile> {
+  async uploadProfilePicture(
+    file: File,
+    hasExistingPicture = false,
+  ): Promise<RcmProfile> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const form = new FormData();
-    form.append('profile_picture', file);
+    const methods: Array<'POST' | 'PUT'> = hasExistingPicture
+      ? ['PUT', 'POST']
+      : ['POST', 'PUT'];
+    let lastError = 'Could not upload your photo. Please try again.';
 
-    const res = await fetch(`${API_BASE}/profile/upload-picture`, {
-      method: 'POST',
-      headers: authBearerOnly(),
-      body: form,
-    });
+    for (const method of methods) {
+      const form = new FormData();
+      form.append('profile_picture', file);
 
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(
-        getFriendlyErrorMessage({
+      const res = await fetch(`${API_BASE}/profile/upload-picture`, {
+        method,
+        headers: authBearerOnly(),
+        body: form,
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        lastError = getFriendlyErrorMessage({
           status: res.status,
           message: t,
           fallback: 'Could not upload your photo. Please try again.',
-        }),
-      );
+        });
+        continue;
+      }
+
+      const json = (await res.json()) as Record<string, unknown>;
+      assertEnvelope(json);
+      const data = json.data as Record<string, unknown> | undefined;
+      if (!data) return profileService.fetchProfile();
+      const parsed = parseProfileData(data);
+      const inlineUrl = extractPictureUrl(data);
+      if (inlineUrl && !parsed.profile_picture) {
+        return { ...parsed, profile_picture: inlineUrl };
+      }
+      if (!parsed.profile_picture) return profileService.fetchProfile();
+      return parsed;
     }
 
-    const json = (await res.json()) as Record<string, unknown>;
-    assertEnvelope(json);
-    const data = json.data as Record<string, unknown> | undefined;
-    if (!data) return profileService.fetchProfile();
-    const parsed = parseProfileData(data);
-    const inlineUrl = extractPictureUrl(data);
-    if (inlineUrl && !parsed.profile_picture) {
-      return { ...parsed, profile_picture: inlineUrl };
-    }
-    if (!parsed.profile_picture) return profileService.fetchProfile();
-    return parsed;
+    throw new Error(lastError);
   },
 
   /** Removes the current profile picture on the server. */
