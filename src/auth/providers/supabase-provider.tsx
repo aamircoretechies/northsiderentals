@@ -7,6 +7,11 @@ import { AuthModel, UserModel } from '@/auth/lib/models';
 import { fetchBookingsList } from '@/services/bookings';
 import { dashboardService } from '@/services/dashboard';
 import { profileService } from '@/services/profile';
+import {
+  defaultDevicePayload,
+  isDeviceIdConflictError,
+  rotateDeviceId,
+} from '@/providers/dashboard-data-provider';
 import { queryKeys } from '@/lib/query-keys';
 
 // Define the Supabase Auth Provider
@@ -85,14 +90,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }),
       queryClient.prefetchQuery({
         queryKey: queryKeys.dashboardBootstrap,
-        queryFn: () => dashboardService.registerDevice({
-          fcm_token: '',
-          device_id: 'web-prefetch',
-          device_type: 'web',
-          device_name: 'browser',
-          device_os_version: 'unknown',
-          app_version: '1.0',
-        }),
+        queryFn: async () => {
+          let body = defaultDevicePayload();
+          try {
+            return await dashboardService.registerDevice(body);
+          } catch (err) {
+            if (!isDeviceIdConflictError(err)) throw err;
+            body = { ...body, device_id: rotateDeviceId() };
+            return await dashboardService.registerDevice(body);
+          }
+        },
       }),
     ]);
   };

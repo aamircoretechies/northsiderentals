@@ -1,5 +1,5 @@
 import { normalizeProfilePicturePath } from '@/services/profile';
-import { apiJson } from '@/utils/api-client';
+import { apiJson, ApiClientError } from '@/utils/api-client';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
 export interface RegisterDeviceRequest {
@@ -331,6 +331,38 @@ export const dashboardService = {
     });
 
     const json = (await withTimeout(request, 15000)) as Record<string, unknown>;
+
+    // The backend often returns HTTP 200 with `{ status: 0, message, data: null }`
+    // for logic-level failures (e.g. unique constraint violations). Surface those
+    // as real rejections so callers (and the device-id retry logic) can react.
+    const rawStatus = (json as Record<string, unknown>).status;
+    const statusValue =
+      typeof rawStatus === 'number'
+        ? rawStatus
+        : typeof rawStatus === 'string'
+          ? rawStatus.toLowerCase()
+          : rawStatus;
+    const isFailure =
+      statusValue === 0 ||
+      statusValue === '0' ||
+      statusValue === false ||
+      statusValue === 'false' ||
+      statusValue === 'error';
+    if (isFailure) {
+      const apiMessage =
+        typeof (json as Record<string, unknown>).message === 'string'
+          ? ((json as Record<string, unknown>).message as string)
+          : '';
+      throw new ApiClientError({
+        message: apiMessage || 'Register device failed',
+        responseData: json,
+        friendlyMessage: getFriendlyErrorMessage({
+          message: apiMessage,
+          fallback: 'Could not load dashboard data.',
+        }),
+      });
+    }
+
     return parseRegisterDevicePayload(json);
   },
 };

@@ -39,7 +39,7 @@ function createLocalDeviceId(): string {
   return `web-${Date.now().toString(36)}-${rand}`;
 }
 
-function getOrCreateDeviceId(): string {
+export function getOrCreateDeviceId(): string {
   if (typeof window === 'undefined') return 'web-client';
   try {
     const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY)?.trim();
@@ -52,7 +52,7 @@ function getOrCreateDeviceId(): string {
   }
 }
 
-function rotateDeviceId(): string {
+export function rotateDeviceId(): string {
   const next = createLocalDeviceId();
   if (typeof window !== 'undefined') {
     try {
@@ -64,19 +64,36 @@ function rotateDeviceId(): string {
   return next;
 }
 
-function isDeviceIdConflictError(error: unknown): boolean {
-  const msg =
-    error instanceof Error ? error.message : String(error ?? '');
+export function isDeviceIdConflictError(error: unknown): boolean {
+  const parts: string[] = [];
+  if (error instanceof Error) parts.push(error.message);
+  if (error && typeof error === 'object') {
+    const rec = error as Record<string, unknown>;
+    if (typeof rec.message === 'string') parts.push(rec.message);
+    const data = rec.responseData;
+    if (data && typeof data === 'object') {
+      const d = data as Record<string, unknown>;
+      if (typeof d.message === 'string') parts.push(d.message);
+    }
+  }
+  parts.push(String(error ?? ''));
+  const msg = parts.join('\n').toLowerCase();
+  if (!msg) return false;
+  // Backends vary: "device_id" (Prisma), "UNIQUE constraint failed: … device_id" (SQLite),
+  // or just the Prisma string "Unique constraint failed on the fields: (`device_id`)".
   return (
-    msg.toLowerCase().includes('device_id') &&
-    msg.toLowerCase().includes('unique')
+    msg.includes('device_id') &&
+    (msg.includes('unique') || msg.includes('duplicate'))
   );
 }
 
-const defaultDevicePayload = (): RegisterDeviceRequest => ({
+export const defaultDevicePayload = (): RegisterDeviceRequest => ({
   fcm_token: 'web-fcm-token',
-  // Stable per-browser-install ID avoids backend unique collisions on device_id.
-  device_id: getOrCreateDeviceId(),
+  // The backend enforces UNIQUE(device_id) on every write, so we must send a
+  // fresh id per request rather than reusing a cached per-browser one.
+  // `rotateDeviceId()` also persists the new id to localStorage as a side
+  // effect, keeping a breadcrumb for support / debugging.
+  device_id: rotateDeviceId(),
   device_type: 'web',
   device_name:
     typeof navigator !== 'undefined' ? navigator.userAgent : 'web-client',
