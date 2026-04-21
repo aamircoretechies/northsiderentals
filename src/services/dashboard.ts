@@ -325,7 +325,7 @@ export const dashboardService = {
 
     const request = apiJson<Record<string, unknown>>(`${API_BASE_URL}/dashboard/register-device`, {
       method: 'POST',
-      auth: 'optional',
+      auth: 'none',
       body: body as unknown as Record<string, unknown>,
       fallbackError: 'Could not load dashboard data.',
     });

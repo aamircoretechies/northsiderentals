@@ -54,8 +54,8 @@ function authHeader(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function handleAuthFailure(status: number): void {
-  if (status !== 401) return;
+function handleAuthFailure(status: number, hadAuthHeader: boolean): void {
+  if (status !== 401 || !hadAuthHeader) return;
   try {
     removeAuth();
     window.dispatchEvent(new CustomEvent('app:auth-expired'));
@@ -77,6 +77,7 @@ export async function apiRequest(
   if (authMode !== 'none') {
     Object.assign(headers, authHeader());
   }
+  const hadAuthHeader = Boolean(headers.Authorization);
   if (authMode === 'required' && !headers.Authorization) {
     const friendly = getFriendlyErrorMessage({
       status: 401,
@@ -109,7 +110,7 @@ export async function apiRequest(
     fallback: options.fallbackError,
   });
 
-  handleAuthFailure(response.status);
+  handleAuthFailure(response.status, hadAuthHeader);
   console.error('[API Error]', {
     status: response.status,
     input: String(input),

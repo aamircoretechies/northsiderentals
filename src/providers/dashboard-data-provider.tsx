@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useAuth } from '@/auth/context/auth-context';
@@ -28,79 +29,11 @@ import {
   UpdateProfilePayload,
 } from '@/services/profile';
 import { getFriendlyError } from '@/utils/api-error-handler';
-
-const DEVICE_ID_STORAGE_KEY = `${import.meta.env.VITE_APP_NAME || 'app'}-device-id`;
-
-function createLocalDeviceId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `web-${Date.now().toString(36)}-${rand}`;
-}
-
-export function getOrCreateDeviceId(): string {
-  if (typeof window === 'undefined') return 'web-client';
-  try {
-    const existing = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY)?.trim();
-    if (existing) return existing;
-    const next = createLocalDeviceId();
-    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, next);
-    return next;
-  } catch {
-    return createLocalDeviceId();
-  }
-}
-
-export function rotateDeviceId(): string {
-  const next = createLocalDeviceId();
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, next);
-    } catch {
-      // ignore storage write errors; still return a new in-memory id for this request
-    }
-  }
-  return next;
-}
-
-export function isDeviceIdConflictError(error: unknown): boolean {
-  const parts: string[] = [];
-  if (error instanceof Error) parts.push(error.message);
-  if (error && typeof error === 'object') {
-    const rec = error as Record<string, unknown>;
-    if (typeof rec.message === 'string') parts.push(rec.message);
-    const data = rec.responseData;
-    if (data && typeof data === 'object') {
-      const d = data as Record<string, unknown>;
-      if (typeof d.message === 'string') parts.push(d.message);
-    }
-  }
-  parts.push(String(error ?? ''));
-  const msg = parts.join('\n').toLowerCase();
-  if (!msg) return false;
-  // Backends vary: "device_id" (Prisma), "UNIQUE constraint failed: … device_id" (SQLite),
-  // or just the Prisma string "Unique constraint failed on the fields: (`device_id`)".
-  return (
-    msg.includes('device_id') &&
-    (msg.includes('unique') || msg.includes('duplicate'))
-  );
-}
-
-export const defaultDevicePayload = (): RegisterDeviceRequest => ({
-  fcm_token: 'web-fcm-token',
-  // The backend enforces UNIQUE(device_id) on every write, so we must send a
-  // fresh id per request rather than reusing a cached per-browser one.
-  // `rotateDeviceId()` also persists the new id to localStorage as a side
-  // effect, keeping a breadcrumb for support / debugging.
-  device_id: rotateDeviceId(),
-  device_type: 'web',
-  device_name:
-    typeof navigator !== 'undefined' ? navigator.userAgent : 'web-client',
-  device_os_version:
-    typeof navigator !== 'undefined' ? navigator.platform : 'unknown',
-  app_version: import.meta.env.VITE_APP_VERSION || '1.0.0',
-});
+import {
+  defaultDevicePayload,
+  isDeviceIdConflictError,
+  rotateDeviceId,
+} from '@/providers/dashboard-device';
 
 export type MergedProfile = {
   displayName: string;
@@ -178,8 +111,18 @@ const DashboardDataContext = createContext<DashboardDataContextValue | null>(
   null,
 );
 
+function isAuthScreenPath(pathname: string): boolean {
+  return /^\/auth(?:\/|$)/.test(pathname);
+}
+
+function getCurrentPathname(): string {
+  return typeof window !== 'undefined' ? window.location.pathname || '/' : '/';
+}
+
 export function DashboardDataProvider({ children }: PropsWithChildren) {
   const { user, auth, loading: authLoading } = useAuth();
+  const autoLoadKeyRef = useRef<string | null>(null);
+  const [pathname, setPathname] = useState(getCurrentPathname);
   const [data, setData] = useState<DashboardData | null>(null);
   const [rcmProfile, setRcmProfile] = useState<RcmProfile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -252,12 +195,47 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updatePathname = () => setPathname(getCurrentPathname());
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function (...args) {
+      originalPushState.apply(this, args);
+      updatePathname();
+    };
+
+    window.history.replaceState = function (...args) {
+      originalReplaceState.apply(this, args);
+      updatePathname();
+    };
+
+    window.addEventListener('popstate', updatePathname);
+    window.addEventListener('hashchange', updatePathname);
+
+    return () => {
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener('popstate', updatePathname);
+      window.removeEventListener('hashchange', updatePathname);
+    };
+  }, []);
+
   // Home / car search data: always load `register-device` (public). Profile + notifications
   // only when logged in. `GET /bookings/list` stays gated in the bookings page.
   useEffect(() => {
     if (authLoading) return;
+    if (isAuthScreenPath(pathname)) {
+      return;
+    }
+    const authKey = auth?.access_token?.trim() ? `auth:${auth.access_token.trim()}` : 'guest';
+    const loadKey = `${authKey}:${pathname}`;
+    if (autoLoadKeyRef.current === loadKey) return;
+    autoLoadKeyRef.current = loadKey;
     void load();
-  }, [authLoading, auth?.access_token, load]);
+  }, [authLoading, auth?.access_token, load, pathname]);
 
   const apiProfile = data?.profile ?? null;
 

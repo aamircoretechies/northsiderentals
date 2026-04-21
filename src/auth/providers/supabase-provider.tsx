@@ -5,13 +5,7 @@ import { AuthContext } from '@/auth/context/auth-context';
 import * as authHelper from '@/auth/lib/helpers';
 import { AuthModel, UserModel } from '@/auth/lib/models';
 import { fetchBookingsList } from '@/services/bookings';
-import { dashboardService } from '@/services/dashboard';
 import { profileService } from '@/services/profile';
-import {
-  defaultDevicePayload,
-  isDeviceIdConflictError,
-  rotateDeviceId,
-} from '@/providers/dashboard-data-provider';
 import { queryKeys } from '@/lib/query-keys';
 
 // Define the Supabase Auth Provider
@@ -87,19 +81,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       queryClient.prefetchQuery({
         queryKey: queryKeys.bookingsList('completed', 1, 20),
         queryFn: () => fetchBookingsList({ status: 'completed', page: 1, limit: 20 }),
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.dashboardBootstrap,
-        queryFn: async () => {
-          let body = defaultDevicePayload();
-          try {
-            return await dashboardService.registerDevice(body);
-          } catch (err) {
-            if (!isDeviceIdConflictError(err)) throw err;
-            body = { ...body, device_id: rotateDeviceId() };
-            return await dashboardService.registerDevice(body);
-          }
-        },
       }),
     ]);
   };
