@@ -269,12 +269,9 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   const updateProfile = useCallback(async (body: UpdateProfilePayload) => {
     try {
       setProfileBusy(true);
-      const updated = await profileService.updateProfile(body);
-      setRcmProfile((prev) => ({
-        ...(prev ?? updated),
-        ...updated,
-        profile_picture: updated.profile_picture ?? prev?.profile_picture ?? null,
-      }));
+      await profileService.updateProfile(body);
+      const fresh = await profileService.fetchProfile();
+      setRcmProfile(fresh);
     } finally {
       setProfileBusy(false);
     }
@@ -284,13 +281,10 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
     try {
       setProfileBusy(true);
       const updated = await profileService.uploadProfilePicture(file);
-      const nextPicture = updated.profile_picture
-        ? `${updated.profile_picture}${updated.profile_picture.includes('?') ? '&' : '?'}v=${Date.now()}`
-        : updated.profile_picture;
       setRcmProfile((prev) => ({
         ...(prev ?? updated),
         ...updated,
-        profile_picture: nextPicture ?? prev?.profile_picture ?? null,
+        profile_picture: updated.profile_picture ?? prev?.profile_picture ?? null,
       }));
     } finally {
       setProfileBusy(false);

@@ -22,6 +22,10 @@ function profileImageAbsoluteUrl(raw: string): string {
   return resolveRcmPublicUrl(t);
 }
 
+function hasExplicitProtocol(url: string): boolean {
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
+}
+
 export function ProfileAvatarImage({
   src,
   fallbackLabel = '',
@@ -31,20 +35,31 @@ export function ProfileAvatarImage({
 }: Props) {
   const trimmed = src?.trim() ?? '';
   const absoluteFromTrimmed = trimmed ? profileImageAbsoluteUrl(trimmed) : '';
+  const canUseDirectImg =
+    Boolean(absoluteFromTrimmed) && hasExplicitProtocol(absoluteFromTrimmed);
+
   const [resolved, setResolved] = useState<string | null>(() =>
-    absoluteFromTrimmed && !shouldAuthFetchMediaUrl(absoluteFromTrimmed)
+    absoluteFromTrimmed &&
+    (canUseDirectImg || !shouldAuthFetchMediaUrl(absoluteFromTrimmed))
       ? absoluteFromTrimmed
       : null,
   );
   const [pending, setPending] = useState(
-    () => Boolean(absoluteFromTrimmed && shouldAuthFetchMediaUrl(absoluteFromTrimmed)),
+    () =>
+      Boolean(
+        absoluteFromTrimmed &&
+          !canUseDirectImg &&
+          shouldAuthFetchMediaUrl(absoluteFromTrimmed),
+      ),
   );
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const u = src?.trim() ?? '';
     if (!u) {
       setResolved(null);
       setPending(false);
+      setFailed(false);
       return;
     }
 
@@ -52,10 +67,14 @@ export function ProfileAvatarImage({
     if (!absolute) {
       setResolved(null);
       setPending(false);
+      setFailed(false);
       return;
     }
 
-    if (!shouldAuthFetchMediaUrl(absolute)) {
+    // Fully-qualified media URLs load directly via <img src="...">.
+    // Never route /uploads/ or any https:// URL through apiBlob.
+    if (hasExplicitProtocol(absolute) || !shouldAuthFetchMediaUrl(absolute)) {
+      setFailed(false);
       setResolved(absolute);
       setPending(false);
       return;
@@ -65,6 +84,7 @@ export function ProfileAvatarImage({
     const blobRef = { current: null as string | null };
     setPending(true);
     setResolved(null);
+    setFailed(false);
 
     void (async () => {
       try {
@@ -86,6 +106,7 @@ export function ProfileAvatarImage({
         if (!cancelled) {
           setResolved(null);
           setPending(false);
+          setFailed(true);
         }
       }
     })();
@@ -121,9 +142,15 @@ export function ProfileAvatarImage({
     return fallbackShell;
   }
 
+  if (failed) {
+    return fallbackShell;
+  }
+
   const displaySrc =
     resolved ??
-    (!absoluteFromTrimmed || shouldAuthFetchMediaUrl(absoluteFromTrimmed)
+    (!absoluteFromTrimmed ||
+    (!hasExplicitProtocol(absoluteFromTrimmed) &&
+      shouldAuthFetchMediaUrl(absoluteFromTrimmed))
       ? null
       : absoluteFromTrimmed);
 
@@ -135,6 +162,11 @@ export function ProfileAvatarImage({
     <img
       src={displaySrc}
       alt={alt}
+      onError={() => {
+        setFailed(true);
+        setResolved(null);
+        setPending(false);
+      }}
       className={cn(
         'block size-full max-h-full max-w-full min-h-0 min-w-0 rounded-full object-cover',
         className,

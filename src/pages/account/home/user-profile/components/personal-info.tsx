@@ -65,18 +65,15 @@ const PersonalInfo = () => {
           </Button>
         )}
       </CardHeader>
-      <CardContent className="kt-scrollable-x-auto p-0 pb-3">
-        <Table className="align-middle text-sm text-muted-foreground">
+      <CardContent className="p-0 pb-3">
+        <Table className="align-middle text-sm text-muted-foreground w-full">
           <TableBody>
             <TableRow>
-              <TableCell className="min-w-28 py-2 font-normal text-secondary-foreground">
+              <TableCell className="py-2 font-normal text-secondary-foreground whitespace-nowrap">
                 Photo
               </TableCell>
-              <TableCell className="min-w-32 py-2 text-sm font-normal text-gray700">
-                150x150px JPEG, PNG Image
-              </TableCell>
-              <TableCell className="py-2 text-center">
-                <div className="flex items-center justify-center">
+              <TableCell className="py-2">
+                <div className="flex items-center gap-3">
                   {canEditProfile ? (
                     <AvatarInput
                       compact
@@ -111,7 +108,7 @@ const PersonalInfo = () => {
                       busy={profileBusy}
                     />
                   ) : (
-                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500 bg-muted aspect-square">
+                    <div className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-green-500 bg-muted">
                       <ProfileAvatarImage
                         src={profile.avatarUrl}
                         fallbackLabel={fullName === '—' ? '' : fullName}
@@ -121,6 +118,7 @@ const PersonalInfo = () => {
                       />
                     </div>
                   )}
+                  <span className="text-sm font-normal text-muted-foreground">150x150px JPEG, PNG Image</span>
                 </div>
               </TableCell>
             </TableRow>
@@ -137,10 +135,10 @@ const PersonalInfo = () => {
               <TableCell className="py-3 font-normal text-foreground">{phone}</TableCell>
             </TableRow>
             <TableRow>
-              <TableCell className="min-w-36 py-2 font-normal text-secondary-foreground">
+              <TableCell className="py-2 font-normal text-secondary-foreground whitespace-nowrap">
                 Email
               </TableCell>
-              <TableCell className="min-w-60 py-2">
+              <TableCell className="py-2">
                 <span className="text-sm font-normal text-foreground">{email}</span>
               </TableCell>
             </TableRow>

@@ -33,12 +33,20 @@ import { useLocation, useNavigate } from 'react-router';
 
 const profileFormInputClassName =
   'w-full bg-[#f2f4f8] border-0 rounded-[12px] px-4 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#3f4254] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow shadow-sm read-only:opacity-70';
-const NAME_MAX_LENGTH = 10;
+const NAME_MAX_LENGTH = 50;
+const MOBILE_MAX_LENGTH = 20;
+const ADDRESS_MAX_LENGTH = 160;
+const CITY_STATE_MAX_LENGTH = 80;
+const POSTAL_CODE_MAX_LENGTH = 10;
 const NAME_PATTERN = /^[a-zA-Z\s'-]+$/;
 const POSTAL_CODE_PATTERN = /^[a-zA-Z0-9\s-]{3,10}$/;
 
 function clampName(value: string): string {
   return value.slice(0, NAME_MAX_LENGTH);
+}
+
+function clampText(value: string, maxLength: number): string {
+  return value.slice(0, maxLength);
 }
 
 /** Module-level so React does not remount inputs every parent render (focus loss). */
@@ -48,18 +56,21 @@ function ProfileFormInput({
   onChange,
   type = 'text',
   readOnly,
+  maxLength,
 }: {
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   readOnly?: boolean;
+  maxLength?: number;
 }) {
   return (
     <input
       type={type}
       placeholder={placeholder}
       readOnly={readOnly}
+      maxLength={maxLength}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={profileFormInputClassName}
@@ -93,7 +104,6 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
   const [postalCode, setPostalCode] = useState('');
   const [countryId, setCountryId] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [driverLicense, setDriverLicense] = useState('');
   const [comboboxOpen, setComboboxOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -115,12 +125,16 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
     setLastName(
       clampName(rcmProfile?.last_name ?? dash?.last_name ?? user?.last_name ?? ''),
     );
-    setMobile(rcmProfile?.mobile ?? dash?.phone ?? user?.phone ?? '');
-    setLocalAddress(addr?.local_address ?? dash?.local_address ?? '');
-    setPostalAddress(addr?.postal_address ?? dash?.postal_address ?? '');
-    setCity(addr?.city ?? '');
-    setState(addr?.state ?? '');
-    setPostalCode(addr?.postal_code ?? '');
+    setMobile(clampText(rcmProfile?.mobile ?? dash?.phone ?? user?.phone ?? '', MOBILE_MAX_LENGTH));
+    setLocalAddress(
+      clampText(addr?.local_address ?? dash?.local_address ?? '', ADDRESS_MAX_LENGTH),
+    );
+    setPostalAddress(
+      clampText(addr?.postal_address ?? dash?.postal_address ?? '', ADDRESS_MAX_LENGTH),
+    );
+    setCity(clampText(addr?.city ?? '', CITY_STATE_MAX_LENGTH));
+    setState(clampText(addr?.state ?? '', CITY_STATE_MAX_LENGTH));
+    setPostalCode(clampText(addr?.postal_code ?? '', POSTAL_CODE_MAX_LENGTH));
     let nextCountry =
       addr?.country_id != null && Number.isFinite(Number(addr.country_id))
         ? String(addr.country_id)
@@ -358,7 +372,8 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             <ProfileFormInput
               placeholder="Phone (with country code)"
               value={mobile}
-              onChange={setMobile}
+              onChange={(v) => setMobile(clampText(v, MOBILE_MAX_LENGTH))}
+              maxLength={MOBILE_MAX_LENGTH}
             />
             <div className="flex flex-col gap-1">
               <input
@@ -391,17 +406,35 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
             <ProfileFormInput
               placeholder="Local address"
               value={localAddress}
-              onChange={setLocalAddress}
+              onChange={(v) => setLocalAddress(clampText(v, ADDRESS_MAX_LENGTH))}
+              maxLength={ADDRESS_MAX_LENGTH}
             />
+            <p className="text-[11px] text-[#8692a6] px-1 -mt-2">
+              Local address: {localAddress.length}/{ADDRESS_MAX_LENGTH}
+            </p>
             <ProfileFormInput
               placeholder="Postal address"
               value={postalAddress}
-              onChange={setPostalAddress}
+              onChange={(v) => setPostalAddress(clampText(v, ADDRESS_MAX_LENGTH))}
+              maxLength={ADDRESS_MAX_LENGTH}
             />
+            <p className="text-[11px] text-[#8692a6] px-1 -mt-2">
+              Postal address: {postalAddress.length}/{ADDRESS_MAX_LENGTH}
+            </p>
 
             <div className="grid grid-cols-2 gap-3">
-              <ProfileFormInput placeholder="City" value={city} onChange={setCity} />
-              <ProfileFormInput placeholder="State" value={state} onChange={setState} />
+              <ProfileFormInput
+                placeholder="City"
+                value={city}
+                onChange={(v) => setCity(clampText(v, CITY_STATE_MAX_LENGTH))}
+                maxLength={CITY_STATE_MAX_LENGTH}
+              />
+              <ProfileFormInput
+                placeholder="State"
+                value={state}
+                onChange={(v) => setState(clampText(v, CITY_STATE_MAX_LENGTH))}
+                maxLength={CITY_STATE_MAX_LENGTH}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -448,8 +481,9 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
                 placeholder="Post code"
                 value={postalCode}
                 onChange={(v) => {
-                  if (/^\d*$/.test(v)) setPostalCode(v);
+                  setPostalCode(clampText(v, POSTAL_CODE_MAX_LENGTH));
                 }}
+                maxLength={POSTAL_CODE_MAX_LENGTH}
               />
             </div>
           </div>
@@ -461,7 +495,7 @@ export function EditProfileModal({ children }: { children: React.ReactNode }) {
               disabled={profileBusy}
               onClick={() => void handleSubmit()}
             >
-              Submit
+              {profileBusy ? 'Saving...' : 'Submit'}
             </Button>
 
             <DialogClose asChild>

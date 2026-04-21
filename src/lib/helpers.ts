@@ -156,30 +156,24 @@ function getRcmMediaOrigin(): string | null {
 
 /**
  * Whether profile/media URLs should be loaded with `Authorization` via `fetch` + blob URL.
- * Relative `/uploads/...` always; absolute `https` only when same origin as RCM media host and
- * path contains `/uploads/` (plain `<img>` cannot send Bearer, so direct URLs often 403).
+ * `/uploads/...` paths are public static assets and should always be loaded directly via `<img>`.
  */
 export function shouldAuthFetchMediaUrl(url: string): boolean {
   const raw = url?.trim();
   if (!raw) return false;
   if (raw.startsWith('data:') || raw.startsWith('blob:')) return false;
+  if (raw.toLowerCase().includes('/uploads/')) return false;
 
   let abs = raw;
   if (raw.startsWith('//')) abs = `https:${raw}`;
 
-  const pathnameHasUploads = (pathname: string) => {
-    const p = pathname.toLowerCase();
-    return p.startsWith('/uploads/') || p.includes('/uploads/');
-  };
-
   if (!abs.startsWith('http://') && !abs.startsWith('https://')) {
-    const path = abs.startsWith('/') ? abs : `/${abs}`;
-    return pathnameHasUploads(path);
+    return false;
   }
 
   try {
     const u = new URL(abs);
-    if (!pathnameHasUploads(u.pathname)) return false;
+    if (u.pathname.toLowerCase().includes('/uploads/')) return false;
     const mediaOrigin = getRcmMediaOrigin();
     if (mediaOrigin) return u.origin === mediaOrigin;
     if (typeof window !== 'undefined' && u.origin === window.location.origin) {
