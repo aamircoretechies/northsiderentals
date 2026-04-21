@@ -726,9 +726,6 @@ export function CarsCheckoutDetailsContent() {
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="licenseState" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">
                   License State/Country
-                  {countriesLoading ? (
-                    <span className="ms-1 font-normal normal-case text-[#0061e0]">(loading…)</span>
-                  ) : null}
                 </label>
                 <div className="relative">
                   <select

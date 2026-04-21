@@ -1,8 +1,23 @@
-import { Link, Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, Outlet, useNavigationType } from 'react-router-dom';
+import { useAuth } from '@/auth/context/auth-context';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { Card, CardContent } from '@/components/ui/card';
 
 export function BrandedLayout() {
+  const navigationType = useNavigationType();
+  const { auth, logout } = useAuth();
+  const shouldLogoutOnBack = navigationType === 'POP' && Boolean(auth?.access_token);
+
+  useEffect(() => {
+    if (!shouldLogoutOnBack) return;
+    logout();
+  }, [logout, shouldLogoutOnBack]);
+
+  if (shouldLogoutOnBack) {
+    return null;
+  }
+
   return (
     <>
       <style>

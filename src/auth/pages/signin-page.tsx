@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,12 +25,17 @@ import { LoaderCircleIcon } from 'lucide-react';
 export function SignInPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { login, loginWithGoogleIdToken } = useAuth();
+  const { auth, login, loginWithGoogleIdToken } = useAuth();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  if (auth?.access_token) {
+    const nextPath = searchParams.get('next') || '/home';
+    return <Navigate to={nextPath} replace />;
+  }
 
   // Check for success message from password reset or error messages
   useEffect(() => {

@@ -44,10 +44,18 @@ export type MergedProfile = {
   avatarUrl: string | null;
 };
 
+function appendCacheBuster(url: string, version: number | null): string {
+  if (!url || !version) return url;
+  const [base, hash = ''] = url.split('#');
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}v=${version}${hash ? `#${hash}` : ''}`;
+}
+
 function mergeProfile(
   user: UserModel | undefined,
   dash: DashboardProfile | null | undefined,
   rcm: RcmProfile | null,
+  avatarVersion: number | null,
 ): MergedProfile {
   const email = (rcm?.email || dash?.email || user?.email || '').trim();
   const first =
@@ -70,7 +78,9 @@ function mergeProfile(
     normalizeProfilePicturePath(user?.pic) ||
     '';
 
-  const avatarUrl = rawPic ? resolveRcmPublicUrl(rawPic) : null;
+  const avatarUrl = rawPic
+    ? appendCacheBuster(resolveRcmPublicUrl(rawPic), avatarVersion)
+    : null;
 
   const addr = rcm?.address;
 
@@ -125,6 +135,7 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   const [pathname, setPathname] = useState(getCurrentPathname);
   const [data, setData] = useState<DashboardData | null>(null);
   const [rcmProfile, setRcmProfile] = useState<RcmProfile | null>(null);
+  const [avatarVersion, setAvatarVersion] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,8 +251,8 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   const apiProfile = data?.profile ?? null;
 
   const profile = useMemo(
-    () => mergeProfile(user, apiProfile, rcmProfile),
-    [user, apiProfile, rcmProfile],
+    () => mergeProfile(user, apiProfile, rcmProfile, avatarVersion),
+    [user, apiProfile, rcmProfile, avatarVersion],
   );
 
   const updateProfile = useCallback(async (body: UpdateProfilePayload) => {
@@ -261,18 +272,13 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
       const hasExistingPicture = Boolean(
         rcmProfile?.profile_picture || data?.profile?.profile_image_url || user?.pic,
       );
-      const updated = await profileService.uploadProfilePicture(
+      await profileService.uploadProfilePicture(
         file,
         hasExistingPicture,
       );
-      const nextPicture = updated.profile_picture
-        ? `${updated.profile_picture}${updated.profile_picture.includes('?') ? '&' : '?'}v=${Date.now()}`
-        : updated.profile_picture;
-      setRcmProfile((prev) => ({
-        ...(prev ?? updated),
-        ...updated,
-        profile_picture: nextPicture ?? prev?.profile_picture ?? null,
-      }));
+      const fresh = await profileService.fetchProfile();
+      setAvatarVersion(Date.now());
+      setRcmProfile(fresh);
     } finally {
       setProfileBusy(false);
     }

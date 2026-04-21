@@ -23,6 +23,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const onAuthExpired = () => {
+      queryClient.clear();
       saveAuth(undefined);
       setCurrentUser(undefined);
       const base = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
@@ -166,6 +167,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logout = () => {
     SupabaseAdapter.logout();
+    queryClient.clear();
     saveAuth(undefined);
     setCurrentUser(undefined);
     const base = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
