@@ -5,6 +5,7 @@ import {
   extractHostedPaymentUrl,
   mergeCreateBookingForUiState,
 } from '@/services/booking-payload';
+import { confirmWindcaveRedirect } from '@/utils/payment-disclaimer';
 
 /**
  * Legacy route: booking now redirects straight to Windcave from details.
@@ -20,6 +21,10 @@ export function CarsCheckoutPaymentContent() {
   useEffect(() => {
     const url = extractHostedPaymentUrl(booking);
     if (url) {
+      if (!confirmWindcaveRedirect()) {
+        setStatus('noop');
+        return;
+      }
       window.location.assign(url);
       return;
     }

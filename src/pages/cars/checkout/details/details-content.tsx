@@ -8,6 +8,7 @@ import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
+import { confirmWindcaveRedirect } from '@/utils/payment-disclaimer';
 import {
   buildCreateBookingPayload,
   mapUiExtrasToPayload,
@@ -513,6 +514,9 @@ export function CarsCheckoutDetailsContent() {
       }
 
       if (paymentUrl) {
+        if (!confirmWindcaveRedirect()) {
+          return;
+        }
         window.location.assign(paymentUrl);
         return;
       }
