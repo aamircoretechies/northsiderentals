@@ -307,9 +307,9 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
   const dropoffDate = dates.dropoff_date;
   const dropoffTime = dates.dropoff_time;
   const pickup =
-    [pickupDate, pickupTime].filter(Boolean).join(' ').trim() || '—';
+    [pickupDate, formatTimeWithAmPm(pickupTime)].filter(Boolean).join(' ').trim() || '—';
   const ret =
-    [dropoffDate, dropoffTime].filter(Boolean).join(' ').trim() || '—';
+    [dropoffDate, formatTimeWithAmPm(dropoffTime)].filter(Boolean).join(' ').trim() || '—';
 
   const pricing = (b.pricing as Record<string, unknown>) || {};
   const currency = (pricing.currency as string) || 'AUD';
@@ -1460,6 +1460,32 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatTimeWithAmPm(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const withMeridiem = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])$/);
+  if (withMeridiem) {
+    const hh = Number(withMeridiem[1]);
+    const mm = withMeridiem[2];
+    if (Number.isFinite(hh)) {
+      const hour12 = ((hh % 12) + 12) % 12 || 12;
+      return `${String(hour12).padStart(2, '0')}:${mm} ${withMeridiem[3].toUpperCase()}`;
+    }
+  }
+  const twentyFour = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (twentyFour) {
+    const hh = Number(twentyFour[1]);
+    const mm = twentyFour[2];
+    if (Number.isFinite(hh)) {
+      const hour24 = ((hh % 24) + 24) % 24;
+      const ampm = hour24 >= 12 ? 'PM' : 'AM';
+      const hour12 = hour24 % 12 || 12;
+      return `${String(hour12).padStart(2, '0')}:${mm} ${ampm}`;
+    }
+  }
+  return raw;
+}
+
 /** Normalize detail API `data` for the booking detail screen */
 export function mapBookingDetailToView(
   data: Record<string, unknown>,
@@ -1479,11 +1505,11 @@ export function mapBookingDetailToView(
   const sym = String(bookingInfo?.currencysymbol ?? '$');
   const currency = String(pricing.currency ?? bookingInfo?.currencyname ?? 'AUD');
 
-  const pickupWhen = [dates.pickup_date, dates.pickup_time]
+  const pickupWhen = [dates.pickup_date, formatTimeWithAmPm(dates.pickup_time)]
     .filter(Boolean)
     .join(' ')
     .trim();
-  const returnWhen = [dates.dropoff_date, dates.dropoff_time]
+  const returnWhen = [dates.dropoff_date, formatTimeWithAmPm(dates.dropoff_time)]
     .filter(Boolean)
     .join(' ')
     .trim();

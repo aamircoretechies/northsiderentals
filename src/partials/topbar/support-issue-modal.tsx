@@ -48,20 +48,30 @@ export function SupportIssueModal({
   };
 
   const handleSubmit = async () => {
-    if (title.trim().length < 3) {
-      toast.error('Subject must be at least 3 characters');
+    const subject = title.trim();
+    const details = description.trim();
+    if (!subject) {
+      toast.error('Subject is required.');
       return;
     }
-    if (description.trim().length < 5) {
-      toast.error('Description must be at least 5 characters');
+    if (subject.length < 3) {
+      toast.error('Subject must be at least 3 characters.');
+      return;
+    }
+    if (!details) {
+      toast.error('Description is required.');
+      return;
+    }
+    if (details.length < 5) {
+      toast.error('Description must be at least 5 characters.');
       return;
     }
 
     try {
       setSubmitting(true);
       await submitSupportIssue({
-        title: title.trim(),
-        description: description.trim(),
+        title: subject,
+        description: details,
         reservation_ref: reservationRef.trim() || undefined,
       });
       toast.success('Support request sent');

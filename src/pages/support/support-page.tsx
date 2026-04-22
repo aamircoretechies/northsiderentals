@@ -19,19 +19,29 @@ export function SupportPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (supportTitle.trim().length < 3) {
-      toast.error('Subject must be at least 3 characters');
+    const title = supportTitle.trim();
+    const details = description.trim();
+    if (!title) {
+      toast.error('Support title is required.');
       return;
     }
-    if (description.trim().length < 5) {
-      toast.error('Description must be at least 5 characters');
+    if (title.length < 3) {
+      toast.error('Support title must be at least 3 characters.');
+      return;
+    }
+    if (!details) {
+      toast.error('Description is required.');
+      return;
+    }
+    if (details.length < 5) {
+      toast.error('Description must be at least 5 characters.');
       return;
     }
     try {
       setSubmitting(true);
       await submitSupportIssue({
-        title: supportTitle.trim(),
-        description: description.trim(),
+        title,
+        description: details,
         reservation_ref: bookingNumber.trim() || undefined,
       });
       toast.success('Support request sent');
