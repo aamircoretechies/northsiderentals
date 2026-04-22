@@ -1,17 +1,13 @@
 import { CarHireWidget, FeaturedCars, Promotions } from './components';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
-import { ContentLoader } from '@/components/common/content-loader';
+import { ScreenLoader } from '@/components/common/screen-loader';
 import { Button } from '@/components/ui/button';
 
 export function Demo2Content() {
   const { data, loading, error, refresh } = useDashboardData();
 
   if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <ContentLoader />
-      </div>
-    );
+    return <ScreenLoader />;
   }
   if (error) {
     return (

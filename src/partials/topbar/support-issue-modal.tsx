@@ -89,11 +89,11 @@ export function SupportIssueModal({
       <DialogTrigger asChild>{children}</DialogTrigger>
 
       <DialogContent
-        className="max-w-md w-full p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
+        className="max-w-md w-[calc(100%-2rem)] rounded-3xl p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
         showCloseButton={false}
       >
         <div className="flex items-center p-4 pt-6 bg-[#f8f9fa]">
-          <DialogClose className="p-2 -ml-2 text-black hover:bg-gray-200 rounded-full transition-colors flex-shrink-0 cursor-pointer">
+          <DialogClose className="p-2  text-black hover:bg-gray-200 rounded-full transition-colors flex-shrink-0 cursor-pointer">
             <ArrowLeft className="w-6 h-6" />
           </DialogClose>
           <DialogTitle className="flex-1 text-center font-extrabold text-[20px] text-black pr-8">

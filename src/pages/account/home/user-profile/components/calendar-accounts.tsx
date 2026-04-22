@@ -9,33 +9,48 @@ interface ICalendarAccountsItem {
 }
 type ICalendarAccountsItems = Array<ICalendarAccountsItem>;
 
-function useGoogleAccountRow(): ICalendarAccountsItems {
+function useSocialAccountRow(): ICalendarAccountsItems {
   const { rcmProfile, profile } = useDashboardData();
 
   const email = (rcmProfile?.email || profile.email || '').trim();
   const method = rcmProfile?.method?.toLowerCase() ?? '';
-  const isGmail =
-    email.length > 0 && email.toLowerCase().endsWith('@gmail.com');
+  const isSocial = Boolean(rcmProfile?.is_social_login);
 
-  const showGoogle =
-    method === 'google' ||
-    (Boolean(rcmProfile?.is_social_login) && isGmail);
-
-  if (!showGoogle || !email) {
+  if (!isSocial || !email) {
     return [];
+  }
+
+  let logo = 'google.svg';
+  let title = 'Social account';
+
+  if (method === 'google' || email.toLowerCase().endsWith('@gmail.com')) {
+    logo = 'google.svg';
+    title = 'Google';
+  } else if (method === 'facebook' || email.toLowerCase().endsWith('@facebook.com')) {
+    logo = 'facebook.svg';
+    title = 'Facebook';
+  } else if (method === 'apple' || email.toLowerCase().endsWith('@apple.com')) {
+    logo = 'apple-black.svg';
+    title = 'Apple';
+  } else if (method === 'microsoft' || method === 'azure' || email.toLowerCase().endsWith('@outlook.com') || email.toLowerCase().endsWith('@hotmail.com')) {
+    logo = 'microsoft-5.svg';
+    title = 'Microsoft';
+  } else if (method !== '') {
+    title = method.charAt(0).toUpperCase() + method.slice(1);
+    // Keep default google logo or try to find one if we had a mapping
   }
 
   return [
     {
-      logo: 'google.svg',
-      title: 'Google',
+      logo,
+      title,
       email,
     },
   ];
 }
 
 const CalendarAccounts = () => {
-  const items = useGoogleAccountRow();
+  const items = useSocialAccountRow();
 
   const renderItem = (item: ICalendarAccountsItem, index: number) => {
     return (
@@ -60,6 +75,10 @@ const CalendarAccounts = () => {
     );
   };
 
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -67,13 +86,7 @@ const CalendarAccounts = () => {
       </CardHeader>
       <CardContent>
         <div className="grid gap-2.5">
-          {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-1">
-              No Google account linked for calendar, or you signed in with email and password.
-            </p>
-          ) : (
-            items.map((item, index) => renderItem(item, index))
-          )}
+          {items.map((item, index) => renderItem(item, index))}
         </div>
       </CardContent>
     </Card>

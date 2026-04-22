@@ -350,13 +350,14 @@ function mapApiCarToCard(
     discount_price: unavailable ? '0' : dailyFinal.toString(),
     special_price_text: unavailable
       ? availMsg || 'Not available for these dates'
-      : `${noDays}-day rental · ${currencySymbol}${Math.round(finalPrice)} total · ${currencySymbol}${dailyFinal} ${periodLabel}`,
+      : `${noDays}-day rental · ${currencySymbol}${dailyFinal} ${periodLabel}`,
     discount_percentage: unavailable ? undefined : discountPerc,
     searchParams: searchParams as Record<string, unknown>,
     locations: locations as unknown[],
     searchMeta,
     currency_symbol: currencySymbol,
     total_rate_after_discount: unavailable ? 0 : finalPrice,
+    total_original_price: ogPrice,
     unavailable,
     unavailable_message: unavailable ? availMsg || undefined : undefined,
   };

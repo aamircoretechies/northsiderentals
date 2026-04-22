@@ -56,9 +56,9 @@ export function EmailQuoteModal({
   const quoteCountryId = licenseCountryToId(
     String(
       rcmProfile?.countryid ??
-        apiProfile?.countryid ??
-        apiProfile?.country_id ??
-        '',
+      apiProfile?.countryid ??
+      apiProfile?.country_id ??
+      '',
     ),
   );
 
@@ -173,7 +173,8 @@ export function EmailQuoteModal({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         showCloseButton={false}
-        className="max-w-[500px] w-full p-0 gap-0 overflow-hidden bg-white border-0 sm:rounded-[24px]"
+        /* className="max-w-[500px] w-full p-0 gap-0 overflow-hidden bg-white border-0 sm:rounded-[24px]" */
+        className="max-w-md w-[calc(100%-2rem)] rounded-3xl p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
       >
         <div className="flex flex-col h-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center px-6 py-5 sticky top-0 bg-white z-10 border-b border-gray-100">

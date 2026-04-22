@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { ContentLoader } from '@/components/common/content-loader';
 import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -968,15 +969,18 @@ export function CarsCheckoutDetailsContent() {
 
         {/* Terms Modal */}
         <Dialog open={isTermsOpen} onOpenChange={setIsTermsOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogContent
+            /*  className="max-w-2xl max-h-[85vh]" */
+            className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] rounded-3xl gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
+
+          >
+
             <DialogHeader>
               <DialogTitle className="text-[20px] font-bold text-black max-w-[80%] text-left" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
             </DialogHeader>
             <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
               {termsLoading ? (
-                <div className="flex justify-center items-center py-20 pe-0">
-                  <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
-                </div>
+                <ContentLoader />
               ) : (
                 <div
                   dangerouslySetInnerHTML={{ __html: termsData?.content || '' }}
@@ -990,15 +994,13 @@ export function CarsCheckoutDetailsContent() {
 
         {/* Notice Modal */}
         <Dialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogContent className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] rounded-3xl gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]">
             <DialogHeader>
               <DialogTitle className="text-[20px] font-bold text-black text-left max-w-[80%]" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
             </DialogHeader>
             <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
               {noticeLoading ? (
-                <div className="flex justify-center items-center py-20">
-                  <Loader2 className="h-10 w-10 animate-spin text-[#0061e0]" />
-                </div>
+                <ContentLoader />
               ) : (
                 <div
                   dangerouslySetInnerHTML={{ __html: noticeData?.content || '' }}

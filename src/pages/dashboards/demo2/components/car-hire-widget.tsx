@@ -385,7 +385,7 @@ export function CarHireWidget({
                   <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
                   <Select value={resolvedPickupTime} onValueChange={setPickupTime}>
-                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
+                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 lg:max-w-[140px] [&>svg:last-child]:hidden">
                       <Clock
                         className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
                         strokeWidth={2}
@@ -439,7 +439,7 @@ export function CarHireWidget({
                   <div className="h-[1px] w-full bg-amber-400/30 sm:h-[60%] sm:w-[1px]" />
 
                   <Select value={resolvedReturnTime} onValueChange={setReturnTime}>
-                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 [&>svg:last-child]:hidden">
+                    <SelectTrigger className="h-full flex-[0.8] cursor-pointer items-center gap-3 rounded-none border-none bg-transparent px-4 py-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 sm:py-0 lg:max-w-[140px] [&>svg:last-child]:hidden">
                       <Clock
                         className="h-[22px] w-[22px] shrink-0 text-[#0061e0]"
                         strokeWidth={2}

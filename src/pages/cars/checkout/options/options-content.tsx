@@ -7,7 +7,7 @@ import { DamageCoverOptions, DamageCoverItem } from './components/damage-cover-o
 import { RentalFeeSummary } from './components/rental-fee-summary';
 import { EmailQuoteModal } from './components/email-quote-modal';
 import { carsService } from '@/services/cars';
-import { ContentLoader } from '@/components/common/content-loader';
+import { ScreenLoader } from '@/components/common/screen-loader';
 import { MAX_CHECKOUT_EXTRA_FEE_QTY } from '@/services/booking-payload';
 import { sanitizeApiText } from '@/utils/sanitize-api-text';
 import {
@@ -282,11 +282,7 @@ export function CarsCheckoutOptionsContent() {
     .join(', ');
 
   if (loadingDetails) {
-    return (
-      <div className="flex justify-center items-center min-h-[50vh]">
-        <ContentLoader />
-      </div>
-    );
+    return <ScreenLoader />;
   }
 
   const actionButtons = (
