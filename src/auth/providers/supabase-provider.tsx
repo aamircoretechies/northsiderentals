@@ -4,9 +4,6 @@ import { SupabaseAdapter } from '@/auth/adapters/supabase-adapter';
 import { AuthContext } from '@/auth/context/auth-context';
 import * as authHelper from '@/auth/lib/helpers';
 import { AuthModel, UserModel } from '@/auth/lib/models';
-import { fetchBookingsList } from '@/services/bookings';
-import { profileService } from '@/services/profile';
-import { queryKeys } from '@/lib/query-keys';
 
 // Define the Supabase Auth Provider
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -65,27 +62,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   };
 
-  const prefetchPostLoginData = async () => {
-    await Promise.allSettled([
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.userProfile,
-        queryFn: () => profileService.fetchProfile(),
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.bookingsList('active', 1, 20),
-        queryFn: () => fetchBookingsList({ status: 'active', page: 1, limit: 20 }),
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.bookingsList('upcoming', 1, 20),
-        queryFn: () => fetchBookingsList({ status: 'upcoming', page: 1, limit: 20 }),
-      }),
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.bookingsList('completed', 1, 20),
-        queryFn: () => fetchBookingsList({ status: 'completed', page: 1, limit: 20 }),
-      }),
-    ]);
-  };
-
   const login = async (email: string, password: string) => {
     try {
       const auth = await SupabaseAdapter.login(email, password);
@@ -97,12 +73,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // Backend-token sessions may not have a Supabase user; keep auth token.
         setCurrentUser(undefined);
       }
-      // Defer prefetch so React can commit auth + client navigation first.
-      // Otherwise a fast 401 from a parallel request can fire `app:auth-expired` and
-      // full-page redirect to sign-in before `navigate('/home')` wins the race.
-      queueMicrotask(() => {
-        void prefetchPostLoginData();
-      });
     } catch (error) {
       saveAuth(undefined);
       throw error;
@@ -119,9 +89,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch {
         setCurrentUser(undefined);
       }
-      queueMicrotask(() => {
-        void prefetchPostLoginData();
-      });
     } catch (error) {
       saveAuth(undefined);
       throw error;
