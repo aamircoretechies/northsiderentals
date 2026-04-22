@@ -9,6 +9,7 @@ import { EmailQuoteModal } from './components/email-quote-modal';
 import { carsService } from '@/services/cars';
 import { ContentLoader } from '@/components/common/content-loader';
 import { MAX_CHECKOUT_EXTRA_FEE_QTY } from '@/services/booking-payload';
+import { sanitizeApiText } from '@/utils/sanitize-api-text';
 import {
   type CheckoutAreaOfUseOption,
   type CheckoutCountryOption,
@@ -31,7 +32,7 @@ function concatFeeDescription(row: Record<string, unknown>): string {
     row.feedescription2,
     row.feedescription3,
   ]
-    .map((x) => String(x ?? '').trim())
+    .map((x) => sanitizeApiText(x))
     .filter(Boolean);
   return Array.from(new Set(parts)).join('\n\n');
 }
@@ -274,7 +275,7 @@ export function CarsCheckoutOptionsContent() {
       : 0;
 
   const carSubtitle = [
-    carData?.transmission,
+    sanitizeApiText(carData?.transmission),
     carData?.year ? `${carData.year} Model` : '',
   ]
     .filter(Boolean)

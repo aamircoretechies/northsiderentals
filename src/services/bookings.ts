@@ -1,6 +1,7 @@
 import { getAuth } from '@/auth/lib/helpers';
 import { createApiUrl } from '@/lib/api-url';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
+import { sanitizeApiText } from '@/utils/sanitize-api-text';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
@@ -1485,20 +1486,6 @@ function formatTimeWithAmPm(value: unknown): string {
     }
   }
   return raw;
-}
-
-function sanitizeApiText(value: unknown): string {
-  const raw = String(value ?? '');
-  if (!raw) return '';
-  const withoutTags = raw.replace(/<[^>]*>/g, ' ');
-  const decoded = withoutTags
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-  return decoded.replace(/\s+/g, ' ').trim();
 }
 
 /** Normalize detail API `data` for the booking detail screen */
