@@ -87,7 +87,7 @@ export function OptionalExtras({ extras, onUpdateQuantity, onToggle }: OptionalE
                   Math.max(
                     1,
                     Number(extra.maxQty ?? MAX_CHECKOUT_EXTRA_FEE_QTY) ||
-                      MAX_CHECKOUT_EXTRA_FEE_QTY,
+                    MAX_CHECKOUT_EXTRA_FEE_QTY,
                   ),
                 );
                 const qty = Math.max(0, Math.min(cap, Number(extra.quantity ?? 0)));

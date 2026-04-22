@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { differenceInHours, parse } from 'date-fns';
 import { Armchair, Luggage, Check, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router';
 import { normalizeMediaUrl } from '@/lib/helpers';
@@ -35,6 +37,8 @@ export interface CarCardProps {
   currency_symbol?: string;
   /** Total rental from API for checkout summaries */
   total_rate_after_discount?: number;
+  /** Total original rate before discount */
+  total_original_price?: number;
   unavailable?: boolean;
   unavailable_message?: string;
 }
@@ -51,6 +55,41 @@ export function CarCard(props: CarCardProps) {
     props.unavailable ||
     !props.discount_price ||
     parseFloat(String(props.discount_price)) === 0;
+
+  const calculatedDays = useMemo(() => {
+    const sp = props.searchParams;
+    if (
+      !sp?.pickup_date ||
+      !sp?.dropoff_date ||
+      !sp?.pickup_time ||
+      !sp?.dropoff_time
+    ) {
+      return 1;
+    }
+    try {
+      const start = parse(
+        `${sp.pickup_date} ${sp.pickup_time}`,
+        'yyyy-MM-dd HH:mm',
+        new Date(),
+      );
+      const end = parse(
+        `${sp.dropoff_date} ${sp.dropoff_time}`,
+        'yyyy-MM-dd HH:mm',
+        new Date(),
+      );
+      const diffHours = differenceInHours(end, start);
+      return Math.max(Math.ceil(diffHours / 24), 1);
+    } catch (e) {
+      console.error('Error calculating days:', e);
+      return 1;
+    }
+  }, [props.searchParams]);
+
+  const dailyPrice = parseFloat(props.discount_price || '0');
+  const dailyOriginalPrice = parseFloat(props.original_price || '0');
+
+  const totalPrice = Math.round(dailyPrice * calculatedDays);
+  const totalOriginalPrice = Math.round(dailyOriginalPrice * calculatedDays);
 
   const cardInner = (
     <>
@@ -105,8 +144,28 @@ export function CarCard(props: CarCardProps) {
         <div className="mb-4" />
       )}
 
-      <div className="grid grid-cols-1 gap-y-1.5 mb-6 text-[13px]">
+      {/* <div className="grid grid-cols-1 gap-y-1.5 mb-6 text-[13px]">
         {props.features.map((feature, idx) => (
+          <div key={idx} className="flex items-start gap-2">
+            <Check
+              size={16}
+              className="text-emerald-600 shrink-0 mt-0.5"
+              strokeWidth={2.5}
+            />
+            <span className="text-emerald-800/90 font-medium leading-snug">
+              {feature}
+            </span>
+          </div>
+        ))}
+      </div> */}
+
+      <div className="grid grid-cols-1 gap-y-1.5 mb-6 text-[13px]">
+        {[
+          '24/7 Roadside Assistance',
+          '100Km Free Per Day',
+          'GST Included',
+          'Standard Damage Cover',
+        ].map((feature, idx) => (
           <div key={idx} className="flex items-start gap-2">
             <Check
               size={16}
@@ -146,18 +205,19 @@ export function CarCard(props: CarCardProps) {
                 {props.discount_percentage}% OFF
               </span>
             ) : null}
-            {props.original_price &&
-              props.original_price !== props.discount_price ? (
+            {totalOriginalPrice && totalOriginalPrice !== totalPrice ? (
               <span className="text-[22px] font-bold text-[#8a6910] line-through decoration-2 opacity-90">
                 {sym}
-                {props.original_price}
+                {totalOriginalPrice}
               </span>
             ) : null}
             <span className="text-[26px] font-extrabold tracking-tight">
               {sym}
-              {props.discount_price}
+              {totalPrice}
             </span>
-            <span className="text-[13px] font-semibold opacity-80">/ day</span>
+            <span className="text-[13px] font-semibold opacity-80 leading-tight">
+              Total for <br></br>{calculatedDays} {calculatedDays === 1 ? 'Day' : 'Days'}
+            </span>
           </Link>
         )}
         <p className="text-center text-muted-foreground text-[13px] font-medium mt-2 leading-snug px-1">

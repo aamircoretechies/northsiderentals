@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search as SearchIcon, Loader2, AlertCircle, X } from 'lucide-react';
+import { ScreenLoader } from '@/components/common/screen-loader';
 import { useNavigate } from 'react-router';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/context/auth-context';
@@ -355,10 +356,7 @@ export function BookingsContent() {
           ) : null}
 
           {listAreaLoading && !items.length ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-              <Loader2 className="size-10 animate-spin text-[#0061e0]" />
-              <p className="text-sm">Loading your bookings…</p>
-            </div>
+            <ScreenLoader />
           ) : null}
 
           {!listAreaLoading && !error && !filtered.length ? (

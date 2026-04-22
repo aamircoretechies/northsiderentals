@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { ScreenLoader } from '@/components/common/screen-loader';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { CollapsibleCard } from '@/pages/express-checkin/components/collapsible-card';
@@ -219,10 +220,7 @@ export function SignAgreementsContent() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Loader2 className="size-10 animate-spin text-[#0061e0]" />
-          <p className="text-sm">Loading agreement…</p>
-        </div>
+        <ScreenLoader />
       ) : null}
 
       {error && !loading ? (

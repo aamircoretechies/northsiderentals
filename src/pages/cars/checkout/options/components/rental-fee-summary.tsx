@@ -25,7 +25,7 @@ export function RentalFeeSummary({
   const totalCost = baseTotal + totalExtras;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[32px] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-gray-100 p-6 pt-2  flex flex-col w-full mx-auto md:max-w-[700px] lg:max-w-none lg:static lg:rounded-none lg:shadow-none lg:border-t-0 lg:p-0">
+    <div className="z-2 fixed bottom-0 left-0 right-0 bg-white rounded-t-[32px] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-gray-100 p-6 pt-2  flex flex-col w-full mx-auto md:max-w-[700px] lg:max-w-none lg:static lg:rounded-none lg:shadow-none lg:border-t-0 lg:p-0">
       {/* Top drag handle visual indicator - Clickable for toggle */}
       <div
         className="w-full pt-1 pb-5 lg:hidden cursor-pointer active:opacity-70 transition-opacity"

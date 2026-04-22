@@ -7,12 +7,13 @@ import {
 
 } from './components';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
+import { ScreenLoader } from '@/components/common/screen-loader';
 
 export function Demo1LightSidebarContent() {
   const { loading, error, refresh } = useDashboardData();
 
   if (loading) {
-    return <div>Loading dashboard data...</div>;
+    return <ScreenLoader />;
   }
 
   if (error) {

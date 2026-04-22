@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { ScreenLoader } from '@/components/common/screen-loader';
 import { useNavigate, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -499,10 +500,7 @@ export function BookingDetailContent() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-muted-foreground">
-          <Loader2 className="size-10 animate-spin text-[#0061e0]" />
-          <p className="text-sm">Loading booking…</p>
-        </div>
+        <ScreenLoader />
       ) : null}
 
       {error && !loading ? (
