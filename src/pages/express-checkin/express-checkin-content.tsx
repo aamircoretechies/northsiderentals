@@ -660,7 +660,6 @@ export function ExpressCheckinContent() {
   const stepOrder: StepId[] = isUpdateMode
     ? ['customer', 'booking']
     : ['customer', 'booking', 'drivers', 'images', 'creditcard'];
-  const [completedSteps, setCompletedSteps] = useState<Record<string, boolean>>({});
   const [savingStep, setSavingStep] = useState<string | null>(null);
 
   // Refresh documents whenever Upload Images card opens so driver/document data stays in sync.
@@ -688,20 +687,8 @@ export function ExpressCheckinContent() {
     };
   }, [openCard, isUpdateMode, reservationRef]);
 
-  const isStepLocked = (id: StepId) => {
-    if (isUpdateMode) return false;
-    const idx = stepOrder.indexOf(id);
-    if (idx <= 0) return false;
-    const previousStep = stepOrder[idx - 1];
-    if (previousStep === 'customer') return false;
-    return !completedSteps[previousStep];
-  };
-
   const toggleCard = (id: string) => {
     if (bookingLockedReason && id !== 'reservation') return;
-    if (stepOrder.includes(id as StepId) && isStepLocked(id as StepId)) {
-      return;
-    }
     setOpenCard(openCard === id ? null : id);
   };
 
@@ -951,12 +938,10 @@ export function ExpressCheckinContent() {
     setBookingForm(f.booking);
     setDriversForm(f.drivers);
     setUploadForm(f.upload);
-    setCompletedSteps({ customer: true });
     setOpenCard('reservation');
   }, [hydrationKey]);
 
   const markSaved = (id: StepId) => {
-    setCompletedSteps((prev) => ({ ...prev, [id]: true }));
     if (isUpdateMode) return;
     const idx = stepOrder.indexOf(id);
     const next = stepOrder[idx + 1];
@@ -1759,6 +1744,74 @@ export function ExpressCheckinContent() {
     };
   }, [bookingInfo, reservationRef, routeState?.reservationRef, snapshot]);
 
+  const rentalFeeSummary = useMemo(() => {
+    const parseDateValue = (value: unknown): Date | null => {
+      const text = String(value ?? '').trim();
+      if (!text) return null;
+      const native = new Date(text);
+      if (!Number.isNaN(native.getTime())) return native;
+      const ddMmm = text.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})$/);
+      if (ddMmm) {
+        const parsed = new Date(`${ddMmm[1]} ${ddMmm[2]} ${ddMmm[3]}`);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      const ddMmYyyy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (ddMmYyyy) {
+        const parsed = new Date(
+          Number(ddMmYyyy[3]),
+          Number(ddMmYyyy[2]) - 1,
+          Number(ddMmYyyy[1]),
+        );
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      return null;
+    };
+
+    const dayCandidates = [bookingInfo?.numberofdays];
+    let days = 0;
+    for (const candidate of dayCandidates) {
+      const n = Number(candidate ?? 0);
+      if (Number.isFinite(n) && n > 0) {
+        days = n;
+        break;
+      }
+    }
+    if (days <= 0) {
+      const pickup = parseDateValue(bookingInfo?.pickupdate);
+      const dropoff = parseDateValue(bookingInfo?.dropoffdate);
+      if (pickup && dropoff) {
+        const diff = Math.ceil(
+          (dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (Number.isFinite(diff) && diff > 0) days = diff;
+      }
+    }
+
+    const dailyRateCandidates = [bookingInfo?.dailyrate];
+    const dailyRate =
+      dailyRateCandidates
+        .map((v) => Number(v ?? 0))
+        .find((n) => Number.isFinite(n) && n >= 0) ?? 0;
+
+    const totalCostCandidates = [bookingInfo?.totalcost];
+    const totalCost =
+      totalCostCandidates
+        .map((v) => Number(v ?? 0))
+        .find((n) => Number.isFinite(n) && n >= 0) ?? 0;
+
+    const gstAmount = Number(bookingInfo?.gst ?? 0);
+    const computedExtras = Math.max(0, totalCost - days * dailyRate);
+    const totalExtras = Number.isFinite(computedExtras) ? computedExtras : 0;
+
+    return {
+      days,
+      dailyRate,
+      totalExtras,
+      totalCost,
+      gstAmount: Number.isFinite(gstAmount) && gstAmount >= 0 ? gstAmount : 0,
+    };
+  }, [bookingInfo]);
+
   return (
     <div className="flex flex-col h-full min-h-screen pb-[300px] lg:pb-10 relative px-4 pt-0 lg:px-0">
       <Dialog open={showUpdateSuccessDialog} onOpenChange={setShowUpdateSuccessDialog}>
@@ -1848,10 +1901,10 @@ export function ExpressCheckinContent() {
           {/* Desktop Summary Placeholder (matches options layout) */}
           <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 hidden lg:flex flex-col mt-2">
             <RentalFeeSummary
-              days={6}
-              dailyRate={43.0}
-              totalExtras={10.0}
-              gstAmount={12.0}
+              days={rentalFeeSummary.days}
+              dailyRate={rentalFeeSummary.dailyRate}
+              totalExtras={rentalFeeSummary.totalExtras}
+              gstAmount={rentalFeeSummary.gstAmount}
             />
           </div>
         </div>
@@ -2041,11 +2094,11 @@ export function ExpressCheckinContent() {
       {!isUpdateMode ? (
         <div className="lg:hidden">
           <RentalFeeSummaryBottomSheet
-            days={6}
-            dailyRate={43.0}
-            totalExtras={10.0}
-            totalCost={280.0}
-            gstAmount={12.0}
+            days={rentalFeeSummary.days}
+            dailyRate={rentalFeeSummary.dailyRate}
+            totalExtras={rentalFeeSummary.totalExtras}
+            totalCost={rentalFeeSummary.totalCost}
+            gstAmount={rentalFeeSummary.gstAmount}
           />
         </div>
       ) : null}
