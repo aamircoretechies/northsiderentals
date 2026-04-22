@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigationType } from 'react-router-dom';
 import { useAuth } from '@/auth/context/auth-context';
 import { toAbsoluteUrl } from '@/lib/helpers';
@@ -7,7 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 export function ClassicLayout() {
   const navigationType = useNavigationType();
   const { auth, logout } = useAuth();
-  const shouldLogoutOnBack = navigationType === 'POP' && Boolean(auth?.access_token);
+  const mountedWithAuth = useRef(Boolean(auth?.access_token));
+  const shouldLogoutOnBack =
+    navigationType === 'POP' && mountedWithAuth.current;
 
   useEffect(() => {
     if (!shouldLogoutOnBack) return;

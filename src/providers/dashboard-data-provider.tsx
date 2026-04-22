@@ -46,9 +46,10 @@ export type MergedProfile = {
 
 function appendCacheBuster(url: string, version: number | null): string {
   if (!url || !version) return url;
-  const [base, hash = ''] = url.split('#');
-  const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}v=${version}${hash ? `#${hash}` : ''}`;
+  // Use a URL fragment instead of a query param so the browser sees a fresh URL
+  // without sending `?v=...` to the backend static-file handler.
+  const [base] = url.split('#');
+  return `${base}#v=${version}`;
 }
 
 function mergeProfile(
@@ -56,6 +57,7 @@ function mergeProfile(
   dash: DashboardProfile | null | undefined,
   rcm: RcmProfile | null,
   avatarVersion: number | null,
+  avatarOverrideUrl: string | null,
 ): MergedProfile {
   const email = (rcm?.email || dash?.email || user?.email || '').trim();
   const first =
@@ -78,9 +80,11 @@ function mergeProfile(
     normalizeProfilePicturePath(user?.pic) ||
     '';
 
-  const avatarUrl = rawPic
-    ? appendCacheBuster(resolveRcmPublicUrl(rawPic), avatarVersion)
-    : null;
+  const avatarUrl = avatarOverrideUrl
+    ? avatarOverrideUrl
+    : rawPic
+      ? appendCacheBuster(resolveRcmPublicUrl(rawPic), avatarVersion)
+      : null;
 
   const addr = rcm?.address;
 
@@ -132,14 +136,25 @@ function getCurrentPathname(): string {
 export function DashboardDataProvider({ children }: PropsWithChildren) {
   const { user, auth, loading: authLoading } = useAuth();
   const autoLoadKeyRef = useRef<string | null>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
   const [pathname, setPathname] = useState(getCurrentPathname);
   const [data, setData] = useState<DashboardData | null>(null);
   const [rcmProfile, setRcmProfile] = useState<RcmProfile | null>(null);
   const [avatarVersion, setAvatarVersion] = useState<number | null>(null);
+  const [avatarOverrideUrl, setAvatarOverrideUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<RcmNotification[]>([]);
+
+  const replaceAvatarOverrideUrl = useCallback((nextUrl: string | null) => {
+    const prevUrl = avatarObjectUrlRef.current;
+    if (prevUrl && prevUrl !== nextUrl) {
+      URL.revokeObjectURL(prevUrl);
+    }
+    avatarObjectUrlRef.current = nextUrl;
+    setAvatarOverrideUrl(nextUrl);
+  }, []);
 
   const load = useCallback(async (payload?: RegisterDeviceRequest) => {
     try {
@@ -251,8 +266,8 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   const apiProfile = data?.profile ?? null;
 
   const profile = useMemo(
-    () => mergeProfile(user, apiProfile, rcmProfile, avatarVersion),
-    [user, apiProfile, rcmProfile, avatarVersion],
+    () => mergeProfile(user, apiProfile, rcmProfile, avatarVersion, avatarOverrideUrl),
+    [user, apiProfile, rcmProfile, avatarVersion, avatarOverrideUrl],
   );
 
   const updateProfile = useCallback(async (body: UpdateProfilePayload) => {
@@ -267,6 +282,8 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
   }, []);
 
   const uploadProfilePicture = useCallback(async (file: File) => {
+    const localPreviewUrl = URL.createObjectURL(file);
+    replaceAvatarOverrideUrl(localPreviewUrl);
     try {
       setProfileBusy(true);
       const hasExistingPicture = Boolean(
@@ -279,10 +296,19 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
       const fresh = await profileService.fetchProfile();
       setAvatarVersion(Date.now());
       setRcmProfile(fresh);
+      replaceAvatarOverrideUrl(localPreviewUrl);
+    } catch (error) {
+      replaceAvatarOverrideUrl(null);
+      throw error;
     } finally {
       setProfileBusy(false);
     }
-  }, [data?.profile?.profile_image_url, rcmProfile?.profile_picture, user?.pic]);
+  }, [
+    data?.profile?.profile_image_url,
+    rcmProfile?.profile_picture,
+    replaceAvatarOverrideUrl,
+    user?.pic,
+  ]);
 
   const deleteProfilePicture = useCallback(async () => {
     try {
@@ -293,10 +319,21 @@ export function DashboardDataProvider({ children }: PropsWithChildren) {
         // Some backends require a profile PATCH/PUT nulling the field after delete.
         fresh = await profileService.updateProfile({ profile_picture: null });
       }
+      replaceAvatarOverrideUrl(null);
+      setAvatarVersion(Date.now());
       setRcmProfile({ ...fresh, profile_picture: null });
     } finally {
       setProfileBusy(false);
     }
+  }, [replaceAvatarOverrideUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+        avatarObjectUrlRef.current = null;
+      }
+    };
   }, []);
 
   const notificationUnreadCount = useMemo(

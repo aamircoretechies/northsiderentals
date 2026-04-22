@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ScreenLoader } from '@/components/common/screen-loader';
 import { useAuth } from './context/auth-context';
@@ -9,27 +9,25 @@ import { useAuth } from './context/auth-context';
  */
 export const RequireAuth = () => {
   const { auth, verify, loading: globalLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const verificationStarted = useRef(false);
+  const [shellReady, setShellReady] = useState(false);
+  const token = auth?.access_token?.trim() ?? '';
 
   useEffect(() => {
-    const checkAuth = async () => {
-      if (!auth?.access_token || !verificationStarted.current) {
-        verificationStarted.current = true;
-        try {
-          await verify();
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
+    let cancelled = false;
+    setShellReady(false);
+    (async () => {
+      try {
+        await verify();
+      } finally {
+        if (!cancelled) setShellReady(true);
       }
+    })();
+    return () => {
+      cancelled = true;
     };
+  }, [token, verify]);
 
-    checkAuth();
-  }, [auth, verify]);
-
-  if (loading || globalLoading) {
+  if (!shellReady || globalLoading) {
     return <ScreenLoader />;
   }
 

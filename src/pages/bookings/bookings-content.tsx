@@ -333,9 +333,9 @@ export function BookingsContent() {
 
           <div className="flex flex-wrap items-center gap-5 justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">
-              {listAreaLoading
-                ? 'Loading…'
-                : `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`}
+              {!listAreaLoading
+                ? `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`
+                : null}
               {!listAreaLoading &&
                 searchInput.trim() &&
                 items.length !== filtered.length

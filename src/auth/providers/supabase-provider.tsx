@@ -97,7 +97,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // Backend-token sessions may not have a Supabase user; keep auth token.
         setCurrentUser(undefined);
       }
-      void prefetchPostLoginData();
+      // Defer prefetch so React can commit auth + client navigation first.
+      // Otherwise a fast 401 from a parallel request can fire `app:auth-expired` and
+      // full-page redirect to sign-in before `navigate('/home')` wins the race.
+      queueMicrotask(() => {
+        void prefetchPostLoginData();
+      });
     } catch (error) {
       saveAuth(undefined);
       throw error;
@@ -114,7 +119,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch {
         setCurrentUser(undefined);
       }
-      void prefetchPostLoginData();
+      queueMicrotask(() => {
+        void prefetchPostLoginData();
+      });
     } catch (error) {
       saveAuth(undefined);
       throw error;
