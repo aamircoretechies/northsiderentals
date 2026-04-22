@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { parse, format, isValid } from 'date-fns';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useLocation, useNavigate } from 'react-router';
@@ -343,6 +343,66 @@ function documentLinkIdFromRow(row: Record<string, unknown>): number {
   return 0;
 }
 
+function normalizeDocumentRows(rows: unknown[]): Record<string, unknown>[] {
+  const byKey = new Map<string, Record<string, unknown>>();
+  rows.forEach((rowUnknown, index) => {
+    const row = (rowUnknown ?? {}) as Record<string, unknown>;
+    const setupId = Number(row.documentlinksetupid ?? 0);
+    const customerId = Number(row.customerid ?? 0);
+    const key = `${setupId}:${customerId}`;
+    const previous = byKey.get(key);
+    if (!previous) {
+      byKey.set(key, row);
+      return;
+    }
+    // Keep a deterministic "latest" row when API returns duplicates.
+    const prevLinkId = documentLinkIdFromRow(previous);
+    const nextLinkId = documentLinkIdFromRow(row);
+    const prevUploaded = Number(previous.isuploaded ?? 0) > 0;
+    const nextUploaded = Number(row.isuploaded ?? 0) > 0;
+    if (
+      (nextUploaded && !prevUploaded) ||
+      nextLinkId > prevLinkId ||
+      (nextLinkId === prevLinkId && index % 2 === 1)
+    ) {
+      byKey.set(key, row);
+    }
+  });
+  return Array.from(byKey.values());
+}
+
+function mapUploadDocuments(rows: unknown[]): UploadImagesForm['docs'] {
+  return normalizeDocumentRows(rows).map((d, i) => {
+    const row = d as Record<string, unknown>;
+    const who = [row.customerfirstname, row.customerlastname]
+      .map((x) => String(x ?? '').trim())
+      .filter(Boolean)
+      .join(' ');
+    const baseTitle = String(row.title ?? 'Document');
+    return {
+      id: documentUploadRowId(row, i),
+      customerId: Number(row.customerid ?? 0),
+      documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
+      documentLinkId: documentLinkIdFromRow(row),
+      seqno: Number(row.seqno ?? 0),
+      doctype: String(row.doctype ?? 'other').trim() || 'other',
+      storageprovider:
+        String(row.storageprovider ?? 'cloudinary').trim() || 'cloudinary',
+      description: String(row.text ?? '').trim(),
+      title: who ? `${baseTitle} (${who})` : baseTitle,
+      uploaded: Number(row.isuploaded ?? 0) > 0,
+      pendingStore: null,
+      notes: String(row.notes ?? '').trim(),
+    };
+  });
+}
+
+function uploadDocKey(
+  d: Pick<UploadImagesForm['docs'][number], 'documentLinkSetupId' | 'customerId' | 'seqno'>,
+): string {
+  return `${Number(d.documentLinkSetupId || 0)}:${Number(d.customerId || 0)}:${Number(d.seqno || 0)}`;
+}
+
 /** Match a catalogue `optionalfees` row to a line on `extrafees` (same fee on the booking). */
 function findExtraFeeRowForOptional(
   opt: Record<string, unknown>,
@@ -528,31 +588,7 @@ export function ExpressCheckinContent() {
       .then((res) => {
         if (cancelled) return;
         const rows = Array.isArray(res?.data) ? res.data : [];
-        setUploadForm({
-          docs: rows.map((d, i) => {
-            const row = d as Record<string, unknown>;
-            const who = [row.customerfirstname, row.customerlastname]
-              .map((x) => String(x ?? '').trim())
-              .filter(Boolean)
-              .join(' ');
-            const baseTitle = String(row.title ?? 'Document');
-            return {
-              id: documentUploadRowId(row, i),
-              customerId: Number(row.customerid ?? 0),
-              documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
-              documentLinkId: documentLinkIdFromRow(row),
-              seqno: Number(row.seqno ?? 0),
-              doctype: String(row.doctype ?? 'other').trim() || 'other',
-              storageprovider:
-                String(row.storageprovider ?? 'cloudinary').trim() || 'cloudinary',
-              description: String(row.text ?? '').trim(),
-              title: who ? `${baseTitle} (${who})` : baseTitle,
-              uploaded: Number(row.isuploaded ?? 0) > 0,
-              pendingStore: null,
-              notes: String(row.notes ?? '').trim(),
-            };
-          }),
-        });
+        setUploadForm({ docs: mapUploadDocuments(rows) });
       })
       .catch((e) => {
         if (cancelled) return;
@@ -805,60 +841,48 @@ export function ExpressCheckinContent() {
   const [driversForm, setDriversForm] = useState<ExtraDriversForm>(initialDriversForm);
 
   const initialUploadForm = useMemo<UploadImagesForm>(() => {
-    return {
-      docs: documentLinkData.map((d, i) => {
-        const row = d as Record<string, unknown>;
-        const who = [row.customerfirstname, row.customerlastname]
-          .map((x) => String(x ?? '').trim())
-          .filter(Boolean)
-          .join(' ');
-        const baseTitle = String(row.title ?? 'Document');
-        return {
-          id: documentUploadRowId(row, i),
-          customerId: Number(row.customerid ?? 0),
-          documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
-          documentLinkId: documentLinkIdFromRow(row),
-          seqno: Number(row.seqno ?? 0),
-          doctype: String(row.doctype ?? 'other').trim() || 'other',
-          storageprovider:
-            String(row.storageprovider ?? 'cloudinary').trim() || 'cloudinary',
-          description: String(row.text ?? '').trim(),
-          title: who ? `${baseTitle} (${who})` : baseTitle,
-          uploaded: Number(row.isuploaded ?? 0) > 0,
-          pendingStore: null,
-          notes: String(row.notes ?? '').trim(),
-        };
-      }),
-    };
+    return { docs: mapUploadDocuments(documentLinkData) };
   }, [documentLinkData]);
   const [uploadForm, setUploadForm] = useState<UploadImagesForm>(initialUploadForm);
   const hydrateUploadDocsFromApi = (rows: unknown[]) => {
-    setUploadForm({
-      docs: rows.map((d, i) => {
-        const row = d as Record<string, unknown>;
-        const who = [row.customerfirstname, row.customerlastname]
-          .map((x) => String(x ?? '').trim())
-          .filter(Boolean)
-          .join(' ');
-        const baseTitle = String(row.title ?? 'Document');
-        return {
-          id: documentUploadRowId(row, i),
-          customerId: Number(row.customerid ?? 0),
-          documentLinkSetupId: Number(row.documentlinksetupid ?? 0),
-          documentLinkId: documentLinkIdFromRow(row),
-          seqno: Number(row.seqno ?? 0),
-          doctype: String(row.doctype ?? 'other').trim() || 'other',
-          storageprovider:
-            String(row.storageprovider ?? 'cloudinary').trim() || 'cloudinary',
-          description: String(row.text ?? '').trim(),
-          title: who ? `${baseTitle} (${who})` : baseTitle,
-          uploaded: Number(row.isuploaded ?? 0) > 0,
-          pendingStore: null,
-          notes: String(row.notes ?? '').trim(),
+    setUploadForm((prev) => {
+      const fromApi = mapUploadDocuments(rows);
+      const merged = [...fromApi];
+
+      const byKey = new Map<string, number>();
+      merged.forEach((d, idx) => {
+        byKey.set(uploadDocKey(d), idx);
+      });
+
+      // Preserve local staged uploads (pendingStore) that are not yet saved on backend.
+      // `listRcmDocuments` can omit these rows, so we must not lose them on refresh.
+      for (const local of prev.docs) {
+        if (!local.pendingStore?.url) continue;
+        const key = uploadDocKey(local);
+        const existingIdx = byKey.get(key);
+        if (existingIdx == null) {
+          merged.push(local);
+          byKey.set(key, merged.length - 1);
+          continue;
+        }
+        merged[existingIdx] = {
+          ...merged[existingIdx],
+          pendingStore: local.pendingStore,
+          isUploading: local.isUploading,
         };
-      }),
+      }
+
+      return { docs: merged };
     });
   };
+
+  const refreshUploadDocuments = useCallback(async () => {
+    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    if (!reservationRefValue) return;
+    const latest = await listRcmDocuments(reservationRefValue, 'checkin');
+    const rows = Array.isArray(latest?.data) ? latest.data : [];
+    hydrateUploadDocsFromApi(rows);
+  }, [bookingInfo?.reservationref, reservationRef]);
 
   const initialFormsRef = useRef({
     customer: initialCustomerForm,
@@ -1301,22 +1325,28 @@ export function ExpressCheckinContent() {
         }
       }
 
-      for (const d of driversToSave) {
-        await addExtraDriver({
-          reservation_ref: reservationRefValue,
-          customerid: Number(d.customerid || 0),
-          customer: {
-            firstname: d.firstname.trim() || 'Driver',
-            lastname: d.lastname.trim() || 'User',
-            dateofbirth: normalizeDateForApi(d.dateofbirth.trim()) || '01/Jan/1980',
-            licenseno: d.licenseno.trim(),
-            email: d.email.trim() || ownerEmail,
-            state: d.state.trim() || ownerState,
-            city: d.city.trim() || ownerCity,
-            postcode: d.postcode.trim() || ownerPostcode,
-            address: d.address.trim() || ownerAddress,
-          },
-        });
+      const failedDrivers: number[] = [];
+      for (let i = 0; i < driversToSave.length; i += 1) {
+        const d = driversToSave[i];
+        try {
+          await addExtraDriver({
+            reservation_ref: reservationRefValue,
+            customerid: Number(d.customerid || 0),
+            customer: {
+              firstname: d.firstname.trim() || 'Driver',
+              lastname: d.lastname.trim() || 'User',
+              dateofbirth: normalizeDateForApi(d.dateofbirth.trim()) || '01/Jan/1980',
+              licenseno: d.licenseno.trim(),
+              email: d.email.trim() || ownerEmail,
+              state: d.state.trim() || ownerState,
+              city: d.city.trim() || ownerCity,
+              postcode: d.postcode.trim() || ownerPostcode,
+              address: d.address.trim() || ownerAddress,
+            },
+          });
+        } catch {
+          failedDrivers.push(i + 1);
+        }
       }
 
       for (const removedId of driversForm.removedCustomerIds) {
@@ -1340,7 +1370,13 @@ export function ExpressCheckinContent() {
       }
 
       if (driversToSave.length > 0 || hasRemovalChanges) {
-        toast.success('Extra drivers saved');
+        if (failedDrivers.length === 0) {
+          toast.success('Extra drivers saved');
+        } else {
+          toast.error(
+            `Some drivers could not be saved (Driver ${failedDrivers.join(', Driver ')}).`,
+          );
+        }
       }
       invalidateBookingsCache(reservationRefValue);
       // Reload workflow so newly added drivers receive real backend customer ids.
@@ -1355,6 +1391,7 @@ export function ExpressCheckinContent() {
       } catch {
         // Non-fatal: keep saved state and let user continue.
       }
+      await refreshUploadDocuments();
       markSaved('drivers');
     } catch (e) {
       toast.error(friendlyBookingErrorMessage(e, 'Could not save extra drivers'));
@@ -1405,6 +1442,7 @@ export function ExpressCheckinContent() {
     });
     toast.success('Extra driver removed');
     invalidateBookingsCache(reservationRefValue);
+      await refreshUploadDocuments();
   };
 
   /** Binary upload only; `POST /documents/rcm/store` runs on Save. */
@@ -1536,6 +1574,7 @@ export function ExpressCheckinContent() {
       }
       toast.success('Documents saved');
       invalidateBookingsCache(reservationRefValue);
+      await refreshUploadDocuments();
       markSaved('images');
     } catch (e) {
       toast.error(getFriendlyError(e, 'Could not save documents'));
@@ -1650,6 +1689,7 @@ export function ExpressCheckinContent() {
       }));
       toast.success('Document deleted');
       invalidateBookingsCache(reservationRefValue);
+      await refreshUploadDocuments();
     } catch (e) {
       setUploadForm((prev) => ({
         docs: prev.docs.map((d) => (d.id === id ? { ...d, isUploading: false } : d)),
@@ -1923,11 +1963,12 @@ export function ExpressCheckinContent() {
               />
               <div className="flex gap-2 mt-4">
                 <Button
+                  type="button"
                   onClick={() => void saveExtraDriversStep()}
                   disabled={savingStep === 'drivers' || Boolean(bookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
-                  {savingStep === 'drivers' ? 'Saving...' : 'Save'}
+                  {savingStep === 'drivers' ? 'Saving…' : 'Save & Continue'}
                 </Button>
                 <Button variant="outline" onClick={() => setDriversForm(initialDriversForm)}>
                   Cancel
