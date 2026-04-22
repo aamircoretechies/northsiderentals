@@ -53,6 +53,14 @@ export function EmailQuoteModal({
   const [phone, setPhone] = useState('');
   const [numberOfPeople, setNumberOfPeople] = useState('');
   const [note, setNote] = useState('');
+  const quoteCountryId = licenseCountryToId(
+    String(
+      rcmProfile?.countryid ??
+        apiProfile?.countryid ??
+        apiProfile?.country_id ??
+        '',
+    ),
+  );
 
   const applyProfilePrefill = () => {
     setFirstName(
@@ -122,7 +130,7 @@ export function EmailQuoteModal({
         phone: phone.trim() || '',
         date_of_birth: '',
         driver_license_number: '',
-        country_id: licenseCountryToId('Australia'),
+        country_id: quoteCountryId,
       },
       number_of_persons: parseTravellerCount(numberOfPeople || '1'),
       insurance_id: Number.isFinite(insuranceId) ? insuranceId : 0,

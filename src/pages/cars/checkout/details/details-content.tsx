@@ -208,7 +208,7 @@ export function CarsCheckoutDetailsContent() {
           if (list.length > 0) {
             const pick = String(list[0].id);
             setFormData((prev) => {
-              const legacy = new Set(['', 'Australia', 'USA', 'UK', 'Other']);
+              const legacy = new Set(['']);
               const lic = prev.licenseCountry.trim();
               const st = prev.licenseState.trim();
               return {
@@ -269,7 +269,7 @@ export function CarsCheckoutDetailsContent() {
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [formData, setFormData] = useState(() => {
     const fromNav = normalizeCountriesFromNavigationState(countriesFromOptions);
-    const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : 'Australia';
+    const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : '';
     const areaNav = normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
     const defaultArea = areaNav.length > 0 ? String(areaNav[0].id) : '';
     return {
@@ -688,12 +688,9 @@ export function CarsCheckoutDetailsContent() {
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="Australia">Australia</option>
-                        <option value="USA">USA</option>
-                        <option value="UK">UK</option>
-                        <option value="Other">Other</option>
-                      </>
+                      <option value="" disabled>
+                        {countriesLoading ? 'Loading countries…' : 'No country options'}
+                      </option>
                     )}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">
@@ -743,11 +740,9 @@ export function CarsCheckoutDetailsContent() {
                         </option>
                       ))
                     ) : (
-                      <>
-                        <option value="Australia">Australia (Country)</option>
-                        <option value="USA">USA</option>
-                        <option value="UK">UK</option>
-                      </>
+                      <option value="" disabled>
+                        {countriesLoading ? 'Loading countries…' : 'No country options'}
+                      </option>
                     )}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#8e95a5]">

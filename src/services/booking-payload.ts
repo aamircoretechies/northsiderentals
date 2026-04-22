@@ -40,13 +40,6 @@ export interface ExtraDriverLine {
   address: string;
 }
 
-const LICENSE_COUNTRY_ID: Record<string, number> = {
-  Australia: 7,
-  USA: 7,
-  UK: 7,
-  Other: 7,
-};
-
 function parsePositiveInt(value: unknown, fallback: number): number {
   const n = parseInt(String(value ?? ''), 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -64,7 +57,7 @@ export function licenseCountryToId(countryValue: string): number {
   const trimmed = countryValue?.trim() ?? '';
   const asNum = parseInt(trimmed, 10);
   if (Number.isFinite(asNum) && asNum > 0) return asNum;
-  return LICENSE_COUNTRY_ID[trimmed] ?? 7;
+  return 0;
 }
 
 export interface BuildBookingPayloadInput {

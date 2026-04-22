@@ -47,12 +47,14 @@ export function CarsCheckoutOptionsContent() {
   const formatDateTime = (dateStr?: string, timeStr?: string) => {
     if (!dateStr || !timeStr) return undefined;
     try {
-      const [year, month, day] = dateStr.split('-');
-      const [hourStr, minuteStr] = timeStr.split(':');
-      const hour = parseInt(hourStr, 10);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const formattedHour = hour % 12 || 12;
-      return `${day}/${month}/${year} ${formattedHour}:${minuteStr} ${ampm}`;
+      const date = String(dateStr).trim();
+      const time = String(timeStr).trim().slice(0, 5);
+      // API may return YYYY-MM-DD or DD/MMM/YYYY; preserve provided day-month-year text.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-');
+        return `${day}/${month}/${year} ${time}`;
+      }
+      return `${date} ${time}`;
     } catch (e) {
       return undefined;
     }
@@ -73,16 +75,34 @@ export function CarsCheckoutOptionsContent() {
   const rLocationFormatted =
     getLocationName(searchParams?.dropoff_location_id) ?? '—';
 
-  const dailyRate = carData?.discount_price
-    ? Number(carData.discount_price)
-    : 0;
+  const dailyRateCandidates = [
+    carData?.discount_price,
+    carData?.dailyrate,
+    carData?.daily_rate,
+    carData?.searchMeta?.dailyrate,
+    carData?.searchMeta?.daily_rate,
+  ];
+  const dailyRate =
+    dailyRateCandidates
+      .map((v) => Number(v ?? 0))
+      .find((n) => Number.isFinite(n) && n > 0) ?? 0;
 
   const getDays = (pDate?: string, rDate?: string) => {
-    if (!pDate || !rDate) return 6;
+    const apiDaysCandidates = [
+      carData?.numberofdays,
+      carData?.searchMeta?.numberofdays,
+      searchParams?.numberofdays,
+    ];
+    for (const candidate of apiDaysCandidates) {
+      const n = Number(candidate ?? 0);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+
+    if (!pDate || !rDate) return 0;
     const d1 = new Date(pDate);
     const d2 = new Date(rDate);
     const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
-    return diff > 0 ? diff : 1;
+    return diff > 0 ? diff : 0;
   };
   const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
 
@@ -231,7 +251,8 @@ export function CarsCheckoutOptionsContent() {
   const currencySymbol =
     carData?.searchMeta?.currency_symbol ??
     carData?.currency_symbol ??
-    '$';
+    carData?.currencysymbol ??
+    '';
   const taxRate = carData?.searchMeta?.taxrate ?? 0.1;
   const taxInclusive = carData?.searchMeta?.taxinclusive !== false;
   const rentalSubtotal = rentalDays * dailyRate;
@@ -305,8 +326,8 @@ export function CarsCheckoutOptionsContent() {
         <div className="col-span-1 flex flex-col lg:order-last">
           <BookingOverview
             carImage={carData?.image_url ?? ''}
-            carTitle={carData?.title ?? 'Vehicle'}
-            carSubtitle={carSubtitle || '—'}
+            carTitle={carData?.title ?? ''}
+            carSubtitle={carSubtitle}
             categoryBadge={carData?.subtitle}
             pickupDate={pDateFormatted}
             pickupLocation={pLocationFormatted}

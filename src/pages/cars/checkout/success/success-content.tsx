@@ -11,12 +11,13 @@ export function CarsCheckoutSuccessContent() {
   const formatDateTime = (dateStr?: string, timeStr?: string) => {
     if (!dateStr || !timeStr) return undefined;
     try {
-      const [year, month, day] = dateStr.split('-');
-      const [hourStr, minuteStr] = timeStr.split(':');
-      const hour = parseInt(hourStr, 10);
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const formattedHour = hour % 12 || 12;
-      return `${day}/${month}/${year} ${formattedHour}:${minuteStr} ${ampm}`;
+      const date = String(dateStr).trim();
+      const time = String(timeStr).trim().slice(0, 5);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-');
+        return `${day}/${month}/${year} ${time}`;
+      }
+      return `${date} ${time}`;
     } catch (e) {
       return undefined;
     }
@@ -25,7 +26,7 @@ export function CarsCheckoutSuccessContent() {
   const getLocationName = (id?: number) => {
     if (!id || !locations) return undefined;
     const loc = locations.find((l: any) => String(l.id) === String(id));
-    return loc ? loc.location.split(' - ')[0] : undefined; // taking first portion for cleaner view if it has a post code
+    return loc ? String(loc.location ?? '').trim() : undefined;
   };
 
   const pDateFormatted =
@@ -38,11 +39,20 @@ export function CarsCheckoutSuccessContent() {
     getLocationName(searchParams?.dropoff_location_id) ?? '—';
 
   const getDays = (pDate?: string, rDate?: string) => {
-    if (!pDate || !rDate) return 1;
+    const apiDaysCandidates = [
+      carData?.numberofdays,
+      carData?.searchMeta?.numberofdays,
+      searchParams?.numberofdays,
+    ];
+    for (const candidate of apiDaysCandidates) {
+      const n = Number(candidate ?? 0);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    if (!pDate || !rDate) return 0;
     const d1 = new Date(pDate);
     const d2 = new Date(rDate);
     const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
-    return diff > 0 ? diff : 1;
+    return diff > 0 ? diff : 0;
   };
   const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
   const carImg = normalizeMediaUrl(carData?.image_url ?? '');
@@ -77,7 +87,7 @@ export function CarsCheckoutSuccessContent() {
             {carImg ? (
               <img
                 src={carImg}
-                alt={carData?.title || 'Vehicle'}
+                alt={carData?.title || ''}
                 loading="lazy"
                 className="w-[80px] h-[80px] object-contain rounded-[12px] bg-white p-1 shadow-sm"
               />
@@ -88,7 +98,7 @@ export function CarsCheckoutSuccessContent() {
             )}
             <div className="flex flex-col">
               <h3 className="text-black font-extrabold text-[18px]">
-                {carData?.title ?? 'Vehicle'}
+                {carData?.title ?? ''}
               </h3>
               <span className="text-[#333] text-[14px]">Rental: {rentalDays} days</span>
             </div>

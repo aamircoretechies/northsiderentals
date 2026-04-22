@@ -246,18 +246,7 @@ export function CustomerDetailsCard({
                           {c.country === value.country && <Check className="w-4 h-4 text-[#0061e0] shrink-0" />}
                         </CommandItem>
                       ))
-                    ) : (
-                      <CommandItem
-                        value="Australia"
-                        onSelect={() => {
-                          onChange({ country: "Australia" });
-                          setComboboxOpen(false);
-                        }}
-                        className="px-4 py-3 flex items-center justify-between cursor-pointer data-[selected=true]:bg-gray-50 text-[14px]"
-                      >
-                        Australia
-                      </CommandItem>
-                    )}
+                    ) : null}
                   </CommandGroup>
                 </CommandList>
               </Command>

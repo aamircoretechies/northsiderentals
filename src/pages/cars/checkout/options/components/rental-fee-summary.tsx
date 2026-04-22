@@ -15,12 +15,12 @@ export function RentalFeeSummary({
   dailyRate,
   totalExtras,
   gstAmount,
-  currencySymbol = '$',
+  currencySymbol = '',
   children,
 }: RentalFeeSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const sym = currencySymbol || '$';
+  const sym = currencySymbol || '';
   const baseTotal = days * dailyRate;
   const totalCost = baseTotal + totalExtras;
 

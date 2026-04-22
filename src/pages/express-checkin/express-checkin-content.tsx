@@ -802,8 +802,12 @@ export function ExpressCheckinContent() {
         'driverid',
         'driverId',
       );
+      const rowId =
+        cid > 0
+          ? `customer-${cid}-${i}`
+          : `driver-${i}-${pickRowString(row, 'firstname', 'firstName')}-${pickRowString(row, 'lastname', 'lastName')}`;
       return {
-        id: String(cid || `driver-${i}`),
+        id: rowId,
         customerid: cid,
         firstname: pickRowString(row, 'firstname', 'firstName', 'first_name'),
         lastname: pickRowString(row, 'lastname', 'lastName', 'last_name'),

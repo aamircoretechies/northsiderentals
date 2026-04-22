@@ -32,7 +32,7 @@ export function BookingOverview({
             {imgSrc ? (
               <img
                 src={imgSrc}
-                alt={carTitle || 'Vehicle'}
+                alt={carTitle || ''}
                 loading="lazy"
                 decoding="async"
                 className="max-w-full max-h-full object-contain mix-blend-darken"
