@@ -242,14 +242,13 @@ function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
 function validateExtraDriverInput(
   d: ExtraDriversForm['drivers'][number],
   index: number,
-  ownerEmail: string,
 ): string | null {
   const label = `Driver ${index + 1}`;
   const first = d.firstname.trim();
   const last = d.lastname.trim();
   const dob = d.dateofbirth.trim();
   const lic = d.licenseno.trim();
-  const email = d.email.trim() || ownerEmail.trim();
+  const email = d.email.trim();
   const state = d.state.trim();
   const city = d.city.trim();
   const postcode = d.postcode.trim();
@@ -1307,11 +1306,23 @@ export function ExpressCheckinContent() {
         return;
       }
       for (let i = 0; i < driversToSave.length; i += 1) {
-        const err = validateExtraDriverInput(driversToSave[i], i, ownerEmail);
+        const err = validateExtraDriverInput(driversToSave[i], i);
         if (err) {
           toast.error(err);
           return;
         }
+      }
+      const seenDriverEmails = new Map<string, number>();
+      for (let i = 0; i < driversToSave.length; i += 1) {
+        const email = driversToSave[i].email.trim().toLowerCase();
+        const firstSeenAt = seenDriverEmails.get(email);
+        if (firstSeenAt != null) {
+          toast.error(
+            `Driver ${i + 1}: email must be unique. Same email is already used for Driver ${firstSeenAt + 1}.`,
+          );
+          return;
+        }
+        seenDriverEmails.set(email, i);
       }
 
       const failedDrivers: number[] = [];
@@ -1326,7 +1337,7 @@ export function ExpressCheckinContent() {
               lastname: d.lastname.trim() || 'User',
               dateofbirth: normalizeDateForApi(d.dateofbirth.trim()) || '01/Jan/1980',
               licenseno: d.licenseno.trim(),
-              email: d.email.trim() || ownerEmail,
+              email: d.email.trim(),
               state: d.state.trim() || ownerState,
               city: d.city.trim() || ownerCity,
               postcode: d.postcode.trim() || ownerPostcode,
@@ -1688,6 +1699,23 @@ export function ExpressCheckinContent() {
   };
 
   const reservationData = useMemo(() => {
+    const formatDateTimeWithMeridiem = (dateValue: unknown, timeValue: unknown): string => {
+      const dateText = String(dateValue ?? '').trim();
+      const timeText = String(timeValue ?? '').trim();
+      if (!dateText && !timeText) return '';
+      if (!timeText) return dateText;
+      const m = timeText.match(/^(\d{1,2}):(\d{2})/);
+      if (!m) return [dateText, timeText].filter(Boolean).join(' ').trim();
+      const hh = Number(m[1]);
+      const mm = m[2];
+      if (!Number.isFinite(hh)) return [dateText, timeText].filter(Boolean).join(' ').trim();
+      const normalizedHour = ((hh % 24) + 24) % 24;
+      const ampm = normalizedHour >= 12 ? 'PM' : 'AM';
+      const h12 = normalizedHour % 12 || 12;
+      const meridiemTime = `${String(h12).padStart(2, '0')}:${mm} ${ampm}`;
+      return [dateText, meridiemTime].filter(Boolean).join(' ').trim();
+    };
+
     const reservationNumber =
       String(
         bookingInfo?.reservationdocumentno ??
@@ -1726,7 +1754,7 @@ export function ExpressCheckinContent() {
           String(bookingInfo?.vehicledescription1 ?? snapshot?.carSubtitle ?? '').trim(),
         ) || '—',
       pickupDate:
-        [bookingInfo?.pickupdate, bookingInfo?.pickuptime].filter(Boolean).join(' ').trim() ||
+        formatDateTimeWithMeridiem(bookingInfo?.pickupdate, bookingInfo?.pickuptime) ||
         String(snapshot?.pickupDate ?? '').trim() ||
         '—',
       pickupLocation:
@@ -1734,7 +1762,7 @@ export function ExpressCheckinContent() {
         String(snapshot?.pickupLocation ?? '').trim() ||
         '—',
       returnDate:
-        [bookingInfo?.dropoffdate, bookingInfo?.dropofftime].filter(Boolean).join(' ').trim() ||
+        formatDateTimeWithMeridiem(bookingInfo?.dropoffdate, bookingInfo?.dropofftime) ||
         String(snapshot?.returnDate ?? '').trim() ||
         '—',
       returnLocation:
