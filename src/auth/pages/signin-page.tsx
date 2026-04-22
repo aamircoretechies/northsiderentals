@@ -43,9 +43,11 @@ export function SignInPage() {
       setSuccessMessage(
         'Your password has been successfully reset. You can now sign in with your new password.',
       );
+      setError(null);
     }
 
     if (errorParam) {
+      setSuccessMessage(null);
       switch (errorParam) {
         case 'auth_callback_failed':
           setError(
@@ -86,6 +88,7 @@ export function SignInPage() {
     try {
       setIsProcessing(true);
       setError(null);
+      setSuccessMessage(null);
 
       console.log('Attempting to sign in with email:', values.email);
 
@@ -96,6 +99,7 @@ export function SignInPage() {
       navigate(nextPath);
     } catch (err) {
       console.error('Unexpected sign-in error:', err);
+      setSuccessMessage(null);
       setError(
         err instanceof Error
           ? err.message
@@ -110,6 +114,7 @@ export function SignInPage() {
     try {
       setIsGoogleLoading(true);
       setError(null);
+      setSuccessMessage(null);
 
       const googleUserCredential = await signInWithPopup(
         firebaseAuth,
@@ -130,13 +135,16 @@ export function SignInPage() {
           ? String((err as { code?: unknown }).code ?? '')
           : '';
       if (errorCode === 'auth/popup-closed-by-user') {
+        setSuccessMessage(null);
         setError('Sign-in was cancelled. Please try again.');
         return;
       }
       if (errorCode === 'auth/popup-blocked') {
+        setSuccessMessage(null);
         setError('Popup was blocked by your browser. Please allow popups and try again.');
         return;
       }
+      setSuccessMessage(null);
       setError(
         err instanceof Error
           ? err.message
@@ -215,7 +223,7 @@ export function SignInPage() {
           </div>
         </div>
 
-        {error && (
+        {error ? (
           <Alert
             variant="destructive"
             appearance="light"
@@ -226,16 +234,14 @@ export function SignInPage() {
             </AlertIcon>
             <AlertTitle>{error}</AlertTitle>
           </Alert>
-        )}
-
-        {successMessage && (
+        ) : successMessage ? (
           <Alert appearance="light" onClose={() => setSuccessMessage(null)}>
             <AlertIcon>
               <Check />
             </AlertIcon>
             <AlertTitle>{successMessage}</AlertTitle>
           </Alert>
-        )}
+        ) : null}
 
         <FormField
           control={form.control}

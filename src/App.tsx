@@ -3,6 +3,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter } from 'react-router-dom';
 import { LoadingBarContainer } from 'react-top-loading-bar';
 import { Toaster } from '@/components/ui/sonner';
+import { OfflineOverlay } from '@/components/common/offline-overlay';
 import { AuthProvider } from './auth/providers/supabase-provider';
 import { DashboardDataProvider } from './providers/dashboard-data-provider';
 import { I18nProvider } from './providers/i18n-provider';
@@ -27,6 +28,7 @@ export function App() {
                     <LoadingBarContainer>
                       <BrowserRouter basename={BASE_URL}>
                         <Toaster />
+                        <OfflineOverlay />
                         <ModulesProvider>
                           <AppRouting />
                         </ModulesProvider>
