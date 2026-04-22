@@ -296,11 +296,12 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     ? (rcm.bookinginfo[0] as Record<string, unknown>)
     : undefined;
 
-  const spec =
-    (bookingInfo?.vehicledescription1 as string) ||
-    (vd.vehicle_name as string) ||
-    (vd.category_name as string) ||
-    '';
+  const spec = sanitizeApiText(
+    bookingInfo?.vehicledescription1 ??
+      vd.vehicle_name ??
+      vd.category_name ??
+      '',
+  );
 
   const pickupDate = dates.pickup_date;
   const pickupTime = dates.pickup_time;
@@ -333,7 +334,7 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     reservationNumber: String(
       b.confirmation_number ?? b.rcm_reservation_no ?? b.booking_id ?? '',
     ),
-    carName: String(
+    carName: sanitizeApiText(
       b.car_name ??
         b.category_name ??
         vd.vehicle_name ??
@@ -1486,6 +1487,20 @@ function formatTimeWithAmPm(value: unknown): string {
   return raw;
 }
 
+function sanitizeApiText(value: unknown): string {
+  const raw = String(value ?? '');
+  if (!raw) return '';
+  const withoutTags = raw.replace(/<[^>]*>/g, ' ');
+  const decoded = withoutTags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+  return decoded.replace(/\s+/g, ' ').trim();
+}
+
 /** Normalize detail API `data` for the booking detail screen */
 export function mapBookingDetailToView(
   data: Record<string, unknown>,
@@ -1533,7 +1548,7 @@ export function mapBookingDetailToView(
     })
     .map((t) => {
       const qty = t.qty != null ? Number(t.qty) : undefined;
-      const name = String(t.name ?? 'Line item');
+      const name = sanitizeApiText(t.name ?? 'Line item') || 'Line item';
       const typeStr = String(t.type ?? '').trim();
       const sub =
         qty != null && qty > 0 && typeStr
@@ -1558,7 +1573,7 @@ export function mapBookingDetailToView(
       const fee = num(e.fees);
       const sub = `${String(e.type ?? '')}${days ? ` · ${days} day(s)` : ''}${fee ? ` @ ${sym}${fee.toFixed(2)}` : ''}`;
       return {
-        label: String(e.name ?? 'Extra'),
+        label: sanitizeApiText(e.name ?? 'Extra') || 'Extra',
         sublabel: sub.trim() || undefined,
         amount: num(e.totalfeeamount),
       };
@@ -1572,7 +1587,7 @@ export function mapBookingDetailToView(
       const excess = num(e.insuranceexcessamount);
       const sub = `${String(e.type ?? '')}${days ? ` · ${days} day(s)` : ''}${fee ? ` @ ${sym}${fee.toFixed(2)}` : ''}${excess ? ` · excess ${sym}${excess.toFixed(2)}` : ''}`;
       return {
-        label: String(e.name ?? 'Cover'),
+        label: sanitizeApiText(e.name ?? 'Cover') || 'Cover',
         sublabel: sub.trim() || undefined,
         amount: num(e.totalfeeamount),
       };
@@ -1626,8 +1641,8 @@ export function mapBookingDetailToView(
         : null,
     reservationType: String(data.reservation_type ?? ''),
     isQuote: Boolean(data.is_quote),
-    carName: String(data.car_name ?? vd.vehicle_name ?? 'Vehicle'),
-    carSpecs: String(bookingInfo?.vehicledescription1 ?? '').trim() || '—',
+    carName: sanitizeApiText(data.car_name ?? vd.vehicle_name ?? 'Vehicle') || 'Vehicle',
+    carSpecs: sanitizeApiText(bookingInfo?.vehicledescription1 ?? '') || '—',
     carImage,
     bookedOnLabel: String(bookingInfo?.reservationcreateddate ?? '—'),
     pickupWhen: pickupWhen || '—',
