@@ -1402,7 +1402,7 @@ export async function openBookingReceipt(
   ) {
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
-    window.location.assign(objectUrl);
+    window.open(objectUrl, '_blank');
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
     return;
   }
@@ -1410,7 +1410,7 @@ export async function openBookingReceipt(
   if (contentType.includes('text/html')) {
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
-    window.location.assign(objectUrl);
+    window.open(objectUrl, '_blank');
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
     return;
   }
@@ -1431,7 +1431,7 @@ export async function openBookingReceipt(
   const target = resolveInvoiceTargetUrl(rawPath, options?.documentsBaseUrl);
   if (!target) throw new Error('Could not resolve invoice URL');
 
-  window.location.assign(target);
+  window.open(target, '_blank');
 }
 
 export interface BookingDetailPricingLine {

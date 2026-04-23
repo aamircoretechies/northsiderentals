@@ -46,6 +46,10 @@ export interface CreatePaymentSessionResponse {
 export interface CreatePaymentSessionRequest {
   reservationref?: string;
   reservation_ref?: string;
+  return_url?: string;
+  cancel_url?: string;
+  success_url?: string;
+  failure_url?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
@@ -115,17 +119,21 @@ export const carsService = {
       typeof window !== 'undefined'
         ? `${window.location.origin}/bookings`
         : '/bookings';
+
+    const ret = params.return_url ?? params.success_url ?? fallbackReturnUrl;
+    const can = params.cancel_url ?? params.failure_url ?? fallbackReturnUrl;
+
     // Send multiple common key variants to maximize backend compatibility.
-    body.return_url = fallbackReturnUrl;
-    body.success_url = fallbackReturnUrl;
-    body.cancel_url = fallbackReturnUrl;
-    body.failure_url = fallbackReturnUrl;
-    body.redirect_url = fallbackReturnUrl;
-    body.returnUrl = fallbackReturnUrl;
-    body.successUrl = fallbackReturnUrl;
-    body.cancelUrl = fallbackReturnUrl;
-    body.failureUrl = fallbackReturnUrl;
-    body.redirectUrl = fallbackReturnUrl;
+    body.return_url = ret;
+    body.success_url = ret;
+    body.cancel_url = can;
+    body.failure_url = can;
+    body.redirect_url = ret;
+    body.returnUrl = ret;
+    body.successUrl = ret;
+    body.cancelUrl = can;
+    body.failureUrl = can;
+    body.redirectUrl = ret;
 
     const json = await apiJson<Record<string, unknown>>(`${API_BASE_URL}/payments/create`, {
       method: 'POST',

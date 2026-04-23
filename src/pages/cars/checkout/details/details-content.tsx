@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ContentLoader } from '@/components/common/content-loader';
 import { useNavigate, useLocation } from 'react-router';
@@ -142,6 +142,7 @@ export function CarsCheckoutDetailsContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, rcmProfile, apiProfile } = useDashboardData();
+
   const {
     carData,
     extras,
@@ -151,11 +152,11 @@ export function CarsCheckoutDetailsContent() {
     countries: countriesFromOptions = [],
     areaOfUseOptions: areaOfUseOptionsFromNav = [],
   } = (location.state || {}) as {
-    carData?: unknown;
-    extras?: unknown[];
+    carData?: any;
+    extras?: any[];
     selectedDamageOption?: string;
-    searchParams?: Record<string, unknown>;
-    locations?: unknown[];
+    searchParams?: any;
+    locations?: any[];
     countries?: CheckoutCountry[];
     areaOfUseOptions?: CheckoutAreaOfUseOption[];
   };
@@ -262,7 +263,21 @@ export function CarsCheckoutDetailsContent() {
   }, [areaOfUseList]);
 
   const [loading, setLoading] = useState(false);
-  const [agreed, setAgreed] = useState(false);
+  const [agreed, setAgreed] = useState(() => {
+    try {
+      return sessionStorage.getItem('checkout_agreed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_agreed', String(agreed));
+    } catch (e) {
+      console.error('Failed to persist agreed status', e);
+    }
+  }, [agreed]);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [termsData, setTermsData] = useState<{ title: string; content: string } | null>(null);
   const [termsLoading, setTermsLoading] = useState(false);
@@ -274,7 +289,7 @@ export function CarsCheckoutDetailsContent() {
     const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : '';
     const areaNav = normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
     const defaultArea = areaNav.length > 0 ? String(areaNav[0].id) : '';
-    return {
+    const defaults = {
       firstName: '',
       lastName: '',
       email: '',
@@ -296,8 +311,41 @@ export function CarsCheckoutDetailsContent() {
       arrivalpoint: '',
       departurepoint: '',
     };
+
+    try {
+      const saved = sessionStorage.getItem('checkout_form_data');
+      if (saved) {
+        return { ...defaults, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.error('Failed to restore checkout form data', e);
+    }
+    return defaults;
   });
-  const [newsletter, setNewsletter] = useState(true);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_form_data', JSON.stringify(formData));
+    } catch (e) {
+      console.error('Failed to persist checkout form data', e);
+    }
+  }, [formData]);
+  const [newsletter, setNewsletter] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('checkout_newsletter');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_newsletter', String(newsletter));
+    } catch (e) {
+      console.error('Failed to persist newsletter status', e);
+    }
+  }, [newsletter]);
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
@@ -510,6 +558,8 @@ export function CarsCheckoutDetailsContent() {
       if (!paymentUrl && reservationRef) {
         const paymentSession = await carsService.createPaymentSession({
           reservationref: reservationRef,
+          return_url: `${window.location.origin}/bookings`,
+          cancel_url: window.location.href,
         });
         paymentUrl = extractHostedPaymentUrl(paymentSession);
       }
@@ -521,6 +571,17 @@ export function CarsCheckoutDetailsContent() {
         window.location.assign(paymentUrl);
         return;
       }
+
+      // Clear persistence on successful submission (before navigate)
+      try {
+        sessionStorage.removeItem('checkout_form_data');
+        sessionStorage.removeItem('checkout_agreed');
+        sessionStorage.removeItem('checkout_newsletter');
+        sessionStorage.removeItem('checkout_nav_state');
+      } catch (e) {
+        console.error('Failed to clear checkout storage', e);
+      }
+
       navigate('/cars/checkout/success', {
         state: {
           booking,

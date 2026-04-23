@@ -19,6 +19,9 @@ const strongPassword = z
   })
   .regex(/[0-9]/, {
     message: 'Password must contain at least one number.',
+  })
+  .regex(/[^a-zA-Z0-9]/, {
+    message: 'Password must contain at least one special character.',
   });
 
 // Schema for setting a new password
