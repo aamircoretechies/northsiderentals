@@ -125,7 +125,9 @@ export function BookingsContent() {
       const list = Array.isArray(raw) ? raw : [];
       const mapped = list
         .filter((b): b is Record<string, unknown> => !!b && typeof b === 'object')
-        .map(mapApiBookingToCardProps);
+        .map(mapApiBookingToCardProps)
+        /** Drop orphan rows the API returns without an RCM ref (no detail, placeholder vehicle). */
+        .filter((card) => Boolean(card.detailReference?.trim()));
       return { mapped, nextPage: mapped.length >= PAGE_SIZE ? pageParam + 1 : undefined };
     },
     getNextPageParam: (lastPage) => lastPage.nextPage,

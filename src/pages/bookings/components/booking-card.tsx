@@ -38,6 +38,7 @@ function statusStyle(label: string): { dot: string; text: string } {
 }
 
 export function BookingCard({
+  bookingId,
   detailReference,
   reservationNumber,
   carName,
@@ -55,8 +56,10 @@ export function BookingCard({
   const queryClient = useQueryClient();
   const imgSrc = normalizeMediaUrl(carImage);
   const { dot, text } = statusStyle(statusLabel);
+  /** Prefer RCM reservation ref; fall back to booking id when list row shape differs. */
+  const refForNav = (detailReference?.trim() || bookingId?.trim() || '').trim();
   const prefetchBooking = () => {
-    const ref = detailReference?.trim();
+    const ref = refForNav;
     if (!ref) return;
     void queryClient.prefetchQuery({
       queryKey: queryKeys.bookingsDetail(ref),
@@ -150,30 +153,19 @@ export function BookingCard({
           <Button
             variant="outline"
             className="px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
-            title={
-              !detailReference?.trim()
-                ? 'Booking reference missing — open this booking from the list after refresh'
-                : undefined
-            }
             onClick={() => {
-              const ref = detailReference?.trim();
+              const ref = refForNav;
               if (ref) navigate(`/bookings/${encodeURIComponent(ref)}`);
             }}
             onMouseEnter={prefetchBooking}
             onFocus={prefetchBooking}
-            disabled={!detailReference?.trim()}
           >
             View details
           </Button>
           <Button
             className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
-            title={
-              !detailReference?.trim()
-                ? 'Booking reference missing — refresh your bookings list'
-                : undefined
-            }
             onClick={() => {
-              const ref = detailReference?.trim();
+              const ref = refForNav;
               if (ref) {
                 navigate(`/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`, {
                   state: { reservationRef: ref, mode: 'update-pay' },
@@ -182,7 +174,6 @@ export function BookingCard({
             }}
             onMouseEnter={prefetchBooking}
             onFocus={prefetchBooking}
-            disabled={!detailReference?.trim()}
           >
             Modify Booking & Pay
           </Button>

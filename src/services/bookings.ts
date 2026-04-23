@@ -1,6 +1,7 @@
 import { getAuth } from '@/auth/lib/helpers';
 import { createApiUrl } from '@/lib/api-url';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
+import { sanitizeApiText } from '@/utils/sanitize-api-text';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
@@ -274,17 +275,62 @@ export async function findBookingLookup(params: {
   return json as FindBookingLookupResponse;
 }
 
+/**
+ * RCM reservation reference used by `GET /bookings/by-reference/:ref`.
+ * List and detail payloads may nest this differently or use alternate keys.
+ */
+export function extractReservationReferenceFromEnvelope(
+  data: Record<string, unknown>,
+): string {
+  const t = (v: unknown) => String(v ?? '').trim();
+
+  const direct = t(data.rcm_reference_key);
+  if (direct) return direct;
+
+  const rootCandidates = [
+    data.reservationref,
+    data.reservation_ref,
+    data.reservationRef,
+    data.reservation_key,
+    data.reservationKey,
+    data.rcm_reservation_ref,
+    data.rcmReservationRef,
+  ];
+  for (const c of rootCandidates) {
+    const s = t(c);
+    if (s) return s;
+  }
+
+  const rcm = (data.rcm_booking_info as Record<string, unknown>) || {};
+  const flatRcm = t(rcm.reservationref ?? rcm.reservation_ref ?? rcm.ReservationRef);
+  if (flatRcm) return flatRcm;
+
+  const bookingArrays = [
+    rcm.bookinginfo,
+    rcm.booking_info,
+    rcm.BookingInfo,
+  ];
+  for (const list of bookingArrays) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const first = list[0] as Record<string, unknown>;
+    const fromRow = t(
+      first.reservationref ??
+        first.reservation_ref ??
+        first.ReservationRef ??
+        first.reference ??
+        first.reference_key,
+    );
+    if (fromRow) return fromRow;
+  }
+
+  return '';
+}
+
 /** RCM reference for `GET /bookings/:ref` / detail route from find-booking payload. */
 export function bookingReferenceFromFindPayload(
   data: Record<string, unknown>,
 ): string {
-  const direct = String(data.rcm_reference_key ?? '').trim();
-  if (direct) return direct;
-  const rcm = (data.rcm_booking_info as Record<string, unknown>) || {};
-  const bookingInfo = Array.isArray(rcm.bookinginfo)
-    ? (rcm.bookinginfo[0] as Record<string, unknown>)
-    : undefined;
-  return String(bookingInfo?.reservationref ?? '').trim();
+  return extractReservationReferenceFromEnvelope(data);
 }
 
 /** Map one booking from list API → card props */
@@ -294,13 +340,17 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
   const rcm = (b.rcm_booking_info as Record<string, unknown>) || {};
   const bookingInfo = Array.isArray(rcm.bookinginfo)
     ? (rcm.bookinginfo[0] as Record<string, unknown>)
-    : undefined;
+    : Array.isArray(rcm.booking_info)
+      ? (rcm.booking_info[0] as Record<string, unknown>)
+      : undefined;
 
-  const spec =
+  const specRaw =
     (bookingInfo?.vehicledescription1 as string) ||
+    (bookingInfo?.vehicledescription2 as string) ||
     (vd.vehicle_name as string) ||
     (vd.category_name as string) ||
     '';
+  const spec = sanitizeApiText(specRaw);
 
   const pickupDate = dates.pickup_date;
   const pickupTime = dates.pickup_time;
@@ -325,28 +375,25 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
   return {
     bookingId: String(b.booking_id ?? ''),
     /** RCM reservation reference — required for `GET /bookings/by-reference/:ref` */
-    detailReference: String(
-      (bookingInfo?.reservationref as string) ||
-        (b.rcm_reference_key as string) ||
-        '',
-    ),
+    detailReference: extractReservationReferenceFromEnvelope(b),
     reservationNumber: String(
       b.confirmation_number ?? b.rcm_reservation_no ?? b.booking_id ?? '',
     ),
-    carName: String(
+    carName: sanitizeApiText(
       b.car_name ??
         b.category_name ??
         vd.vehicle_name ??
         vd.category_name ??
         'Vehicle',
     ),
-    carSpecs: spec.trim() || '—',
+    carSpecs: spec || '—',
     carImage: img,
     pickupDate: pickup,
     returnDate: ret,
-    statusLabel: String(b.booking_status ?? '—'),
+    statusLabel: sanitizeApiText(String(b.booking_status ?? '—')),
     paymentStatus: b.payment_status != null ? String(b.payment_status) : '',
-    reservationType: b.reservation_type != null ? String(b.reservation_type) : '',
+    reservationType:
+      b.reservation_type != null ? sanitizeApiText(b.reservation_type) : '',
     totalDisplay: `${currency} ${total.toFixed(2)}`,
     isQuote: Boolean(b.is_quote),
   };
@@ -1493,7 +1540,9 @@ export function mapBookingDetailToView(
   const rcm = (data.rcm_booking_info as Record<string, unknown>) || {};
   const bookingInfo = Array.isArray(rcm.bookinginfo)
     ? (rcm.bookinginfo[0] as Record<string, unknown>)
-    : undefined;
+    : Array.isArray(rcm.booking_info)
+      ? (rcm.booking_info[0] as Record<string, unknown>)
+      : undefined;
   const customerInfo = Array.isArray(rcm.customerinfo)
     ? (rcm.customerinfo[0] as Record<string, unknown>)
     : undefined;
@@ -1540,7 +1589,7 @@ export function mapBookingDetailToView(
           ? `Qty ${qty} · ${typeStr}`
           : typeStr || undefined;
       return {
-        label: name,
+        label: sanitizeApiText(name),
         sublabel: sub,
         amount: num(t.total),
       };
@@ -1558,7 +1607,7 @@ export function mapBookingDetailToView(
       const fee = num(e.fees);
       const sub = `${String(e.type ?? '')}${days ? ` · ${days} day(s)` : ''}${fee ? ` @ ${sym}${fee.toFixed(2)}` : ''}`;
       return {
-        label: String(e.name ?? 'Extra'),
+        label: sanitizeApiText(String(e.name ?? 'Extra')),
         sublabel: sub.trim() || undefined,
         amount: num(e.totalfeeamount),
       };
@@ -1572,17 +1621,13 @@ export function mapBookingDetailToView(
       const excess = num(e.insuranceexcessamount);
       const sub = `${String(e.type ?? '')}${days ? ` · ${days} day(s)` : ''}${fee ? ` @ ${sym}${fee.toFixed(2)}` : ''}${excess ? ` · excess ${sym}${excess.toFixed(2)}` : ''}`;
       return {
-        label: String(e.name ?? 'Cover'),
+        label: sanitizeApiText(String(e.name ?? 'Cover')),
         sublabel: sub.trim() || undefined,
         amount: num(e.totalfeeamount),
       };
     });
 
-  const refKey = String(
-    data.rcm_reference_key ??
-      bookingInfo?.reservationref ??
-      '',
-  );
+  const refKey = extractReservationReferenceFromEnvelope(data);
 
   const agreementRaw = pickNonEmpty(
     bookingInfo?.agreementpage,
@@ -1613,29 +1658,37 @@ export function mapBookingDetailToView(
   const customerDetails =
     (data.customer_details as Record<string, unknown>) || {};
 
+  const carSpecParts = [
+    sanitizeApiText(bookingInfo?.vehicledescription1),
+    sanitizeApiText(bookingInfo?.vehicledescription2),
+  ].filter(Boolean);
+  const carSpecsJoined = carSpecParts.join(' · ') || '—';
+
   return {
     bookingId: String(data.booking_id ?? ''),
     referenceKey: refKey,
-    confirmationLabel: String(
+    confirmationLabel: sanitizeApiText(
       data.confirmation_number ?? data.rcm_reservation_no ?? refKey ?? '—',
     ),
-    bookingStatus: String(data.booking_status ?? '—'),
+    bookingStatus: sanitizeApiText(String(data.booking_status ?? '—')),
     paymentStatus:
       data.payment_status != null && String(data.payment_status).length
-        ? String(data.payment_status)
+        ? sanitizeApiText(String(data.payment_status))
         : null,
-    reservationType: String(data.reservation_type ?? ''),
+    reservationType: sanitizeApiText(String(data.reservation_type ?? '')),
     isQuote: Boolean(data.is_quote),
-    carName: String(data.car_name ?? vd.vehicle_name ?? 'Vehicle'),
-    carSpecs: String(bookingInfo?.vehicledescription1 ?? '').trim() || '—',
+    carName: sanitizeApiText(String(data.car_name ?? vd.vehicle_name ?? 'Vehicle')),
+    carSpecs: carSpecsJoined,
     carImage,
-    bookedOnLabel: String(bookingInfo?.reservationcreateddate ?? '—'),
+    bookedOnLabel: sanitizeApiText(
+      String(bookingInfo?.reservationcreateddate ?? '—'),
+    ),
     pickupWhen: pickupWhen || '—',
-    pickupWhereName: pickupName || '—',
-    pickupWhereAddress: pickupAddr,
+    pickupWhereName: sanitizeApiText(pickupName) || '—',
+    pickupWhereAddress: sanitizeApiText(pickupAddr),
     returnWhen: returnWhen || '—',
-    returnWhereName: dropName || '—',
-    returnWhereAddress: dropAddr,
+    returnWhereName: sanitizeApiText(dropName) || '—',
+    returnWhereAddress: sanitizeApiText(dropAddr),
     rentalAgreementUrl,
     summaryLines,
     totalCost,
