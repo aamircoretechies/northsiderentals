@@ -30,7 +30,7 @@ export function Header() {
       className={cn(
         'flex items-center transition-[height] shrink-0 h-(--header-height)',
         headerStickyOn &&
-        'transition-[height] fixed z-10 top-0 start-0 end-0 shadow-sm backdrop-blur-md bg-background/70',
+        'transition-[height] fixed z-50 top-0 start-0 end-0 shadow-sm backdrop-blur-md bg-background/70',
       )}
     >
       <Container className="flex lg:justify-between items-center gap-2.5">
