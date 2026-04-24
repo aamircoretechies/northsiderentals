@@ -1,11 +1,14 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ContentLoader } from '@/components/common/content-loader';
 import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useDashboardData } from '@/hooks/use-dashboard-data';
+import { getAuth } from '@/auth/lib/helpers';
+import { useDashboardData, type MergedProfile } from '@/hooks/use-dashboard-data';
+import type { DashboardProfile } from '@/services/dashboard';
+import type { RcmProfile } from '@/services/profile';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
@@ -53,6 +56,58 @@ const FIELD_LIMITS: Record<string, number> = {
   arrivalpoint: 80,
   departurepoint: 80,
 };
+
+/** Identity/contact fields always sourced from account when logged in (not sessionStorage). */
+const PROFILE_CHECKOUT_SYNC_KEYS = [
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'address',
+  'city',
+  'stateRegion',
+  'postCode',
+] as const;
+
+type ProfileCheckoutSyncKey = (typeof PROFILE_CHECKOUT_SYNC_KEYS)[number];
+
+function stripProfileCheckoutKeysForStorage<T extends Record<string, unknown>>(row: T): T {
+  const next = { ...row } as Record<string, unknown>;
+  for (const k of PROFILE_CHECKOUT_SYNC_KEYS) {
+    delete next[k];
+  }
+  return next as T;
+}
+
+function buildCheckoutPrefillFromProfile(
+  profile: MergedProfile | undefined,
+  rcmProfile: RcmProfile | null,
+  apiProfile: DashboardProfile | null,
+): Record<ProfileCheckoutSyncKey, string> {
+  const fullName = String(profile?.displayName ?? '').trim();
+  const [firstFromDisplay = '', ...rest] = fullName.split(/\s+/).filter(Boolean);
+  const lastFromDisplay = rest.join(' ');
+  const addr = rcmProfile?.address;
+
+  return {
+    firstName: String(
+      rcmProfile?.first_name ?? apiProfile?.first_name ?? firstFromDisplay,
+    ).slice(0, FIELD_LIMITS.firstName),
+    lastName: String(
+      rcmProfile?.last_name ?? apiProfile?.last_name ?? lastFromDisplay,
+    ).slice(0, FIELD_LIMITS.lastName),
+    email: String(rcmProfile?.email ?? profile?.email ?? '').slice(0, FIELD_LIMITS.email),
+    phone: String(
+      rcmProfile?.mobile ?? apiProfile?.phone ?? profile?.phone ?? '',
+    ).slice(0, FIELD_LIMITS.phone),
+    address: String(
+      addr?.local_address ?? apiProfile?.local_address ?? '',
+    ).slice(0, FIELD_LIMITS.address),
+    city: String(addr?.city ?? '').slice(0, FIELD_LIMITS.city),
+    stateRegion: String(addr?.state ?? '').slice(0, FIELD_LIMITS.stateRegion),
+    postCode: String(addr?.postal_code ?? '').slice(0, FIELD_LIMITS.postCode),
+  };
+}
 
 function isValidEmail(email: string): boolean {
   return EMAIL_PATTERN.test(email.trim());
@@ -315,7 +370,12 @@ export function CarsCheckoutDetailsContent() {
     try {
       const saved = sessionStorage.getItem('checkout_form_data');
       if (saved) {
-        return { ...defaults, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved) as Record<string, unknown>;
+        const merged =
+          getAuth()?.access_token?.trim()
+            ? stripProfileCheckoutKeysForStorage(parsed)
+            : parsed;
+        return { ...defaults, ...merged };
       }
     } catch (e) {
       console.error('Failed to restore checkout form data', e);
@@ -325,7 +385,11 @@ export function CarsCheckoutDetailsContent() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem('checkout_form_data', JSON.stringify(formData));
+      const row =
+        getAuth()?.access_token?.trim()
+          ? stripProfileCheckoutKeysForStorage(formData as Record<string, unknown>)
+          : formData;
+      sessionStorage.setItem('checkout_form_data', JSON.stringify(row));
     } catch (e) {
       console.error('Failed to persist checkout form data', e);
     }
@@ -355,40 +419,37 @@ export function CarsCheckoutDetailsContent() {
     setFormData(prev => ({ ...prev, [name]: nextValue }));
   };
 
-  useEffect(() => {
-    const fullName = String(profile?.displayName ?? '').trim();
-    const [firstFromDisplay = '', ...rest] = fullName.split(/\s+/).filter(Boolean);
-    const lastFromDisplay = rest.join(' ');
-    const addr = rcmProfile?.address;
+  const profileIdentityPrefill = useMemo(
+    () => buildCheckoutPrefillFromProfile(profile, rcmProfile, apiProfile),
+    [profile, rcmProfile, apiProfile],
+  );
 
-    setFormData((prev) => ({
-      ...prev,
-      firstName:
-        prev.firstName ||
-        String(rcmProfile?.first_name ?? apiProfile?.first_name ?? firstFromDisplay).slice(0, FIELD_LIMITS.firstName),
-      lastName:
-        prev.lastName ||
-        String(rcmProfile?.last_name ?? apiProfile?.last_name ?? lastFromDisplay).slice(0, FIELD_LIMITS.lastName),
-      email:
-        prev.email ||
-        String(rcmProfile?.email ?? profile?.email ?? '').slice(0, FIELD_LIMITS.email),
-      phone:
-        prev.phone ||
-        String(rcmProfile?.mobile ?? apiProfile?.phone ?? profile?.phone ?? '').slice(0, FIELD_LIMITS.phone),
-      address:
-        prev.address ||
-        String(addr?.local_address ?? apiProfile?.local_address ?? '').slice(0, FIELD_LIMITS.address),
-      city:
-        prev.city ||
-        String(addr?.city ?? '').slice(0, FIELD_LIMITS.city),
-      stateRegion:
-        prev.stateRegion ||
-        String(addr?.state ?? '').slice(0, FIELD_LIMITS.stateRegion),
-      postCode:
-        prev.postCode ||
-        String(addr?.postal_code ?? '').slice(0, FIELD_LIMITS.postCode),
-    }));
-  }, [profile, rcmProfile, apiProfile]);
+  const lastProfileCheckoutPrefillRef = useRef<Record<ProfileCheckoutSyncKey, string> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    const lastSnap = lastProfileCheckoutPrefillRef.current;
+    const desired = profileIdentityPrefill;
+
+    setFormData((prev) => {
+      const next = { ...prev };
+      let dirty = false;
+      for (const key of PROFILE_CHECKOUT_SYNC_KEYS) {
+        const d = desired[key];
+        const p = String(prev[key] ?? '');
+        const lastDesired = lastSnap == null ? null : String(lastSnap[key] ?? '');
+        const shouldApply = !p || (lastDesired !== null && p === lastDesired);
+        if (shouldApply && next[key] !== d) {
+          next[key] = d;
+          dirty = true;
+        }
+      }
+      return dirty ? next : prev;
+    });
+
+    lastProfileCheckoutPrefillRef.current = { ...desired };
+  }, [profileIdentityPrefill]);
 
   const openTermsModal = async (e: React.MouseEvent) => {
     e.preventDefault();
