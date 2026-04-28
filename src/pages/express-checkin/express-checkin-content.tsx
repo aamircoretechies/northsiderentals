@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { carsService } from '@/services/cars';
-import { confirmWindcaveRedirect } from '@/utils/payment-disclaimer';
+
 import {
   addExtraDriver,
   deleteRcmDocument,
@@ -1615,11 +1615,14 @@ export function ExpressCheckinContent() {
       if (!/^https?:\/\//i.test(url)) {
         throw new Error('Payment URL is missing. Please try again.');
       }
-      if (!confirmWindcaveRedirect()) {
-        return;
-      }
       markSaved('creditcard');
-      window.location.assign(url);
+      navigate('/cars/checkout/payment', {
+        state: {
+          paymentUrl: url,
+          booking: workflow,
+          formData: customerForm,
+        },
+      });
     } catch (e) {
       toast.error(getFriendlyError(e, 'Could not start payment'));
     } finally {

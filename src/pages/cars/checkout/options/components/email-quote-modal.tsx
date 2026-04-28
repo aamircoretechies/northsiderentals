@@ -55,9 +55,8 @@ export function EmailQuoteModal({
   const [note, setNote] = useState('');
   const quoteCountryId = licenseCountryToId(
     String(
-      rcmProfile?.countryid ??
-      apiProfile?.countryid ??
-      apiProfile?.country_id ??
+      rcmProfile?.address?.country_id ??
+      (apiProfile as any)?.country_id ??
       '',
     ),
   );

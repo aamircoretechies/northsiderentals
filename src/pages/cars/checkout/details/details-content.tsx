@@ -9,7 +9,7 @@ import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
-import { confirmWindcaveRedirect } from '@/utils/payment-disclaimer';
+
 import {
   buildCreateBookingPayload,
   mapUiExtrasToPayload,
@@ -210,7 +210,7 @@ export function CarsCheckoutDetailsContent() {
           setCountriesList(list);
           if (list.length > 0) {
             const pick = String(list[0].id);
-            setFormData((prev) => {
+            setFormData((prev: any) => {
               const legacy = new Set(['']);
               const lic = prev.licenseCountry.trim();
               const st = prev.licenseState.trim();
@@ -229,7 +229,7 @@ export function CarsCheckoutDetailsContent() {
           );
           setAreaOfUseList(areas);
           if (areas.length > 0) {
-            setFormData((prev) => {
+            setFormData((prev: any) => {
               const current = prev.areaOfUse.trim();
               const valid =
                 current &&
@@ -255,7 +255,7 @@ export function CarsCheckoutDetailsContent() {
 
   useEffect(() => {
     if (areaOfUseList.length === 0) return;
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       const v = prev.areaOfUse.trim();
       if (v && areaOfUseList.some((a) => String(a.id) === v)) return prev;
       return { ...prev, areaOfUse: String(areaOfUseList[0].id) };
@@ -352,7 +352,7 @@ export function CarsCheckoutDetailsContent() {
     const limit = FIELD_LIMITS[name];
     const nextValue =
       typeof limit === 'number' ? String(value ?? '').slice(0, limit) : value;
-    setFormData(prev => ({ ...prev, [name]: nextValue }));
+    setFormData((prev: any) => ({ ...prev, [name]: nextValue }));
   };
 
   useEffect(() => {
@@ -361,7 +361,7 @@ export function CarsCheckoutDetailsContent() {
     const lastFromDisplay = rest.join(' ');
     const addr = rcmProfile?.address;
 
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       firstName:
         prev.firstName ||
@@ -565,10 +565,16 @@ export function CarsCheckoutDetailsContent() {
       }
 
       if (paymentUrl) {
-        if (!confirmWindcaveRedirect()) {
-          return;
-        }
-        window.location.assign(paymentUrl);
+        navigate('/cars/checkout/payment', {
+          state: {
+            paymentUrl,
+            booking,
+            formData,
+            carData,
+            searchParams,
+            locations,
+          },
+        });
         return;
       }
 
@@ -658,7 +664,7 @@ export function CarsCheckoutDetailsContent() {
                   onChange={(e) => {
                     const next = e.target.value;
                     if (!next || PHONE_ALLOWED_CHARS.test(next)) {
-                      setFormData((prev) => ({ ...prev, phone: next }));
+                      setFormData((prev: any) => ({ ...prev, phone: next }));
                     }
                   }}
                   placeholder="Phone (with country code)"
