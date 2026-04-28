@@ -107,9 +107,9 @@ export function CarHireWidget({
     setSelectedDriverAge(String(lastAge.id));
   }, [driverAges]);
 
-  const [pickupDate, setPickupDate] = useState<Date>(() => startOfDay(new Date()));
+  const [pickupDate, setPickupDate] = useState<Date>(() => addDays(startOfDay(new Date()), 1));
   const [returnDate, setReturnDate] = useState<Date>(() =>
-    addDays(startOfDay(new Date()), 2),
+    addDays(startOfDay(new Date()), 3),
   );
   const [pickupTime, setPickupTime] = useState('09:00 AM');
   const [returnTime, setReturnTime] = useState('09:00 AM');

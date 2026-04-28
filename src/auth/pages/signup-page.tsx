@@ -69,7 +69,11 @@ export function SignUpPage() {
       <form
         onSubmit={form.handleSubmit(onSubmit)}
         className="block w-full space-y-5"
+        autoComplete="off"
       >
+        {/* Prevent browser autofill */}
+        <input type="text" name="prevent_autofill_email" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+        <input type="password" name="prevent_autofill_password" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
         <div className="flex justify-center pb-2">
           <Link to="/">
             <img
@@ -118,6 +122,7 @@ export function SignUpPage() {
                 <Input
                   placeholder="Your email address"
                   type="email"
+                  autoComplete="off"
                   {...field}
                 />
               </FormControl>
@@ -172,6 +177,7 @@ export function SignUpPage() {
                 <Input
                   placeholder="Create a password"
                   type={passwordVisible ? 'text' : 'password'}
+                  autoComplete="new-password"
                   {...field}
                 />
                 <Button
@@ -203,6 +209,7 @@ export function SignUpPage() {
                 <Input
                   placeholder="Confirm your password"
                   type={confirmPasswordVisible ? 'text' : 'password'}
+                  autoComplete="new-password"
                   {...field}
                 />
                 <Button

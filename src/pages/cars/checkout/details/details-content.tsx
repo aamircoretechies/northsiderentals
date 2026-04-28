@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { ContentLoader } from '@/components/common/content-loader';
 import { useNavigate, useLocation } from 'react-router';
@@ -9,7 +9,7 @@ import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
-import { confirmWindcaveRedirect } from '@/utils/payment-disclaimer';
+
 import {
   buildCreateBookingPayload,
   mapUiExtrasToPayload,
@@ -142,6 +142,7 @@ export function CarsCheckoutDetailsContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profile, rcmProfile, apiProfile } = useDashboardData();
+
   const {
     carData,
     extras,
@@ -151,11 +152,11 @@ export function CarsCheckoutDetailsContent() {
     countries: countriesFromOptions = [],
     areaOfUseOptions: areaOfUseOptionsFromNav = [],
   } = (location.state || {}) as {
-    carData?: unknown;
-    extras?: unknown[];
+    carData?: any;
+    extras?: any[];
     selectedDamageOption?: string;
-    searchParams?: Record<string, unknown>;
-    locations?: unknown[];
+    searchParams?: any;
+    locations?: any[];
     countries?: CheckoutCountry[];
     areaOfUseOptions?: CheckoutAreaOfUseOption[];
   };
@@ -209,7 +210,7 @@ export function CarsCheckoutDetailsContent() {
           setCountriesList(list);
           if (list.length > 0) {
             const pick = String(list[0].id);
-            setFormData((prev) => {
+            setFormData((prev: any) => {
               const legacy = new Set(['']);
               const lic = prev.licenseCountry.trim();
               const st = prev.licenseState.trim();
@@ -228,7 +229,7 @@ export function CarsCheckoutDetailsContent() {
           );
           setAreaOfUseList(areas);
           if (areas.length > 0) {
-            setFormData((prev) => {
+            setFormData((prev: any) => {
               const current = prev.areaOfUse.trim();
               const valid =
                 current &&
@@ -254,7 +255,7 @@ export function CarsCheckoutDetailsContent() {
 
   useEffect(() => {
     if (areaOfUseList.length === 0) return;
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       const v = prev.areaOfUse.trim();
       if (v && areaOfUseList.some((a) => String(a.id) === v)) return prev;
       return { ...prev, areaOfUse: String(areaOfUseList[0].id) };
@@ -262,7 +263,21 @@ export function CarsCheckoutDetailsContent() {
   }, [areaOfUseList]);
 
   const [loading, setLoading] = useState(false);
-  const [agreed, setAgreed] = useState(false);
+  const [agreed, setAgreed] = useState(() => {
+    try {
+      return sessionStorage.getItem('checkout_agreed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_agreed', String(agreed));
+    } catch (e) {
+      console.error('Failed to persist agreed status', e);
+    }
+  }, [agreed]);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [termsData, setTermsData] = useState<{ title: string; content: string } | null>(null);
   const [termsLoading, setTermsLoading] = useState(false);
@@ -274,7 +289,7 @@ export function CarsCheckoutDetailsContent() {
     const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : '';
     const areaNav = normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
     const defaultArea = areaNav.length > 0 ? String(areaNav[0].id) : '';
-    return {
+    const defaults = {
       firstName: '',
       lastName: '',
       email: '',
@@ -296,15 +311,48 @@ export function CarsCheckoutDetailsContent() {
       arrivalpoint: '',
       departurepoint: '',
     };
+
+    try {
+      const saved = sessionStorage.getItem('checkout_form_data');
+      if (saved) {
+        return { ...defaults, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.error('Failed to restore checkout form data', e);
+    }
+    return defaults;
   });
-  const [newsletter, setNewsletter] = useState(true);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_form_data', JSON.stringify(formData));
+    } catch (e) {
+      console.error('Failed to persist checkout form data', e);
+    }
+  }, [formData]);
+  const [newsletter, setNewsletter] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('checkout_newsletter');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('checkout_newsletter', String(newsletter));
+    } catch (e) {
+      console.error('Failed to persist newsletter status', e);
+    }
+  }, [newsletter]);
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
     const limit = FIELD_LIMITS[name];
     const nextValue =
       typeof limit === 'number' ? String(value ?? '').slice(0, limit) : value;
-    setFormData(prev => ({ ...prev, [name]: nextValue }));
+    setFormData((prev: any) => ({ ...prev, [name]: nextValue }));
   };
 
   useEffect(() => {
@@ -313,7 +361,7 @@ export function CarsCheckoutDetailsContent() {
     const lastFromDisplay = rest.join(' ');
     const addr = rcmProfile?.address;
 
-    setFormData((prev) => ({
+    setFormData((prev: any) => ({
       ...prev,
       firstName:
         prev.firstName ||
@@ -510,17 +558,36 @@ export function CarsCheckoutDetailsContent() {
       if (!paymentUrl && reservationRef) {
         const paymentSession = await carsService.createPaymentSession({
           reservationref: reservationRef,
+          return_url: `${window.location.origin}/bookings`,
+          cancel_url: window.location.href,
         });
         paymentUrl = extractHostedPaymentUrl(paymentSession);
       }
 
       if (paymentUrl) {
-        if (!confirmWindcaveRedirect()) {
-          return;
-        }
-        window.location.assign(paymentUrl);
+        navigate('/cars/checkout/payment', {
+          state: {
+            paymentUrl,
+            booking,
+            formData,
+            carData,
+            searchParams,
+            locations,
+          },
+        });
         return;
       }
+
+      // Clear persistence on successful submission (before navigate)
+      try {
+        sessionStorage.removeItem('checkout_form_data');
+        sessionStorage.removeItem('checkout_agreed');
+        sessionStorage.removeItem('checkout_newsletter');
+        sessionStorage.removeItem('checkout_nav_state');
+      } catch (e) {
+        console.error('Failed to clear checkout storage', e);
+      }
+
       navigate('/cars/checkout/success', {
         state: {
           booking,
@@ -597,7 +664,7 @@ export function CarsCheckoutDetailsContent() {
                   onChange={(e) => {
                     const next = e.target.value;
                     if (!next || PHONE_ALLOWED_CHARS.test(next)) {
-                      setFormData((prev) => ({ ...prev, phone: next }));
+                      setFormData((prev: any) => ({ ...prev, phone: next }));
                     }
                   }}
                   placeholder="Phone (with country code)"
