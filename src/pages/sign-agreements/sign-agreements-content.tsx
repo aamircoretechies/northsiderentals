@@ -205,19 +205,19 @@ export function SignAgreementsContent() {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-screen pb-[150px] lg:pb-10 relative px-4 pt-0 lg:px-0 bg-[#f8f9fa]">
-      <div className="flex items-center mb-6 pt-2">
-        <button
+    <div className="flex flex-col h-full min-h-screen lg:pb-10 relative px-4 pt-0 lg:px-0 bg-[#f8f9fa]">
+      {/* <div className="flex items-center mb-6 pt-2"> */}
+      {/* <button
           type="button"
           onClick={() => navigate(-1)}
           className="p-2 -ml-2 text-black hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="flex-1 text-center font-extrabold text-[20px] text-black pr-8">
+        </button> */}
+      {/* <h1 className="flex-1 text-left font-extrabold text-[20px] text-black pr-8">
           Authorize
-        </h1>
-      </div>
+        </h1> */}
+      {/* </div> */}
 
       {loading ? (
         <ScreenLoader />
@@ -234,7 +234,7 @@ export function SignAgreementsContent() {
       ) : null}
 
       {!loading && !error && bookingView ? (
-        <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+        <div className="w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-2 lg:gap-4 max-w-7xl">
           <div className="col-span-1 flex flex-col lg:order-last">
             <CollapsibleCard
               title="BOOKING DETAILS"
@@ -274,10 +274,10 @@ export function SignAgreementsContent() {
             </div>
           </div>
 
-          <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
+          <div className="col-span-1 lg:col-span-2 flex flex-col h-full self-start">
             {signatureItems.length === 0 ? (
               <p className="text-[14px] text-[#6b7280] px-1">
-                No signature steps were returned for this booking.
+                Nothing to sign for this booking as of now.
               </p>
             ) : (
               signatureItems.map((item) => {

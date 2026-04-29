@@ -52,13 +52,13 @@ export function CarsCheckoutOptionsContent() {
       const m = rawTime.match(/^(\d{1,2}):(\d{2})/);
       const time = m
         ? (() => {
-            const hh = Number(m[1]);
-            const mm = m[2];
-            const hour24 = ((hh % 24) + 24) % 24;
-            const hour12 = hour24 % 12 || 12;
-            const ampm = hour24 >= 12 ? 'PM' : 'AM';
-            return `${String(hour12).padStart(2, '0')}:${mm} ${ampm}`;
-          })()
+          const hh = Number(m[1]);
+          const mm = m[2];
+          const hour24 = ((hh % 24) + 24) % 24;
+          const hour12 = hour24 % 12 || 12;
+          const ampm = hour24 >= 12 ? 'PM' : 'AM';
+          return `${String(hour12).padStart(2, '0')}:${mm} ${ampm}`;
+        })()
         : rawTime;
       // API may return YYYY-MM-DD or DD/MMM/YYYY; preserve provided day-month-year text.
       if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -185,9 +185,9 @@ export function CarsCheckoutOptionsContent() {
                   1,
                   Number(
                     fee.maxqty ??
-                      fee.max_qty ??
-                      fee.MaxQty ??
-                      MAX_CHECKOUT_EXTRA_FEE_QTY,
+                    fee.max_qty ??
+                    fee.MaxQty ??
+                    MAX_CHECKOUT_EXTRA_FEE_QTY,
                   ) || MAX_CHECKOUT_EXTRA_FEE_QTY,
                 ),
               ),
@@ -285,7 +285,7 @@ export function CarsCheckoutOptionsContent() {
   }
 
   const actionButtons = (
-    <div className="grid grid-cols-2 gap-4 mt-6">
+    <div className="grid grid-cols-2 gap-4 mt-4">
       <EmailQuoteModal
         carData={carData}
         searchParams={searchParams}
@@ -294,14 +294,14 @@ export function CarsCheckoutOptionsContent() {
         trigger={
           <Button
             variant="outline"
-            className="w-full border-[#0061e0] text-[#0061e0] bg-white hover:bg-[#0061e0] hover:text-white font-bold text-[16px] py-4 sm:py-6 rounded-full"
+            className="w-full h-[48px] border-[#0061e0] text-[#0061e0] bg-white hover:bg-[#0061e0] hover:text-white font-bold text-[16px] py-3  rounded-full"
           >
             Email Quote
           </Button>
         }
       />
       <Button
-        className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-4 sm:py-6 rounded-full shadow-md"
+        className="w-full h-[48px] bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-3  rounded-full shadow-md"
         onClick={() =>
           navigate('/cars/checkout/details', {
             state: {

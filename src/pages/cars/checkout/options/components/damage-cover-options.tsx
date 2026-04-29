@@ -63,7 +63,7 @@ export function DamageCoverOptions({
           return (
             <div
               key={option.id}
-              className={`p-5 flex justify-between items-center cursor-pointer transition-colors hover:bg-gray-50 ${index !== options.length - 1 ? 'border-b border-gray-100' : ''
+              className={`p-3 flex justify-between items-center cursor-pointer transition-colors hover:bg-gray-50 ${index !== options.length - 1 ? 'border-b border-gray-100' : ''
                 }`}
               onClick={() => onSelect(option.id)}
             >

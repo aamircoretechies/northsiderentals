@@ -67,7 +67,7 @@ function BookingReceiptButton({
             })
             .finally(() => setLoading(false));
         }}
-        className="text-[14px] font-medium text-[#0061e0] hover:underline disabled:opacity-60 disabled:pointer-events-none bg-transparent border-0 p-0 cursor-pointer text-start"
+        className="text-[14px] font-medium text-[#004a9f] underline hover:no-underline disabled:opacity-60 disabled:pointer-events-none bg-transparent border-0 p-0 cursor-pointer text-start"
       >
         {loading ? 'Opening receipt…' : 'View receipt / invoice'}
       </button>
@@ -106,7 +106,7 @@ function BookingAgreementButton({
         type="button"
         disabled={loading}
         onClick={() => void openAgreement()}
-        className="font-medium text-[#0061e0] text-[14px] hover:underline disabled:opacity-60 disabled:pointer-events-none bg-transparent border-0 p-0"
+        className="font-medium text-[#004a9f] text-[14px] underline hover:no-underline disabled:opacity-60 disabled:pointer-events-none bg-transparent border-0 p-0"
       >
         {loading ? 'Opening agreement…' : 'View Agreement'}
       </button>
@@ -140,7 +140,7 @@ function RentalFeeSummaryBlock({
     <>
       <div className={`${isMobile && !isExpanded ? 'hidden' : 'flex flex-col'} ${compact ? 'gap-2' : 'gap-3'}`}>
         <h3
-          className={`${titleSize} font-bold text-[#6b7280] tracking-wide ${compact ? 'mb-3' : 'mb-4'}`}
+          className={`${titleSize} font-bold text-[#004a9f] tracking-wide ${compact ? 'mb-1' : 'mb-1'}`}
         >
           RENTAL FEE SUMMARY
         </h3>
@@ -149,12 +149,12 @@ function RentalFeeSummaryBlock({
           view.summaryLines.map((line, i) => (
             <div
               key={`${line.label}-${i}`}
-              className="flex justify-between items-start gap-3"
+              className="flex justify-between items-start gap-2"
             >
               <span className={`${textSize} text-black`}>
-                {line.label}
+                {line.label} {' '}
                 {line.sublabel ? (
-                  <span className="block text-[12px] text-[#6b7280] font-normal mt-0.5">
+                  <span className=" text-[12px] text-[#6b7280] font-normal mt-0.5">
                     {line.sublabel}
                   </span>
                 ) : null}
@@ -170,14 +170,14 @@ function RentalFeeSummaryBlock({
       </div>
 
       <div
-        className={`${compact ? 'mt-3 pt-3' : 'mt-4 pt-4'} border-t border-gray-100 flex flex-col gap-1`}
+        className={`${compact ? 'mt-1 pt-1' : 'mt-2 pt-2'} flex flex-col gap-1`}
       >
         <div className="flex justify-between items-center">
-          <span className={`${textSize} font-medium text-[#0061e0]`}>
+          <span className={`${textSize} font-medium text-[#004a9f]`}>
             Total cost
           </span>
           <span
-            className={`${compact ? 'text-[15px]' : 'text-[16px]'} font-bold text-[#0061e0]`}
+            className={`${compact ? 'text-[15px]' : 'text-[16px]'} font-bold text-[#004a9f]`}
           >
             {formatMoney(sym, view.totalCost)}
           </span>
@@ -199,19 +199,14 @@ function RentalFeeSummaryBlock({
             </span>
           </div>
         ) : null}
-        {view.receiptUrl ? (
-          <BookingReceiptButton
-            receiptApiUrl={view.receiptUrl}
-            documentsBaseUrl={view.documentsBaseUrl}
-          />
-        ) : null}
+
       </div>
 
       <div className="flex flex-row gap-2">
         <Button
           onClick={onExpressCheckin}
           disabled={view.expressCheckinCompleted || isLaunchingCheckin}
-          className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-extrabold h-[48px] rounded-[8px] text-[16px] disabled:opacity-60"
+          className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
         >
           {view.expressCheckinCompleted
             ? 'Express check-in done'
@@ -222,7 +217,7 @@ function RentalFeeSummaryBlock({
         <Button
           onClick={onSignAgreement}
           disabled={view.agreementSigned}
-          className="w-full mt-5 bg-[#0061e0] hover:bg-[#0052cc] text-white font-extrabold h-[48px] rounded-[8px] text-[16px] disabled:opacity-60"
+          className="w-full mt-5 bg-[#004a9f] hover:bg-[#0052cc] text-white font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
         >
           {view.agreementSigned ? 'Agreement signed' : 'Sign Agreement'}
         </Button>
@@ -404,7 +399,7 @@ export function BookingDetailContent() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="font-semibold text-[#0061e0] text-[15px] hover:underline cursor-pointer bg-transparent border-0 p-0"
+                className="font-semibold text-[#004a9f] text-[15px] hover:underline cursor-pointer bg-transparent border-0 p-0"
               >
                 Self Service
               </button>
@@ -527,7 +522,7 @@ export function BookingDetailContent() {
         <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 px-4 sm:px-6">
           <div className="lg:hidden col-span-1 -mb-2">
             <span className="text-[#6b7280] text-[15px]">Confirmation # </span>
-            <span className="font-bold text-[#0061e0] text-[15px]">
+            <span className="font-bold text-[#004a9f] text-[15px]">
               {view.confirmationLabel}
             </span>
             {view.referenceKey ? (
@@ -540,7 +535,7 @@ export function BookingDetailContent() {
           <div className="col-span-1 flex flex-col gap-6 lg:order-last">
             <div className="hidden lg:block -mb-2">
               <span className="text-[#6b7280] text-[15px]">Confirmation # </span>
-              <span className="font-bold text-[#0061e0] text-[15px]">
+              <span className="font-bold text-[#004a9f] text-[15px]">
                 {view.confirmationLabel}
               </span>
               {view.referenceKey ? (
@@ -564,7 +559,7 @@ export function BookingDetailContent() {
               </div>
 
               <div className="bg-white rounded-[12px] border border-gray-100 shadow-sm flex flex-col">
-                <div className="p-4 sm:p-5 flex flex-row sm:flex-row gap-4">
+                <div className="p-3 sm:p-5 flex flex-row sm:flex-row gap-4">
                   <div className="w-[120px] h-[80px] sm:w-[140px] sm:h-[90px] shrink-0 bg-[#f8f9fc] rounded-[10px] flex items-center justify-center p-2">
                     {normalizeMediaUrl(view.carImage) ? (
                       <img
@@ -577,7 +572,7 @@ export function BookingDetailContent() {
                     )}
                   </div>
                   <div className="flex flex-col justify-center gap-0.5 min-w-0">
-                    <h3 className="text-black font-extrabold text-[16px]">
+                    <h3 className="text-black font-bold text-[16px]">
                       {view.carName}
                     </h3>
                     <p className="text-[#6b7280] text-[13px]">{view.carSpecs}</p>
@@ -601,35 +596,35 @@ export function BookingDetailContent() {
                 <div className="grid grid-cols-2 border-t border-gray-100">
                   <div className="p-4 sm:p-5 flex flex-col gap-1 border-r border-gray-100">
                     <span className="text-[13px] text-[#6b7280]">Pickup:</span>
-                    <p className="font-extrabold text-[14px] text-black">
+                    <p className="font-bold text-[13px] text-black">
                       {view.pickupWhen}
                     </p>
-                    <p className="text-[13px] text-[#6b7280]">
+                    <p className="text-[12px] text-[#6b7280]">
                       {view.pickupWhereName}
                     </p>
-                    {view.pickupWhereAddress ? (
-                      <p className="text-[13px] text-[#6b7280]">
+                    {/*  {view.pickupWhereAddress ? (
+                      <p className="text-[13px] text-[#6b7280] ">
                         {view.pickupWhereAddress}
                       </p>
-                    ) : null}
+                    ) : null} */}
                   </div>
                   <div className="p-4 sm:p-5 flex flex-col gap-1">
                     <span className="text-[13px] text-[#6b7280]">Return:</span>
-                    <p className="font-extrabold text-[14px] text-black">
+                    <p className="font-bold text-[13px] text-black">
                       {view.returnWhen}
                     </p>
-                    <p className="text-[13px] text-[#6b7280]">
+                    <p className="text-[12px] text-[#6b7280]">
                       {view.returnWhereName}
                     </p>
-                    {view.returnWhereAddress ? (
+                    {/* {view.returnWhereAddress ? (
                       <p className="text-[13px] text-[#6b7280]">
                         {view.returnWhereAddress}
                       </p>
-                    ) : null}
+                    ) : null} */}
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 p-4 flex justify-center items-center">
+                <div className="border-t border-gray-100 p-4 flex flex-col justify-center items-center">
                   {view.rentalAgreementUrl ? (
                     <BookingAgreementButton
                       agreementUrl={view.rentalAgreementUrl}
@@ -639,6 +634,13 @@ export function BookingDetailContent() {
                       Agreement link not available
                     </span>
                   )}
+
+                  {view.receiptUrl ? (
+                    <BookingReceiptButton
+                      receiptApiUrl={view.receiptUrl}
+                      documentsBaseUrl={view.documentsBaseUrl}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>

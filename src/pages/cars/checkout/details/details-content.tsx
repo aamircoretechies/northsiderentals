@@ -79,6 +79,7 @@ function validateBookingCustomerForm(
   const city = formData.city?.trim() ?? '';
   const stateRegion = formData.stateRegion?.trim() ?? '';
   const postCode = formData.postCode?.trim() ?? '';
+  const licenseExpiry = formData.licenseExpiry?.trim() ?? '';
   const flightin = formData.flightin?.trim() ?? '';
   const flightout = formData.flightout?.trim() ?? '';
   const arrivalpoint = formData.arrivalpoint?.trim() ?? '';
@@ -93,6 +94,10 @@ function validateBookingCustomerForm(
   if (!numberOfPeople) return 'Number of travellers is required.';
   if (!dob) return 'Date of birth is required.';
   if (!licenseNumber) return 'Licence number is required.';
+  if (!licenseExpiry) return 'Licence expiry date is required.';
+  if (!city) return 'City is required.';
+  if (!stateRegion) return 'State is required.';
+  if (!postCode) return 'Post code is required.';
   if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
   if (
     (city && !LOCATION_ALLOWED_PATTERN.test(city)) ||
@@ -100,7 +105,7 @@ function validateBookingCustomerForm(
   ) {
     return 'City and state contain invalid characters.';
   }
-  if (postCode && !POSTCODE_PATTERN.test(postCode)) return 'Please enter a valid post code.';
+  if (!POSTCODE_PATTERN.test(postCode)) return 'Please enter a valid post code.';
   if (flightin && !FLIGHT_PATTERN.test(flightin)) return 'Inbound flight format looks invalid.';
   if (flightout && !FLIGHT_PATTERN.test(flightout)) return 'Outbound flight format looks invalid.';
   if (arrivalpoint && !LOCATION_ALLOWED_PATTERN.test(arrivalpoint)) {
@@ -610,7 +615,7 @@ export function CarsCheckoutDetailsContent() {
         {/* Header */}
 
 
-        <div className="flex-1 w-full mx-auto p-4 sm:p-6 pb-32 flex flex-col gap-8 bg-white mt-0 rounded-[16px] shadow-sm mb-32">
+        <div className="flex-1 w-full mx-auto p-4 sm:p-6 flex flex-col gap-8 bg-white mt-0 rounded-[16px] shadow-sm mb-32">
 
           {/* Customer Details */}
           <div className="flex flex-col gap-4">
@@ -778,7 +783,7 @@ export function CarsCheckoutDetailsContent() {
                   htmlFor="licenseExpiry"
                   className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide"
                 >
-                  Licence expiry (optional)
+                  Licence expiry
                 </label>
                 <input
                   id="licenseExpiry"
@@ -923,7 +928,7 @@ export function CarsCheckoutDetailsContent() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4">
+          {/* <div className="flex flex-col gap-4">
             <h2 className="text-[#6b7280] font-bold text-[13px] tracking-wide uppercase">
               Travel details (optional)
             </h2>
@@ -980,9 +985,9 @@ export function CarsCheckoutDetailsContent() {
                 />
               </div>
             </div>
-          </div>
+          </div> */}
 
-          <div className="flex items-start gap-3 px-1">
+          {/* <div className="flex items-start gap-3 px-1">
             <Checkbox
               id="newsletter"
               checked={newsletter}
@@ -992,10 +997,10 @@ export function CarsCheckoutDetailsContent() {
             <label htmlFor="newsletter" className="text-[13px] text-gray-700 leading-tight" style={{ lineHeight: '24px' }}>
               Email me news and offers from Northside Rentals
             </label>
-          </div>
+          </div> */}
 
           {/* Notice & Terms */}
-          <div className="flex flex-col gap-6 mt-4">
+          <div className="flex flex-col gap-6 mt-0">
             <div className="bg-[#fff8d6] border border-[#ffec99] rounded-[8px] p-4 text-center shadow-sm">
               <p className="text-[12px] text-[#8c6b1d] leading-tight font-medium">
                 Please note: your reservation is not confirmed until you receive a confirmation email from Northside Rentals confirming your vehicle reservation is now booked.
@@ -1038,14 +1043,14 @@ export function CarsCheckoutDetailsContent() {
         <Dialog open={isTermsOpen} onOpenChange={setIsTermsOpen}>
           <DialogContent
             /*  className="max-w-2xl max-h-[85vh]" */
-            className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] rounded-3xl gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
+            className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] rounded-3xl p-4 pe-3 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
 
           >
 
             <DialogHeader>
-              <DialogTitle className="text-[20px] font-bold text-black max-w-[80%] text-left" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
+              <DialogTitle className="text-[16px] font-bold text-[#004a9f] max-w-[80%] text-left" dangerouslySetInnerHTML={{ __html: termsData?.title || 'Terms & Conditions' }} />
             </DialogHeader>
-            <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
+            <div className="mt-0 text-[14px] text-gray-700  overflow-y-auto pe-3">
               {termsLoading ? (
                 <ContentLoader />
               ) : (
@@ -1054,18 +1059,18 @@ export function CarsCheckoutDetailsContent() {
                   className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
                 />
               )}
-              <Button className='bg-[#0061e0] w-full mt-4 rounded-full' onClick={() => setIsTermsOpen(false)}>Done</Button>
+              <Button className='bg-[#004a9f] w-full mt-4 h-[48px] rounded-full' onClick={() => setIsTermsOpen(false)}>Done</Button>
             </div>
           </DialogContent>
         </Dialog>
 
         {/* Notice Modal */}
         <Dialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] rounded-3xl gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]">
+          <DialogContent className="max-w-2xl max-h-[85vh] w-[calc(100%-2rem)] p-4 pe-1 rounded-3xl gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]">
             <DialogHeader>
-              <DialogTitle className="text-[20px] font-bold text-black text-left max-w-[80%]" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
+              <DialogTitle className="text-[16px] font-bold text-[#004a9f] text-left max-w-[80%]" dangerouslySetInnerHTML={{ __html: noticeData?.title || 'Important Notice' }} />
             </DialogHeader>
-            <div className="mt-2 text-[14px] text-gray-700  overflow-y-auto pe-4">
+            <div className="mt-0 text-[14px] text-gray-700  overflow-y-auto pe-3">
               {noticeLoading ? (
                 <ContentLoader />
               ) : (
@@ -1074,7 +1079,7 @@ export function CarsCheckoutDetailsContent() {
                   className="prose prose-sm max-w-none text-black [&>h1]:text-[20px] [&>h1]:font-bold [&>h1]:mb-2 [&>h2]:text-[18px] [&>h2]:font-bold [&>h2]:mb-2 [&>p]:mb-4 [&>ul]:list-disc [&>ul]:ml-5 [&>ul]:mb-4"
                 />
               )}
-              <Button className='bg-[#0061e0] w-full mt-4 rounded-full' onClick={() => setIsNoticeOpen(false)}>Done</Button>
+              <Button className='bg-[#004a9f] w-full mt-4 h-[48px] rounded-full' onClick={() => setIsNoticeOpen(false)}>Done</Button>
             </div>
           </DialogContent>
         </Dialog>

@@ -118,6 +118,13 @@ export const MENU_SIDEBAR: MenuConfig = [
     ],
   },
   {
+    title: 'Authorize',
+    icon: LayoutGrid,
+    children: [
+      { title: 'Authorize', path: '/sign-agreements' },
+    ],
+  },
+  {
     title: 'Help',
     icon: LayoutGrid,
     children: [

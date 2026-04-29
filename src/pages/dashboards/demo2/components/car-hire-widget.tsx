@@ -256,14 +256,14 @@ export function CarHireWidget({
 
   return (
     <div className="mx-auto flex w-full flex-col gap-4 font-sans">
-      <div className="relative flex w-full flex-col gap-6 rounded-[24px] bg-[#ffc107] p-6 text-black shadow-sm">
+      <div className="relative flex w-full flex-col gap-6 rounded-[24px] bg-[#ffc107] p-4 text-black shadow-sm">
         <h2 className="text-[22px] font-extrabold text-black">Car Hire</h2>
 
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {locations.length === 0 ? (
               <>
-                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-4 text-left font-sans opacity-80">
+                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-3 text-left font-sans opacity-80">
                   <MapPin className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2.5} />
                   <div className="min-w-0 flex-1">
                     <div className="mb-0.5 text-[12px] font-bold uppercase tracking-wide text-slate-500">
@@ -274,7 +274,7 @@ export function CarHireWidget({
                     </div>
                   </div>
                 </div>
-                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-4 text-left font-sans opacity-80">
+                <div className="flex h-auto w-full cursor-not-allowed gap-4 rounded-xl border-none bg-white/80 p-3 text-left font-sans opacity-80">
                   <MapPin className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2.5} />
                   <div className="min-w-0 flex-1">
                     <div className="mb-0.5 text-[12px] font-bold uppercase tracking-wide text-slate-500">
@@ -292,7 +292,7 @@ export function CarHireWidget({
                   value={resolvedPickupLocation}
                   onValueChange={setPickupLocation}
                 >
-                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
                     <div className="flex min-w-0 flex-1 items-center gap-4">
                       <div className="shrink-0 text-[#0061e0]">
                         <MapPin className="h-6 w-6" strokeWidth={2.5} />
@@ -321,7 +321,7 @@ export function CarHireWidget({
                   value={resolvedReturnLocation}
                   onValueChange={setReturnLocation}
                 >
-                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-4 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
+                  <SelectTrigger className="h-auto w-full cursor-pointer gap-4 rounded-xl border-none bg-white p-3 text-left font-sans shadow-none hover:bg-gray-50 focus:ring-0 [&>svg:last-child]:hidden">
                     <div className="flex min-w-0 flex-1 items-center gap-4">
                       <div className="shrink-0 text-[#0061e0]">
                         <MapPin className="h-6 w-6" strokeWidth={2.5} />
@@ -355,7 +355,7 @@ export function CarHireWidget({
                 <div className="mb-1 pl-1 text-[13px] font-bold uppercase tracking-widest text-black">
                   Pickup Date & Time
                 </div>
-                <div className="flex flex-col items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
+                <div className="flex flex-row items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:items-center">
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
@@ -409,7 +409,7 @@ export function CarHireWidget({
                 <div className="mb-1 pl-1 text-[13px] font-bold uppercase tracking-widest text-black">
                   Return Date & Time
                 </div>
-                <div className="flex flex-col items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
+                <div className="flex flex-row items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
@@ -494,7 +494,7 @@ export function CarHireWidget({
               )}
             </div>
 
-            <div className="flex h-[64px] items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
+            <div className="flex h-[48px] items-center gap-4 rounded-xl bg-white p-3 shadow-sm">
               <Tag className="h-6 w-6 shrink-0 text-[#0061e0]" strokeWidth={2} />
               <div className="w-full flex-1">
                 <input
@@ -513,7 +513,7 @@ export function CarHireWidget({
           type="button"
           onClick={handleFindCars}
           disabled={loading || !canSearch}
-          className="group mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border-none bg-[#0067B2] py-5 font-sans shadow-sm transition-colors hover:bg-[#0067B2] disabled:cursor-not-allowed disabled:opacity-60"
+          className="group mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-full border-none bg-[#0067B2] py-3 font-sans shadow-sm transition-colors hover:bg-[#0067B2] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="text-[20px] font-bold text-black">
             {loading ? 'Searching...' : 'Find Cars'}

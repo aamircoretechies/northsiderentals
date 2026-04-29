@@ -1094,9 +1094,9 @@ export function ExpressCheckinContent() {
       const customerPayload = {
         customerid: toFiniteNumber(
           customerInfo?.customerid ??
-            customerInfo?.id ??
-            bookingInfo?.customerid ??
-            legacyEditFields.id,
+          customerInfo?.id ??
+          bookingInfo?.customerid ??
+          legacyEditFields.id,
           0,
         ),
         firstname: customerForm.firstName,
@@ -1443,7 +1443,7 @@ export function ExpressCheckinContent() {
     });
     toast.success('Extra driver removed');
     invalidateBookingsCache(reservationRefValue);
-      await refreshUploadDocuments();
+    await refreshUploadDocuments();
   };
 
   /** Binary upload only; `POST /documents/rcm/store` runs on Save. */
@@ -1473,14 +1473,14 @@ export function ExpressCheckinContent() {
         docs: prev.docs.map((d) =>
           d.id === id
             ? {
-                ...d,
-                isUploading: false,
-                pendingStore: {
-                  url,
-                  originalname: file.name,
-                  resultsprovider,
-                },
-              }
+              ...d,
+              isUploading: false,
+              pendingStore: {
+                url,
+                originalname: file.name,
+                resultsprovider,
+              },
+            }
             : d,
         ),
       }));
@@ -1564,11 +1564,11 @@ export function ExpressCheckinContent() {
           docs: prev.docs.map((d) =>
             d.id === docId
               ? {
-                  ...d,
-                  pendingStore: null,
-                  uploaded: true,
-                  documentLinkId: nextLinkId || d.documentLinkId,
-                }
+                ...d,
+                pendingStore: null,
+                uploaded: true,
+                documentLinkId: nextLinkId || d.documentLinkId,
+              }
               : d,
           ),
         }));
@@ -1726,9 +1726,9 @@ export function ExpressCheckinContent() {
     const reservationNumber =
       String(
         bookingInfo?.reservationdocumentno ??
-          snapshot?.reservationNumber ??
-          routeState?.reservationRef ??
-          '',
+        snapshot?.reservationNumber ??
+        routeState?.reservationRef ??
+        '',
       ).trim() || '—';
     const carImagePath = String(bookingInfo?.vehicleimage ?? '').trim();
     const workflowCarImage = carImagePath
@@ -1872,11 +1872,11 @@ export function ExpressCheckinContent() {
         </DialogContent>
       </Dialog>
 
-      <div className="mb-4 pt-2">
+      {/*   <div className="mb-4 pt-2">
         <h1 className="font-extrabold text-[18px] sm:text-[20px] text-black">
           {isUpdateMode ? 'Modify Booking' : 'Express Check-in'}
         </h1>
-      </div>
+      </div> */}
 
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 ">
         {bookingLockedReason ? (
@@ -2126,17 +2126,17 @@ export function ExpressCheckinContent() {
       </div>
 
       {/* Mobile Sticky Bottom Sheet */}
-      {!isUpdateMode ? (
-        <div className="lg:hidden">
-          <RentalFeeSummaryBottomSheet
-            days={rentalFeeSummary.days}
-            dailyRate={rentalFeeSummary.dailyRate}
-            totalExtras={rentalFeeSummary.totalExtras}
-            totalCost={rentalFeeSummary.totalCost}
-            gstAmount={rentalFeeSummary.gstAmount}
-          />
-        </div>
-      ) : null}
+      {/*  {!isUpdateMode ? ( */}
+      <div className="lg:hidden">
+        <RentalFeeSummaryBottomSheet
+          days={rentalFeeSummary.days}
+          dailyRate={rentalFeeSummary.dailyRate}
+          totalExtras={rentalFeeSummary.totalExtras}
+          totalCost={rentalFeeSummary.totalCost}
+          gstAmount={rentalFeeSummary.gstAmount}
+        />
+      </div>
+      {/* ) : null} */}
     </div>
   );
 }
