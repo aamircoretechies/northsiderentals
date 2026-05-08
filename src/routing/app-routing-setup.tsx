@@ -104,6 +104,7 @@ import { ExpressCheckinPage } from '@/pages/express-checkin';
 import { SignAgreementsPage } from '@/pages/sign-agreements';
 import { HelpPage } from '@/pages/help';
 import { SupportPage } from '@/pages/support/support-page';
+import { DeleteAccountPage } from '@/pages/delete-account';
 import { Navigate, Route, Routes } from 'react-router';
 
 export function AppRoutingSetup() {
@@ -422,6 +423,7 @@ export function AppRoutingSetup() {
           <Route path="/auth/get-started" element={<AccountGetStartedPage />} />
         </Route>
       </Route>
+      <Route path="/delete-account" element={<DeleteAccountPage />} />
       <Route path="error/*" element={<ErrorRouting />} />
       <Route path="auth/*" element={<AuthRouting />} />
       <Route path="*" element={<Navigate to="/error/404" />} />
