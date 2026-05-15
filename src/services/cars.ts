@@ -70,7 +70,7 @@ export const carsService = {
     return apiJson<any>(`${getApiBaseUrl()}/cars/search`, {
       method: 'POST',
       auth: 'optional',
-      body: data,
+      body: data as unknown as Record<string, unknown>,
       fallbackError: 'Could not search available cars.',
     });
   },
@@ -79,7 +79,7 @@ export const carsService = {
     return apiJson<any>(`${getApiBaseUrl()}/cars/get-details`, {
       method: 'POST',
       auth: 'optional',
-      body: data,
+      body: data as unknown as Record<string, unknown>,
       fallbackError: 'Could not load vehicle details.',
     });
   },
