@@ -11,13 +11,20 @@ import {
 } from '@/components/ui/dialog';
 import { carsService } from '@/services/cars';
 import {
+  resolveRatePeriodTypeId,
+  resolveTransmissionId,
+} from '@/lib/rcm-booking';
+import {
   buildCreateBookingPayload,
+  extractReservationNo,
   mapUiExtrasToPayload,
+  mergeCreateBookingForUiState,
   parseTravellerCount,
   licenseCountryToId,
 } from '@/services/booking-payload';
 import type { CarCardProps } from '@/pages/cars/search-results-grid/components/car-card';
 import { getFriendlyError } from '@/utils/api-error-handler';
+import { ReservationConfirmationCard } from '@/pages/cars/checkout/components/reservation-confirmation-card';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useAuth } from '@/auth/context/auth-context';
 
@@ -47,6 +54,7 @@ export function EmailQuoteModal({
   const { profile, apiProfile, rcmProfile } = useDashboardData();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [quoteReference, setQuoteReference] = useState<string | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -79,12 +87,13 @@ export function EmailQuoteModal({
     setPhone('');
     setNumberOfPeople('');
     setNote('');
+    setQuoteReference(null);
   };
 
   useEffect(() => {
     if (!open) return;
-    applyProfilePrefill();
-  }, [open, rcmProfile, apiProfile, profile.email, user]);
+    if (!quoteReference) applyProfilePrefill();
+  }, [open, rcmProfile, apiProfile, profile.email, user, quoteReference]);
 
   const handleSubmit = async () => {
     if (!carData || carData.unavailable || !searchParams) {
@@ -142,16 +151,23 @@ export function EmailQuoteModal({
       arrivalpoint: '',
       departurepoint: '',
       newsletter: true,
-      transmission: 1,
-      rateperiod_typeid: carData.rateperiod_typeid ?? 1,
+      transmission: resolveTransmissionId({
+        carUi: carData as unknown as Record<string, unknown>,
+        searchParams: sp,
+      }),
+      rateperiod_typeid: resolveRatePeriodTypeId({
+        carUi: carData as unknown as Record<string, unknown>,
+      }),
     });
 
     setSubmitting(true);
     try {
-      await carsService.createBooking(payload);
-      toast.success('Quote request sent. Check your email for details.');
-      resetForm();
-      setOpen(false);
+      const response = await carsService.createBooking(payload);
+      const reference =
+        extractReservationNo(response) ||
+        extractReservationNo(mergeCreateBookingForUiState(response));
+      setQuoteReference(reference || '—');
+      toast.success('Quote request submitted.');
     } catch (e: unknown) {
       toast.error(getFriendlyError(e, 'Could not send quote request.'));
     } finally {
@@ -159,20 +175,22 @@ export function EmailQuoteModal({
     }
   };
 
+  const closeModal = () => {
+    resetForm();
+    setOpen(false);
+  };
+
   return (
     <Dialog
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (!v) {
-          resetForm();
-        }
+        if (!v) resetForm();
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         showCloseButton={false}
-        /* className="max-w-[500px] w-full p-0 gap-0 overflow-hidden bg-white border-0 sm:rounded-[24px]" */
         className="max-w-md w-[calc(100%-2rem)] rounded-3xl p-0 gap-0 overflow-hidden bg-[#f8f9fa] border-0 sm:rounded-[24px]"
       >
         <div className="flex flex-col h-full max-h-[90vh] overflow-y-auto">
@@ -180,12 +198,12 @@ export function EmailQuoteModal({
             <button
               type="button"
               className="p-1 cursor-pointer hover:bg-gray-50 rounded-full"
-              onClick={() => setOpen(false)}
+              onClick={closeModal}
             >
               <ArrowLeft size={24} className="text-black" />
             </button>
             <DialogTitle className="flex-1 text-center text-[20px] font-bold text-black pr-8">
-              Email quote
+              {quoteReference ? 'Quote submitted' : 'Email quote'}
             </DialogTitle>
           </div>
           <DialogDescription className="sr-only">
@@ -193,95 +211,103 @@ export function EmailQuoteModal({
           </DialogDescription>
 
           <div className="flex flex-col px-6 py-6 flex-1">
-            <h3 className="text-[#8692a6] font-bold text-[13px] uppercase tracking-wide mb-5">
-              Customer details
-            </h3>
-
-            <div className="flex flex-col gap-4">
-              <input
-                type="text"
-                placeholder="First name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
+            {quoteReference ? (
+              <ReservationConfirmationCard
+                title="Quotation submitted"
+                reservationNo={quoteReference}
+                numberLabel="Quote no"
+                message="A copy of your quote will be sent to your email. Please save your quote number for reference."
+                onDone={closeModal}
               />
-              <input
-                type="text"
-                placeholder="Last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
-              />
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
-              />
-              <input
-                type="tel"
-                placeholder="Phone (digits only)"
-                value={phone}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (/^\d*$/.test(val)) setPhone(val);
-                }}
-                className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
-              />
-
-              <div className="relative">
-                <select
-                  value={numberOfPeople}
-                  onChange={(e) => setNumberOfPeople(e.target.value)}
-                  className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 pr-12 text-[15px] font-medium text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors appearance-none cursor-pointer"
-                >
-                  <option value="" disabled>
-                    Number of people traveling
-                  </option>
-                  <option value="1">1 person</option>
-                  <option value="2">2 people</option>
-                  <option value="3">3 people</option>
-                  <option value="4">4 people</option>
-                  <option value="5+">5+ people</option>
-                </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <ChevronDown size={20} className="text-[#8692a6]" />
+            ) : (
+              <>
+                <h3 className="text-[#8692a6] font-bold text-[13px] uppercase tracking-wide mb-5">
+                  Customer details
+                </h3>
+                <div className="flex flex-col gap-4">
+                  <input
+                    type="text"
+                    placeholder="First name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Last name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone (digits only)"
+                    value={phone}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (/^\d*$/.test(val)) setPhone(val);
+                    }}
+                    className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors"
+                  />
+                  <div className="relative">
+                    <select
+                      value={numberOfPeople}
+                      onChange={(e) => setNumberOfPeople(e.target.value)}
+                      className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 pr-12 text-[15px] font-medium text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>
+                        Number of people traveling
+                      </option>
+                      <option value="1">1 person</option>
+                      <option value="2">2 people</option>
+                      <option value="3">3 people</option>
+                      <option value="4">4 people</option>
+                      <option value="5+">5+ people</option>
+                    </select>
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronDown size={20} className="text-[#8692a6]" />
+                    </div>
+                  </div>
+                  <textarea
+                    placeholder="Add a note (optional)"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors min-h-[120px] resize-none"
+                  />
                 </div>
-              </div>
-
-              <textarea
-                placeholder="Add a note (optional)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="w-full bg-[#f4f7fa] rounded-[12px] px-5 py-4 text-[15px] font-medium text-black placeholder:text-[#8692a6] outline-none border border-transparent focus:border-[#0061e0] transition-colors min-h-[120px] resize-none"
-              />
-            </div>
-
-            <div className="mt-8 flex flex-col gap-4">
-              <Button
-                type="button"
-                className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-md transition-colors disabled:opacity-60"
-                onClick={() => void handleSubmit()}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="size-5 animate-spin" />
-                    Sending…
-                  </span>
-                ) : (
-                  'Submit quote request'
-                )}
-              </Button>
-              <button
-                type="button"
-                className="w-full text-center text-[#6b7280] font-medium text-[16px] py-3 hover:text-black transition-colors"
-                onClick={() => setOpen(false)}
-              >
-                Go back
-              </button>
-            </div>
+                <div className="mt-8 flex flex-col gap-4">
+                  <Button
+                    type="button"
+                    className="w-full bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-7 rounded-full shadow-md transition-colors disabled:opacity-60"
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="size-5 animate-spin" />
+                        Sending…
+                      </span>
+                    ) : (
+                      'Submit quote request'
+                    )}
+                  </Button>
+                  <button
+                    type="button"
+                    className="w-full text-center text-[#6b7280] font-medium text-[16px] py-3 hover:text-black transition-colors"
+                    onClick={closeModal}
+                  >
+                    Go back
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>

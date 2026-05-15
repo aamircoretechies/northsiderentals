@@ -352,7 +352,7 @@ export function CarsCheckoutOptionsContent() {
     carData?.currency_symbol ??
     carData?.currencysymbol ??
     '';
-  const taxRate = carData?.searchMeta?.taxrate ?? 0.1;
+  const taxRate = Number(carData?.searchMeta?.taxrate ?? 0);
   const taxInclusive = carData?.searchMeta?.taxinclusive !== false;
   const rentalSubtotal = rentalDays * dailyRate;
   const totalCostEstimate = rentalSubtotal + totalExtras;

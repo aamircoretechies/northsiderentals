@@ -1,7 +1,9 @@
 /**
  * Turn API-provided HTML snippets into plain text for safe UI display.
  * Uses the DOM in the browser so entities and nested tags (e.g. ul/li) decode correctly.
- */
+ *
+ * Backend should return plain text (see docs/BACKEND.md §1); this is a client fallback.
+and  */
 export function sanitizeApiText(value: unknown): string {
   if (value == null) return '';
   const raw = String(value).trim();

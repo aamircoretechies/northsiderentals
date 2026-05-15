@@ -4,6 +4,13 @@
  */
 
 import { format, isValid, parseISO } from 'date-fns';
+import {
+  RCM_BOOKING_TYPE_BOOKING,
+  RCM_BOOKING_TYPE_QUOTE,
+} from '@/lib/rcm-booking';
+import { extractReservationNoForDisplay } from '@/utils/reservation-no';
+
+export { extractReservationNoForDisplay, isLikelyRcmReservationNo } from '@/utils/reservation-no';
 
 /** Max quantity per optional extra line (e.g. additional driver fee) — UI and payload clamp to this. */
 export const MAX_CHECKOUT_EXTRA_FEE_QTY = 10;
@@ -148,8 +155,8 @@ export function buildCreateBookingPayload(
     arrivalpoint,
     departurepoint,
     newsletter,
-    transmission = 1,
-    rateperiod_typeid = 1,
+    transmission,
+    rateperiod_typeid,
     areaofuseid: areaOfUseIdInput,
     agentname = '',
     agentemail = '',
@@ -163,7 +170,9 @@ export function buildCreateBookingPayload(
   };
 
   const bookingTypeCode =
-    bookingType === 'Quotation' || bookingType === 'Quote' ? 1 : 2;
+    bookingType === 'Quotation' || bookingType === 'Quote'
+      ? RCM_BOOKING_TYPE_QUOTE
+      : RCM_BOOKING_TYPE_BOOKING;
 
   const cd = customer_details as Record<string, unknown>;
   const mergedCustomerDetails: Record<string, unknown> = { ...cd };
@@ -196,10 +205,7 @@ export function buildCreateBookingPayload(
     number_of_persons: parsePositiveInt(number_of_persons, 1),
     customer_details: mergedCustomerDetails,
     insurance_id: parsePositiveInt(insurance_id, 0),
-    extrakmsid: 0,
-    transmission: parsePositiveInt(transmission, 1),
     numbertravelling: parsePositiveInt(number_of_persons, 1),
-    emailoption: 1,
     remark: nonEmpty(remark),
     flightin: nonEmpty(flightin),
     flightout: nonEmpty(flightout),
@@ -207,7 +213,6 @@ export function buildCreateBookingPayload(
     departurepoint: nonEmpty(departurepoint),
     areaofuseid: parsePositiveInt(areaOfUseIdInput ?? 0, 0),
     newsletter: Boolean(newsletter),
-    rateperiod_typeid: parsePositiveInt(rateperiod_typeid, 1),
     extra_fees: extra_fees.map((e) => ({
       id: parsePositiveInt(e.id, 0),
       qty: Math.min(
@@ -223,7 +228,12 @@ export function buildCreateBookingPayload(
   };
 
   const campaign = nonEmpty(campaigncode);
-  if (campaign) payload.campaigncode = campaign;
+  if (campaign) {
+    // RCM accepts multiple aliases; send all (matches car search payload).
+    payload.campaigncode = campaign;
+    payload.promocode = campaign;
+    payload.couponcode = campaign;
+  }
 
   const agName = nonEmpty(agentname);
   if (agName) payload.agentname = agName;
@@ -233,6 +243,15 @@ export function buildCreateBookingPayload(
   if (agRef) payload.agentrefno = agRef;
   const ref = nonEmpty(refno);
   if (ref) payload.refno = ref;
+
+  const transmissionId = parsePositiveInt(transmission, -1);
+  if (transmissionId >= 0) {
+    payload.transmission = transmissionId;
+  }
+  const ratePeriodId = parsePositiveInt(rateperiod_typeid, -1);
+  if (ratePeriodId > 0) {
+    payload.rateperiod_typeid = ratePeriodId;
+  }
 
   return payload;
 }
@@ -296,13 +315,101 @@ export function mergeCreateBookingForUiState(res: unknown): Record<string, unkno
   const r =
     res && typeof res === 'object' ? { ...(res as Record<string, unknown>) } : {};
   if (!d) return r;
+  const reference = extractBookingReferenceFromData(d) || extractBookingReferenceFromData(r);
   return {
     ...r,
     ...d,
-    booking_id: d.booking_id ?? r.booking_id,
+    booking_id: d.booking_id ?? d.bookingid ?? r.booking_id ?? reference,
+    quote_id: d.quote_id ?? d.quoteid ?? r.quote_id,
+    confirmation_number:
+      d.confirmation_number ?? d.confirmation_no ?? r.confirmation_number,
+    rcm_reference_key:
+      d.rcm_reference_key ??
+      d.rcm_reservation_no ??
+      d.reservation_ref ??
+      d.reservationref ??
+      r.rcm_reference_key,
+    reservation_ref:
+      d.reservation_ref ?? d.reservationref ?? r.reservation_ref ?? reference,
+    reservation_no:
+      extractReservationNoForDisplay(d) ||
+      extractReservationNoForDisplay(r) ||
+      (d.reservation_no ??
+        d.rcm_reservation_no ??
+        d.reservationdocumentno ??
+        r.reservation_no ??
+        r.rcm_reservation_no),
     payment_id: d.payment_id ?? r.payment_id,
     amount: d.amount ?? r.amount,
     currency: d.currency ?? r.currency,
     payment_url: d.payment_url ?? r.payment_url,
   };
+}
+
+function pickFirstNonEmptyString(...values: unknown[]): string {
+  for (const v of values) {
+    const t = String(v ?? '').trim();
+    if (t) return t;
+  }
+  return '';
+}
+
+/** RCM `reservationref` — used for API lookup (`/bookings/by-reference`), not confirmation popups. */
+export function extractReservationRefForDisplay(
+  data: Record<string, unknown> | null | undefined,
+): string {
+  if (!data) return '';
+  return pickFirstNonEmptyString(
+    data.reservationref,
+    data.reservation_ref,
+    data.rcm_reference_key,
+    data.reservationRef,
+  );
+}
+
+export function extractReservationNo(res: unknown): string {
+  const d = getCreateBookingData(res);
+  const r =
+    res && typeof res === 'object' ? (res as Record<string, unknown>) : null;
+  return (
+    extractReservationNoForDisplay(d) ||
+    extractReservationNoForDisplay(r) ||
+    ''
+  );
+}
+
+function extractBookingReferenceFromData(
+  data: Record<string, unknown> | null | undefined,
+): string {
+  if (!data) return '';
+  const rcmRef = extractReservationRefForDisplay(data);
+  if (rcmRef) return rcmRef;
+  return pickFirstNonEmptyString(
+    data.booking_id,
+    data.bookingid,
+    data.quote_id,
+    data.quoteid,
+    data.confirmation_number,
+    data.confirmation_no,
+  );
+}
+
+/** Reservation ref or fallback id from create-booking / booking API payloads. */
+export function extractBookingReference(res: unknown): string {
+  const d = getCreateBookingData(res);
+  const r =
+    res && typeof res === 'object' ? (res as Record<string, unknown>) : null;
+  return extractBookingReferenceFromData(d) || extractBookingReferenceFromData(r);
+}
+
+/** RCM reservation number only — never confirmation_number or booking_id. */
+export function extractReservationRef(res: unknown): string {
+  const d = getCreateBookingData(res);
+  const r =
+    res && typeof res === 'object' ? (res as Record<string, unknown>) : null;
+  return (
+    extractReservationRefForDisplay(d) ||
+    extractReservationRefForDisplay(r) ||
+    ''
+  );
 }

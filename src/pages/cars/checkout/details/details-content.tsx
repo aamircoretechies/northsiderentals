@@ -11,6 +11,10 @@ import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
 
 import {
+  resolveRatePeriodTypeId,
+  resolveTransmissionId,
+} from '@/lib/rcm-booking';
+import {
   buildCreateBookingPayload,
   mapUiExtrasToPayload,
   parseTravellerCount,
@@ -19,6 +23,11 @@ import {
   extractHostedPaymentUrl,
   mergeCreateBookingForUiState,
 } from '@/services/booking-payload';
+import {
+  buildCheckoutConfirmationUrl,
+  buildCheckoutPaymentCancelUrl,
+  saveCheckoutPendingState,
+} from '@/utils/checkout-session';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   type CheckoutAreaOfUseOption,
@@ -623,19 +632,15 @@ export function CarsCheckoutDetailsContent() {
       arrivalpoint: formData.arrivalpoint.trim(),
       departurepoint: formData.departurepoint.trim(),
       newsletter,
-      transmission: 1,
-      rateperiod_typeid: Number(car?.rateperiod_typeid ?? 1) || 1,
+      transmission: resolveTransmissionId({
+        carUi: car as Record<string, unknown>,
+        searchParams: sp,
+      }),
+      rateperiod_typeid: resolveRatePeriodTypeId({
+        carUi: car as Record<string, unknown>,
+      }),
       areaofuseid,
     });
-
-    // Debug payload for backend reconciliation:
-    // compare this exact request body with `rcm_booking_info.customerinfo` response.
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line no-console
-      console.log('[CreateBooking] Outgoing payload', payload);
-      // eslint-disable-next-line no-console
-      console.log('[CreateBooking] customer_details subset', payload.customer_details);
-    }
 
     setLoading(true);
     try {
@@ -646,16 +651,29 @@ export function CarsCheckoutDetailsContent() {
         booking.rcm_reference_key ?? booking.reservation_ref ?? booking.reservationref ?? '',
       ).trim();
 
-      if (!paymentUrl && reservationRef) {
+      const confirmationUrl = buildCheckoutConfirmationUrl();
+      const bookingId = String(booking.booking_id ?? booking.bookingid ?? '').trim();
+
+      if (!paymentUrl && (bookingId || reservationRef)) {
         const paymentSession = await carsService.createPaymentSession({
-          reservationref: reservationRef,
-          return_url: `${window.location.origin}/bookings`,
-          cancel_url: window.location.href,
+          booking_id: bookingId || undefined,
+          reservationref: reservationRef || undefined,
+          success_url: confirmationUrl,
+          cancel_url: buildCheckoutPaymentCancelUrl(),
+          failure_url: `${confirmationUrl}${confirmationUrl.includes('?') ? '&' : '?'}status=failed`,
         });
         paymentUrl = extractHostedPaymentUrl(paymentSession);
       }
 
       if (paymentUrl) {
+        saveCheckoutPendingState({
+          booking,
+          formData,
+          carData,
+          searchParams,
+          locations,
+          paymentUrl,
+        });
         navigate('/cars/checkout/payment', {
           state: {
             paymentUrl,

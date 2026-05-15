@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from '@/lib/api-base';
+import { getAppOrigin } from '@/utils/app-origin';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 
@@ -44,19 +46,20 @@ export interface CreatePaymentSessionResponse {
 }
 
 export interface CreatePaymentSessionRequest {
+  booking_id?: string | number;
   reservationref?: string;
   reservation_ref?: string;
-  return_url?: string;
-  cancel_url?: string;
+  /** App confirmation route after backend `/payments/complete` — do not bypass that step. */
   success_url?: string;
+  cancel_url?: string;
   failure_url?: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.example.com';
+/** Car search text fields: return plain text from API (see docs/BACKEND.md). Client strips HTML if present. */
 
 export const carsService = {
   async getDetails(): Promise<{ rentalsource: RentalSource[] }> {
-    return apiJson<{ rentalsource: RentalSource[] }>(`${API_BASE_URL}/cars/get-details`, {
+    return apiJson<{ rentalsource: RentalSource[] }>(`${getApiBaseUrl()}/cars/get-details`, {
       method: 'GET',
       auth: 'optional',
       fallbackError: 'Could not load car details.',
@@ -64,7 +67,7 @@ export const carsService = {
   },
 
   async searchCars(data: CarSearchRequest): Promise<any> {
-    return apiJson<any>(`${API_BASE_URL}/cars/search`, {
+    return apiJson<any>(`${getApiBaseUrl()}/cars/search`, {
       method: 'POST',
       auth: 'optional',
       body: data,
@@ -73,7 +76,7 @@ export const carsService = {
   },
 
   async getVehicleDetails(data: CarGetDetailsRequest): Promise<any> {
-    return apiJson<any>(`${API_BASE_URL}/cars/get-details`, {
+    return apiJson<any>(`${getApiBaseUrl()}/cars/get-details`, {
       method: 'POST',
       auth: 'optional',
       body: data,
@@ -82,7 +85,7 @@ export const carsService = {
   },
 
   async createBooking(data: any): Promise<any> {
-    const json = await apiJson<Record<string, unknown>>(`${API_BASE_URL}/bookings/create`, {
+    const json = await apiJson<Record<string, unknown>>(`${getApiBaseUrl()}/bookings/create`, {
       method: 'POST',
       auth: 'optional',
       body: data,
@@ -106,36 +109,49 @@ export const carsService = {
   async createPaymentSession(
     params: CreatePaymentSessionRequest,
   ): Promise<CreatePaymentSessionResponse> {
+    const bookingId = String(params.booking_id ?? '').trim();
     const reservationRef = String(
       params.reservationref ?? params.reservation_ref ?? '',
     ).trim();
-    if (!reservationRef) {
-      throw new Error('Reservation reference is required to create payment');
+    if (!bookingId && !reservationRef) {
+      throw new Error('booking_id or reservation reference is required to create payment');
     }
+
     const body: Record<string, string> = {};
-    body.reservationref = reservationRef;
-    body.reservation_ref = reservationRef;
-    const fallbackReturnUrl =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/bookings`
-        : '/bookings';
+    if (bookingId) {
+      body.booking_id = bookingId;
+      body.bookingid = bookingId;
+    }
+    if (reservationRef) {
+      body.reservationref = reservationRef;
+      body.reservation_ref = reservationRef;
+    }
 
-    const ret = params.return_url ?? params.success_url ?? fallbackReturnUrl;
-    const can = params.cancel_url ?? params.failure_url ?? fallbackReturnUrl;
+    // Windcave returns to backend `/payments/complete` by default; success_url is where
+    // the API redirects the user after finalize (with status & confirmation_number).
+    if (params.success_url?.trim()) {
+      const success = params.success_url.trim();
+      body.success_url = success;
+      body.successUrl = success;
+    }
+    if (params.cancel_url?.trim()) {
+      const cancel = params.cancel_url.trim();
+      body.cancel_url = cancel;
+      body.cancelUrl = cancel;
+    }
+    if (params.failure_url?.trim()) {
+      const failure = params.failure_url.trim();
+      body.failure_url = failure;
+      body.failureUrl = failure;
+    }
 
-    // Send multiple common key variants to maximize backend compatibility.
-    body.return_url = ret;
-    body.success_url = ret;
-    body.cancel_url = can;
-    body.failure_url = can;
-    body.redirect_url = ret;
-    body.returnUrl = ret;
-    body.successUrl = ret;
-    body.cancelUrl = can;
-    body.failureUrl = can;
-    body.redirectUrl = ret;
+    const appOrigin = getAppOrigin();
+    if (appOrigin) {
+      body.frontend_origin = appOrigin;
+      body.app_origin = appOrigin;
+    }
 
-    const json = await apiJson<Record<string, unknown>>(`${API_BASE_URL}/payments/create`, {
+    const json = await apiJson<Record<string, unknown>>(`${getApiBaseUrl()}/payments/create`, {
       method: 'POST',
       auth: 'optional',
       body,

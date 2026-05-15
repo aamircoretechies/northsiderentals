@@ -18,6 +18,8 @@ export interface CarCardProps {
   vehiclecategorytypeid?: number;
   /** API `rateperiod_typeid` for booking payload */
   rateperiod_typeid?: number;
+  /** API transmission preference id when returned on search row */
+  transmissionid?: number;
   image_url: string;
   title: string;
   /** API `vehiclecategorytype` e.g. "Small to Mid Size Cars" */

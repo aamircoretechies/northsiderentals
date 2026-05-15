@@ -39,6 +39,16 @@ import {
   type WorkflowChecklistStep,
 } from '@/services/bookings';
 import { getFriendlyError } from '@/utils/api-error-handler';
+import {
+  RCM_BOOKING_TYPE_BOOKING,
+  resolveReferralId,
+} from '@/lib/rcm-booking';
+import { inferIsQuote } from '@/utils/booking-status';
+import {
+  buildCheckoutConfirmationUrl,
+  buildCheckoutPaymentCancelUrl,
+  saveCheckoutPendingState,
+} from '@/utils/checkout-session';
 
 interface ExpressCheckinRouteState {
   mode?: 'update' | 'update-pay' | 'checkin';
@@ -607,6 +617,16 @@ export function ExpressCheckinContent() {
   );
   const steps = normalizedWorkflow.list;
   const bookingInfo = normalizedWorkflow.bookinginfo[0];
+  const isQuoteBooking = useMemo(() => {
+    if (snapshot?.bookingType === 1) return true;
+    if (!bookingInfo) return false;
+    return inferIsQuote({
+      bookingtype: bookingInfo.bookingtype ?? bookingInfo.booking_type,
+      reservation_type:
+        bookingInfo.reservationtype ?? bookingInfo.reservation_type,
+    });
+  }, [snapshot?.bookingType, bookingInfo]);
+  const isConvertQuoteMode = isUpdatePayMode && isQuoteBooking;
   const customerInfo = normalizedWorkflow.customerinfo[0];
   const optionalFeesRaw = normalizedWorkflow.optionalfees;
   const extraFeesRaw = normalizedWorkflow.extrafees;
@@ -984,7 +1004,7 @@ export function ExpressCheckinContent() {
         'booking_type',
         'reservationtype',
         'reservation_type',
-      ) || toFiniteNumber(snapshot?.bookingType, 2);
+      ) || toFiniteNumber(snapshot?.bookingType, RCM_BOOKING_TYPE_BOOKING);
     const transmission =
       pickRowNumber(
         bookingInfo ?? {},
@@ -1014,7 +1034,7 @@ export function ExpressCheckinContent() {
     if (pickupLocationId <= 0 || customerId <= 0 || transmission < 0) return null;
     return {
       pickuplocationid: pickupLocationId,
-      bookingtype: bookingType > 0 ? bookingType : 2,
+      bookingtype: bookingType > 0 ? bookingType : RCM_BOOKING_TYPE_BOOKING,
       transmission,
       id: customerId,
     };
@@ -1039,7 +1059,7 @@ export function ExpressCheckinContent() {
     const view = mapBookingDetailToView(raw as Record<string, unknown>);
     const fallback = {
       pickuplocationid: toFiniteNumber(view.pickupLocationId, 0),
-      bookingtype: toFiniteNumber(view.bookingType, 2),
+      bookingtype: toFiniteNumber(view.bookingType, RCM_BOOKING_TYPE_BOOKING),
       transmission: toFiniteNumber(view.transmission, 0),
       id: toFiniteNumber(view.customerId, 0),
     };
@@ -1059,6 +1079,9 @@ export function ExpressCheckinContent() {
     try {
       setBookingSaveError(null);
       const legacyEditFields = await ensureLegacyEditFields();
+      const effectiveBookingType = isConvertQuoteMode
+        ? RCM_BOOKING_TYPE_BOOKING
+        : legacyEditFields.bookingtype;
       const optionalfees = bookingForm.selectedOptionalFees
         .map((selectedId) => {
           const idx = optionalFeesRaw.findIndex(
@@ -1135,6 +1158,8 @@ export function ExpressCheckinContent() {
         throw new Error('Number of people traveling must be at least 1.');
       }
 
+      const referralId = resolveReferralId(bookingInfo);
+
       const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
       const editPayload = {
         booking_id: firstText(snapshot?.bookingId, bookingInfo?.booking_id, bookingInfo?.bookingid),
@@ -1176,8 +1201,8 @@ export function ExpressCheckinContent() {
           postcode: customerPayload.postcode,
           countryid: customerPayload.countryid || 0,
         },
-        bookingtype: legacyEditFields.bookingtype,
-        booking_type: legacyEditFields.bookingtype,
+        bookingtype: effectiveBookingType,
+        booking_type: effectiveBookingType,
         insuranceid: toFiniteNumber(bookingForm.selectedInsurance, 0),
         insurance_id: toFiniteNumber(bookingForm.selectedInsurance, 0),
         extrakmsid: toFiniteNumber(selectedExtraKmsId, 0),
@@ -1186,7 +1211,7 @@ export function ExpressCheckinContent() {
         transmission: legacyEditFields.transmission,
         numbertravelling: travellerCount,
         number_of_persons: travellerCount,
-        referralid: toFiniteNumber(bookingInfo?.referralid, 1),
+        ...(referralId != null ? { referralid: referralId } : {}),
         remark: firstText(bookingForm.notes, bookingInfo?.customerremark),
         flightin: firstText(bookingInfo?.flightin),
         flightout: firstText(bookingInfo?.flightout),
@@ -1205,7 +1230,7 @@ export function ExpressCheckinContent() {
       if (isUpdateMode) {
         await updateBooking({
           reservation_ref: reservationRefValue,
-          bookingtype: legacyEditFields.bookingtype,
+          bookingtype: effectiveBookingType,
           pickuplocationid: legacyEditFields.pickuplocationid,
           pickupdatetime: pickupDatetime,
           dropofflocationid: toFiniteNumber(
@@ -1222,7 +1247,7 @@ export function ExpressCheckinContent() {
           extrakmsid: toFiniteNumber(selectedExtraKmsId, 0),
           transmission: legacyEditFields.transmission,
           customer: customerPayload,
-          referralid: toFiniteNumber(bookingInfo?.referralid, 1),
+          ...(referralId != null ? { referralid: referralId } : {}),
           remark: firstText(bookingForm.notes, bookingInfo?.customerremark),
           numbertravelling: travellerCount,
           flightin: firstText(bookingInfo?.flightin),
@@ -1242,8 +1267,18 @@ export function ExpressCheckinContent() {
         await editBookingBasics(editPayload);
       }
       invalidateBookingsCache(firstText(reservationRef, bookingInfo?.reservationref));
+      if (isConvertQuoteMode && legacyEditFieldsRef.current) {
+        legacyEditFieldsRef.current = {
+          ...legacyEditFieldsRef.current,
+          bookingtype: RCM_BOOKING_TYPE_BOOKING,
+        };
+      }
       if (isUpdatePayMode) {
-        toast.success('Booking details saved');
+        toast.success(
+          isConvertQuoteMode
+            ? 'Details saved — continue to secure card entry'
+            : 'Booking details saved',
+        );
         await startSecurePaymentStep();
       } else if (isUpdateMode) {
         setShowUpdateSuccessDialog(true);
@@ -1606,8 +1641,13 @@ export function ExpressCheckinContent() {
 
     try {
       setLaunchingPayment(true);
+      const confirmationUrl = buildCheckoutConfirmationUrl();
       const session = await carsService.createPaymentSession({
+        booking_id: bookingId || undefined,
         reservationref: reservationRefValue || undefined,
+        success_url: confirmationUrl,
+        cancel_url: buildCheckoutPaymentCancelUrl(),
+        failure_url: `${confirmationUrl}${confirmationUrl.includes('?') ? '&' : '?'}status=failed`,
       });
       const url = String(
         (session?.data as Record<string, unknown> | undefined)?.payment_url ?? '',
@@ -1615,6 +1655,16 @@ export function ExpressCheckinContent() {
       if (!/^https?:\/\//i.test(url)) {
         throw new Error('Payment URL is missing. Please try again.');
       }
+      saveCheckoutPendingState({
+        booking: {
+          reservation_ref: reservationRefValue,
+          reservationref: reservationRefValue,
+          booking_id: bookingId,
+          bookingtype: isConvertQuoteMode ? RCM_BOOKING_TYPE_BOOKING : undefined,
+        },
+        formData: customerForm as unknown as Record<string, unknown>,
+        paymentUrl: url,
+      });
       markSaved('creditcard');
       navigate('/cars/checkout/payment', {
         state: {
@@ -1879,6 +1929,15 @@ export function ExpressCheckinContent() {
       </div> */}
 
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 ">
+        {isConvertQuoteMode ? (
+          <div className="lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-semibold">Convert quote to booking request</p>
+            <p className="mt-1 text-amber-900/90">
+              Review your details, save changes, then add your card to submit this quote as a
+              booking request (same flow as a new reservation).
+            </p>
+          </div>
+        ) : null}
         {bookingLockedReason ? (
           <div className="lg:col-span-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             <p className="font-semibold">This booking cannot be updated</p>
@@ -2027,9 +2086,11 @@ export function ExpressCheckinContent() {
                   >
                     {savingStep === 'booking'
                       ? 'Saving…'
-                      : isUpdateMode
-                        ? 'Save Changes'
-                        : 'Save'}
+                      : isConvertQuoteMode
+                        ? 'Save & continue to payment'
+                        : isUpdateMode
+                          ? 'Save Changes'
+                          : 'Save'}
                   </Button>
                   {!isUpdateMode ? (
                     <Button variant="outline" onClick={() => setBookingForm(initialBookingForm)}>
@@ -2099,15 +2160,16 @@ export function ExpressCheckinContent() {
             </CollapsibleCard>
           ) : null}
 
-          {!isUpdateMode ? (
+          {!isUpdateMode || isConvertQuoteMode ? (
             <CollapsibleCard
               title={stepName(steps, 'createdpspaymentmethod', 'COLLECT CARD DETAIL')}
               isOpen={openCard === 'creditcard'}
               onToggle={() => toggleCard('creditcard')}
             >
               <div className="rounded-xl border border-gray-100 bg-[#f8f9fa] p-4 text-[14px] text-[#4b5563]">
-                Card details are collected securely on Windcave. Click below to
-                continue to the hosted payment page.
+                {isConvertQuoteMode
+                  ? 'Save your booking details above first, then add your card on Windcave to convert this quote into a booking request.'
+                  : 'Card details are collected securely on Windcave. Click below to continue to the hosted payment page.'}
               </div>
               <div className="flex gap-2 mt-4">
                 <Button
@@ -2116,7 +2178,11 @@ export function ExpressCheckinContent() {
                   disabled={launchingPayment || Boolean(bookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
-                  {launchingPayment ? 'Redirecting…' : 'Pay securely with Windcave'}
+                  {launchingPayment
+                    ? 'Redirecting…'
+                    : isConvertQuoteMode
+                      ? 'Add card & submit booking request'
+                      : 'Pay securely with Windcave'}
                 </Button>
               </div>
             </CollapsibleCard>

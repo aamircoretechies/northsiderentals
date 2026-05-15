@@ -2,6 +2,12 @@ import { getAuth } from '@/auth/lib/helpers';
 import { createApiUrl } from '@/lib/api-url';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 import { sanitizeApiText } from '@/utils/sanitize-api-text';
+import { RCM_BOOKING_TYPE_BOOKING } from '@/lib/rcm-booking';
+import {
+  formatBookingStatusLabel,
+  inferIsQuote,
+} from '@/utils/booking-status';
+import { extractReservationNoForDisplay } from '@/utils/reservation-no';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
@@ -372,13 +378,19 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     (vd.imageurl as string) ||
     '';
 
+  const isQuote = inferIsQuote({
+    is_quote: b.is_quote,
+    bookingtype: b.bookingtype ?? b.booking_type,
+    reservation_type: b.reservation_type,
+    booking_status: b.booking_status,
+  });
+  const rawStatus = sanitizeApiText(String(b.booking_status ?? '—'));
+
   return {
     bookingId: String(b.booking_id ?? ''),
     /** RCM reservation reference — required for `GET /bookings/by-reference/:ref` */
     detailReference: extractReservationReferenceFromEnvelope(b),
-    reservationNumber: String(
-      b.confirmation_number ?? b.rcm_reservation_no ?? b.booking_id ?? '',
-    ),
+    reservationNumber: extractReservationNoForDisplay(b) || '—',
     carName: sanitizeApiText(
       b.car_name ??
         b.category_name ??
@@ -390,12 +402,16 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     carImage: img,
     pickupDate: pickup,
     returnDate: ret,
-    statusLabel: sanitizeApiText(String(b.booking_status ?? '—')),
+    statusLabel: formatBookingStatusLabel(
+      rawStatus,
+      isQuote,
+      b.reservation_type != null ? String(b.reservation_type) : undefined,
+    ),
     paymentStatus: b.payment_status != null ? String(b.payment_status) : '',
     reservationType:
       b.reservation_type != null ? sanitizeApiText(b.reservation_type) : '',
     totalDisplay: `${currency} ${total.toFixed(2)}`,
-    isQuote: Boolean(b.is_quote),
+    isQuote,
   };
 }
 
@@ -703,7 +719,8 @@ export interface UpdateBookingPayload {
     loyaltycardno?: string;
     address: string;
   };
-  referralid: number;
+  /** Omitted when workflow/bookinginfo has no referral id (do not invent a default). */
+  referralid?: number;
   remark: string;
   numbertravelling: number;
   flightin: string;
@@ -850,8 +867,8 @@ export async function editBookingBasics(
     }
   }
   if (requestPayload.booking_type == null) {
-    requestPayload.bookingtype = 2;
-    requestPayload.booking_type = 2;
+    requestPayload.bookingtype = RCM_BOOKING_TYPE_BOOKING;
+    requestPayload.booking_type = RCM_BOOKING_TYPE_BOOKING;
   }
   if (payload.referralid != null) {
     requestPayload.referralid = toFiniteNumber(payload.referralid, 0);
@@ -1664,19 +1681,34 @@ export function mapBookingDetailToView(
   ].filter(Boolean);
   const carSpecsJoined = carSpecParts.join(' · ') || '—';
 
+  const isQuote = inferIsQuote({
+    is_quote: data.is_quote,
+    bookingtype:
+      bookingInfo?.bookingtype ??
+      bookingInfo?.booking_type ??
+      bookingInfo?.reservationtype,
+    reservation_type: data.reservation_type,
+    booking_status: data.booking_status,
+  });
+  const rawBookingStatus = sanitizeApiText(String(data.booking_status ?? '—'));
+
   return {
     bookingId: String(data.booking_id ?? ''),
     referenceKey: refKey,
     confirmationLabel: sanitizeApiText(
-      data.confirmation_number ?? data.rcm_reservation_no ?? refKey ?? '—',
+      extractReservationNoForDisplay(data) || refKey || '—',
     ),
-    bookingStatus: sanitizeApiText(String(data.booking_status ?? '—')),
+    bookingStatus: formatBookingStatusLabel(
+      rawBookingStatus,
+      isQuote,
+      String(data.reservation_type ?? ''),
+    ),
     paymentStatus:
       data.payment_status != null && String(data.payment_status).length
         ? sanitizeApiText(String(data.payment_status))
         : null,
     reservationType: sanitizeApiText(String(data.reservation_type ?? '')),
-    isQuote: Boolean(data.is_quote),
+    isQuote,
     carName: sanitizeApiText(String(data.car_name ?? vd.vehicle_name ?? 'Vehicle')),
     carSpecs: carSpecsJoined,
     carImage,

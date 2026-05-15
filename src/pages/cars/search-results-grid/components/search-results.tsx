@@ -14,6 +14,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { CarCard, CarCardProps, CarSearchMeta } from './car-card';
 import { CarsFiltersSheet, type CarsSearchFilters } from './cars-filters-sheet';
+import { resolveTaxRateFromSearch } from '@/lib/rcm-booking';
+import { sanitizeApiText } from '@/utils/sanitize-api-text';
 
 type SearchResultsType = 'card' | 'list';
 
@@ -70,7 +72,7 @@ function rowAvailableMessage(row: Record<string, unknown>): string {
     row.availablemessage ??
     row.AvailableMessage ??
     row.available_message;
-  return typeof raw === 'string' ? raw.trim() : '';
+  return sanitizeApiText(raw);
 }
 
 /** Hide boilerplate API status text so real `availablemessage` content stands out. */
@@ -167,31 +169,6 @@ function extractCurrencyFromData(data: Record<string, unknown> | undefined) {
   return { symbol, name };
 }
 
-function sanitizeApiText(value: unknown): string {
-  if (typeof value !== 'string') return '';
-  const raw = value.trim();
-  if (!raw) return '';
-
-  // Browser-safe decode for HTML entities and tag stripping from API fields.
-  if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-    const el = window.document.createElement('div');
-    el.innerHTML = raw;
-    return (el.textContent ?? el.innerText ?? '').replace(/\s+/g, ' ').trim();
-  }
-
-  // SSR/test fallback: strip tags and decode the common entities we receive.
-  return raw
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function buildSearchMeta(
   data: Record<string, unknown> | undefined,
   currency: { symbol: string; name: string },
@@ -202,12 +179,10 @@ function buildSearchMeta(
       currency_name: currency.name,
     };
   }
-  const tr = data.taxrate;
-  const taxrate =
-    typeof tr === 'number' ? tr : Number(tr);
+  const taxrate = resolveTaxRateFromSearch(data);
   return {
     taxinclusive: Boolean(data.taxinclusive),
-    taxrate: Number.isFinite(taxrate) && taxrate > 0 ? taxrate : 0.1,
+    ...(taxrate != null ? { taxrate } : {}),
     currency_symbol: currency.symbol,
     currency_name: currency.name,
   };
@@ -322,11 +297,13 @@ function mapApiCarToCard(
   const season = seasonNameForCategory(apiData, id as number);
   const features = carFeaturesFromApi(car, season);
 
-  const availMsg =
-    typeof car.availablemessage === 'string' ? car.availablemessage.trim() : '';
+  const availMsg = sanitizeApiText(car.availablemessage);
 
   const typeIdNum = Number(car.vehiclecategorytypeid);
   const ratePeriodTypeId = Number(car.rateperiod_typeid);
+  const transmissionId = Number(
+    car.transmissionid ?? car.transmission_id ?? car.transmissionpreference,
+  );
 
   return {
     id,
@@ -335,6 +312,10 @@ function mapApiCarToCard(
     rateperiod_typeid:
       Number.isFinite(ratePeriodTypeId) && ratePeriodTypeId > 0
         ? ratePeriodTypeId
+        : undefined,
+    transmissionid:
+      Number.isFinite(transmissionId) && transmissionId >= 0
+        ? transmissionId
         : undefined,
     image_url: imageRaw,
     title,

@@ -167,15 +167,24 @@ export function BookingCard({
             onClick={() => {
               const ref = refForNav;
               if (ref) {
-                navigate(`/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`, {
-                  state: { reservationRef: ref, mode: 'update-pay' },
-                });
+                navigate(
+                  `/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`,
+                  {
+                    state: {
+                      reservationRef: ref,
+                      mode: 'update-pay',
+                      bookingSnapshot: isQuote
+                        ? { bookingType: 1, reservationNumber }
+                        : undefined,
+                    },
+                  },
+                );
               }
             }}
             onMouseEnter={prefetchBooking}
             onFocus={prefetchBooking}
           >
-            Modify Booking & Pay
+            {isQuote ? 'Convert to booking request' : 'Modify Booking & Pay'}
           </Button>
         </div>
       </div>

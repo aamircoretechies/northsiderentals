@@ -1,5 +1,9 @@
 # Northside Rentals Web App
 
+## Backend API contract
+
+See **[docs/BACKEND.md](./docs/BACKEND.md)** for required API behaviour (plain-text car search fields, payment redirects, promo codes, quote vs booking status). The frontend strips HTML from RCM strings as a fallback; the API should return plain text.
+
 ## ReUI Components
 
 Metronic now leverages [ReUI](https://v1.reui.io), our open-source React component library.

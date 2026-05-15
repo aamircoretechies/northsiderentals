@@ -1,4 +1,8 @@
 import type { RcmSignatureListItem } from '@/services/rcm-documents';
+import {
+  applyCardBrandToAgreementHtml,
+  loadCheckoutCardBrand,
+} from '@/utils/card-brand';
 import { SignaturePad } from './signature-pad';
 
 export function signatureRowKey(item: RcmSignatureListItem): string {
@@ -33,7 +37,12 @@ export function SignatureAgreementSection({
   errorMessage,
 }: SignatureAgreementSectionProps) {
   const key = signatureRowKey(item);
-  const html = item.signaturetemplatetext?.trim();
+  const rawHtml = item.signaturetemplatetext?.trim();
+  const cardBrand = item.isccauth ? loadCheckoutCardBrand() : '';
+  const html =
+    rawHtml && cardBrand
+      ? applyCardBrandToAgreementHtml(rawHtml, cardBrand)
+      : rawHtml;
   const link = item.linktoagreement?.trim();
 
   if (item.issigned) {
