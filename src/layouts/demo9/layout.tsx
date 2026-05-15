@@ -56,16 +56,38 @@ export function Demo9Layout() {
 
         <main className="flex flex-col grow  h-full min-h-full bg-[#E8ECEF70]" role="content">
           {/*       {!pathname.includes('/public-profile/') && ( */}
-          {true && (
+          {pathname !== '/home' && pathname !== '/' && (
             <Toolbar>
               <ToolbarHeading />
 
               <ToolbarActions>
-                {!pathname.includes('/cars/checkout/success') && pathname !== '/home' && pathname !== '/' && (
+                {!pathname.includes('/cars/checkout/success') && (
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => navigate(-1)}
+                    onClick={() => {
+                      if (pathname === '/cars/checkout/details') {
+                        // Reconstruct options state: carData in details is the car object in options
+                        const state = location.state as any;
+                        navigate('/cars/checkout/options', { 
+                          state: { 
+                            car: state?.carData,
+                            // Preserve search params and locations if available
+                            searchParams: state?.searchParams,
+                            locations: state?.locations,
+                            extras: state?.extras,
+                            damageOptions: state?.damageOptions,
+                            selectedDamageOption: state?.selectedDamageOption,
+                            countries: state?.countries,
+                            areaOfUseOptions: state?.areaOfUseOptions
+                          } 
+                        });
+                      } else if (pathname === '/cars/checkout/options') {
+                        navigate('/cars/search-results-grid', { state: location.state });
+                      } else {
+                        navigate(-1);
+                      }
+                    }}
                   >
                     Go Back
                   </Button>

@@ -5,9 +5,11 @@ import { MENU_SIDEBAR } from '@/config/menu.config';
 import { useMenu } from '@/hooks/use-menu';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useSettings } from '@/providers/settings-provider';
+import { Container } from '@/components/common/container';
 import { Footer } from './components/footer';
 import { Header } from './components/header';
 import { Sidebar } from './components/sidebar';
+import { Toolbar, ToolbarHeading } from './components/toolbar';
 
 export function Demo1Layout() {
   const isMobile = useIsMobile();
@@ -66,6 +68,13 @@ export function Demo1Layout() {
         <Header />
 
         <main className="grow pt-5" role="content">
+          {pathname !== '/home' && pathname !== '/' && (
+            <Container>
+              <Toolbar>
+                <ToolbarHeading />
+              </Toolbar>
+            </Container>
+          )}
           <Outlet />
         </main>
 

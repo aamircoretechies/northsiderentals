@@ -114,6 +114,8 @@ export function CarHireWidget({
   const [pickupTime, setPickupTime] = useState('09:00 AM');
   const [returnTime, setReturnTime] = useState('09:00 AM');
   const [promoCode, setPromoCode] = useState('');
+  const [pickupPopoverOpen, setPickupPopoverOpen] = useState(false);
+  const [returnPopoverOpen, setReturnPopoverOpen] = useState(false);
 
   const navigate = useNavigate();
   const { searchCars, loading } = useCarSearch();
@@ -255,7 +257,7 @@ export function CarHireWidget({
     returnDate >= minReturnDate;
 
   return (
-    <div className="mx-auto flex w-full flex-col gap-4 font-sans">
+    <div className="mx-auto flex w-full flex-col gap-4 font-sans mt-6">
       <div className="relative flex w-full flex-col gap-6 rounded-[24px] bg-[#ffc107] p-4 text-black shadow-sm">
         <h2 className="text-[22px] font-extrabold text-black">Car Hire</h2>
 
@@ -356,7 +358,7 @@ export function CarHireWidget({
                   Pickup Date & Time
                 </div>
                 <div className="flex flex-row items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:items-center">
-                  <Popover>
+                  <Popover open={pickupPopoverOpen} onOpenChange={setPickupPopoverOpen}>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
@@ -375,7 +377,12 @@ export function CarHireWidget({
                       <Calendar
                         mode="single"
                         selected={pickupDate}
-                        onSelect={(d) => d && setPickupDate(startOfDay(d))}
+                        onSelect={(d) => {
+                          if (d) {
+                            setPickupDate(startOfDay(d));
+                            setPickupPopoverOpen(false);
+                          }
+                        }}
                         initialFocus
                         disabled={(date) => startOfDay(date) < minPickupDate}
                       />
@@ -410,7 +417,7 @@ export function CarHireWidget({
                   Return Date & Time
                 </div>
                 <div className="flex flex-row items-stretch overflow-hidden rounded-xl border border-transparent bg-white shadow-sm sm:h-[64px] sm:flex-row sm:items-center">
-                  <Popover>
+                  <Popover open={returnPopoverOpen} onOpenChange={setReturnPopoverOpen}>
                     <PopoverTrigger asChild>
                       <button
                         type="button"
@@ -429,7 +436,12 @@ export function CarHireWidget({
                       <Calendar
                         mode="single"
                         selected={returnDate}
-                        onSelect={(d) => d && setReturnDate(startOfDay(d))}
+                        onSelect={(d) => {
+                          if (d) {
+                            setReturnDate(startOfDay(d));
+                            setReturnPopoverOpen(false);
+                          }
+                        }}
                         initialFocus
                         disabled={(date) => startOfDay(date) < minReturnDate}
                       />

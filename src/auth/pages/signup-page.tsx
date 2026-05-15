@@ -157,7 +157,7 @@ export function SignUpPage() {
               <FormLabel>Mobile</FormLabel>
               <FormControl>
                 <Input
-                  placeholder="9035168029"
+                  placeholder="0430123456"
                   autoComplete="tel"
                   {...field}
                 />

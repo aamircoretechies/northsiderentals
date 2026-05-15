@@ -39,10 +39,27 @@ function concatFeeDescription(row: Record<string, unknown>): string {
 export function CarsCheckoutOptionsContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const carData = location.state?.car;
-
-  const searchParams = carData?.searchParams;
-  const locations = carData?.locations;
+  const carData = location.state?.car || location.state?.carData || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_car_data') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const searchParams = location.state?.searchParams || carData?.searchParams || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_search_params') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const locations = location.state?.locations || carData?.locations || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_locations') || 'null');
+    } catch {
+      return null;
+    }
+  })();
 
   const formatDateTime = (dateStr?: string, timeStr?: string) => {
     if (!dateStr || !timeStr) return undefined;
@@ -117,12 +134,43 @@ export function CarsCheckoutOptionsContent() {
   };
   const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
 
-  const [extras, setExtras] = useState<OptionalExtraItem[]>([]);
-  const [damageOptions, setDamageOptions] = useState<DamageCoverItem[]>([]);
-  const [selectedDamageOption, setSelectedDamageOption] = useState('std');
-  const [loadingDetails, setLoadingDetails] = useState(true);
-  const [countries, setCountries] = useState<CheckoutApiCountry[]>([]);
-  const [areaOfUseOptions, setAreaOfUseOptions] = useState<CheckoutAreaOfUseOption[]>([]);
+  const [extras, setExtras] = useState<OptionalExtraItem[]>(() => {
+    if (location.state?.extras) return location.state.extras;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_extras') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [damageOptions, setDamageOptions] = useState<DamageCoverItem[]>(() => {
+    if (location.state?.damageOptions) return location.state.damageOptions;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_damage_options') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [selectedDamageOption, setSelectedDamageOption] = useState(() => {
+    if (location.state?.selectedDamageOption) return location.state.selectedDamageOption;
+    return sessionStorage.getItem('checkout_selected_damage_option') || 'std';
+  });
+  const [loadingDetails, setLoadingDetails] = useState(!extras.length);
+  const [countries, setCountries] = useState<CheckoutApiCountry[]>(() => {
+    if (location.state?.countries) return location.state.countries;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_countries') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [areaOfUseOptions, setAreaOfUseOptions] = useState<CheckoutAreaOfUseOption[]>(() => {
+    if (location.state?.areaOfUseOptions) return location.state.areaOfUseOptions;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_area_of_use') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     let active = true;
@@ -135,7 +183,7 @@ export function CarsCheckoutOptionsContent() {
         if (active) setLoadingDetails(true);
         const requestData = {
           vehicle_reference: carData.id,
-          category_id: searchParams.category_id || 0,
+          category_id: searchParams.category_id || carData.vehiclecategorytypeid || 0,
           pickup_location_id: searchParams.pickup_location_id,
           dropoff_location_id: searchParams.dropoff_location_id,
           pickup_date: searchParams.pickup_date,
@@ -156,7 +204,9 @@ export function CarsCheckoutOptionsContent() {
             ),
           );
 
+          const previousExtras = location.state?.extras as OptionalExtraItem[] | undefined;
           const fetchedExtras = (data.optionalfees as unknown[]) || [];
+
           setExtras(fetchedExtras.map((feeUnknown) => {
             const fee = feeUnknown as Record<string, unknown>;
             const feeDays = Number(fee.numberofdays) || rentalDays || 1;
@@ -171,13 +221,16 @@ export function CarsCheckoutOptionsContent() {
               String(fee.name ?? '')
                 .toLowerCase()
                 .includes('driver');
+            
+            const prev = previousExtras?.find(p => p.id === String(fee.id));
+
             return {
               id: String(fee.id ?? ''),
               name: String(fee.name ?? ''),
               price: Number.isFinite(price) ? price : 0,
               type: isQuantity ? ('quantity' as const) : ('toggle' as const),
-              quantity: 0,
-              selected: false,
+              quantity: prev ? prev.quantity : 0,
+              selected: prev ? prev.selected : false,
               description: concatFeeDescription(fee),
               maxQty: Math.min(
                 MAX_CHECKOUT_EXTRA_FEE_QTY,
@@ -211,7 +264,9 @@ export function CarsCheckoutOptionsContent() {
           });
           setDamageOptions(mappedDamage);
           if (mappedDamage.length > 0) {
-            setSelectedDamageOption(mappedDamage[0].id);
+            const prevDamage = location.state?.selectedDamageOption;
+            const isValidPrev = prevDamage && mappedDamage.some(d => d.id === prevDamage);
+            setSelectedDamageOption(isValidPrev ? prevDamage : mappedDamage[0].id);
           }
         }
       } catch (err) {
@@ -223,6 +278,39 @@ export function CarsCheckoutOptionsContent() {
     fetchDetails();
     return () => { active = false; };
   }, [carData, searchParams, rentalDays]);
+
+  // Persist state to sessionStorage
+  useEffect(() => {
+    if (carData) sessionStorage.setItem('checkout_car_data', JSON.stringify(carData));
+  }, [carData]);
+
+  useEffect(() => {
+    if (searchParams) sessionStorage.setItem('checkout_search_params', JSON.stringify(searchParams));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (locations) sessionStorage.setItem('checkout_locations', JSON.stringify(locations));
+  }, [locations]);
+
+  useEffect(() => {
+    if (extras.length > 0) sessionStorage.setItem('checkout_extras', JSON.stringify(extras));
+  }, [extras]);
+
+  useEffect(() => {
+    if (damageOptions.length > 0) sessionStorage.setItem('checkout_damage_options', JSON.stringify(damageOptions));
+  }, [damageOptions]);
+
+  useEffect(() => {
+    sessionStorage.setItem('checkout_selected_damage_option', selectedDamageOption);
+  }, [selectedDamageOption]);
+
+  useEffect(() => {
+    if (countries.length > 0) sessionStorage.setItem('checkout_countries', JSON.stringify(countries));
+  }, [countries]);
+
+  useEffect(() => {
+    if (areaOfUseOptions.length > 0) sessionStorage.setItem('checkout_area_of_use', JSON.stringify(areaOfUseOptions));
+  }, [areaOfUseOptions]);
 
   const toggleExtra = (id: string, select: boolean) => {
     setExtras((current) =>

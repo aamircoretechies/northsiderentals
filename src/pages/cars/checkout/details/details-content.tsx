@@ -149,29 +149,82 @@ export function CarsCheckoutDetailsContent() {
   const { profile, rcmProfile, apiProfile } = useDashboardData();
 
   const {
-    carData,
-    extras,
-    selectedDamageOption,
-    searchParams,
-    locations,
-    countries: countriesFromOptions = [],
+    carData: carDataFromNav,
+    extras: extrasFromNav,
+    damageOptions: damageOptionsFromNav,
+    selectedDamageOption: selectedDamageOptionFromNav,
+    searchParams: searchParamsFromNav,
+    locations: locationsFromNav,
+    countries: countriesFromNav = [],
     areaOfUseOptions: areaOfUseOptionsFromNav = [],
-  } = (location.state || {}) as {
-    carData?: any;
-    extras?: any[];
-    selectedDamageOption?: string;
-    searchParams?: any;
-    locations?: any[];
-    countries?: CheckoutCountry[];
-    areaOfUseOptions?: CheckoutAreaOfUseOption[];
-  };
+  } = (location.state || {}) as any;
 
-  const [countriesList, setCountriesList] = useState<CheckoutCountry[]>(() =>
-    normalizeCountriesFromNavigationState(countriesFromOptions),
-  );
-  const [areaOfUseList, setAreaOfUseList] = useState<CheckoutAreaOfUseOption[]>(() =>
-    normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav),
-  );
+  const [carData, setCarData] = useState(() => {
+    if (carDataFromNav) return carDataFromNav;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_car_data') || 'null');
+    } catch {
+      return null;
+    }
+  });
+
+  const [searchParams, setSearchParams] = useState(() => {
+    if (searchParamsFromNav) return searchParamsFromNav;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_search_params') || 'null');
+    } catch {
+      return null;
+    }
+  });
+
+  const [locations, setLocations] = useState(() => {
+    if (locationsFromNav) return locationsFromNav;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_locations') || 'null');
+    } catch {
+      return null;
+    }
+  });
+
+  const [extras, setExtras] = useState(() => {
+    if (extrasFromNav) return extrasFromNav;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_extras') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const [damageOptions, setDamageOptions] = useState(() => {
+    if (damageOptionsFromNav) return damageOptionsFromNav;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_damage_options') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const [selectedDamageOption, setSelectedDamageOption] = useState(() => {
+    if (selectedDamageOptionFromNav) return selectedDamageOptionFromNav;
+    return sessionStorage.getItem('checkout_selected_damage_option') || 'std';
+  });
+
+  const [countriesList, setCountriesList] = useState<CheckoutCountry[]>(() => {
+    if (countriesFromNav && countriesFromNav.length > 0) return normalizeCountriesFromNavigationState(countriesFromNav);
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_countries') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [areaOfUseList, setAreaOfUseList] = useState<CheckoutAreaOfUseOption[]>(() => {
+    if (areaOfUseOptionsFromNav && areaOfUseOptionsFromNav.length > 0) return normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_area_of_use') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [countriesLoading, setCountriesLoading] = useState(false);
 
   const useApiCountries = countriesList.length > 0;
@@ -258,6 +311,39 @@ export function CarsCheckoutDetailsContent() {
     };
   }, [carData, searchParams, countriesList.length, areaOfUseList.length]);
 
+  // Persist state to sessionStorage
+  useEffect(() => {
+    if (carData) sessionStorage.setItem('checkout_car_data', JSON.stringify(carData));
+  }, [carData]);
+
+  useEffect(() => {
+    if (searchParams) sessionStorage.setItem('checkout_search_params', JSON.stringify(searchParams));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (locations) sessionStorage.setItem('checkout_locations', JSON.stringify(locations));
+  }, [locations]);
+
+  useEffect(() => {
+    if (extras.length > 0) sessionStorage.setItem('checkout_extras', JSON.stringify(extras));
+  }, [extras]);
+
+  useEffect(() => {
+    if (damageOptions.length > 0) sessionStorage.setItem('checkout_damage_options', JSON.stringify(damageOptions));
+  }, [damageOptions]);
+
+  useEffect(() => {
+    sessionStorage.setItem('checkout_selected_damage_option', selectedDamageOption);
+  }, [selectedDamageOption]);
+
+  useEffect(() => {
+    if (countriesList.length > 0) sessionStorage.setItem('checkout_countries', JSON.stringify(countriesList));
+  }, [countriesList]);
+
+  useEffect(() => {
+    if (areaOfUseList.length > 0) sessionStorage.setItem('checkout_area_of_use', JSON.stringify(areaOfUseList));
+  }, [areaOfUseList]);
+
   useEffect(() => {
     if (areaOfUseList.length === 0) return;
     setFormData((prev: any) => {
@@ -290,7 +376,7 @@ export function CarsCheckoutDetailsContent() {
   const [noticeData, setNoticeData] = useState<{ title: string; content: string } | null>(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [formData, setFormData] = useState(() => {
-    const fromNav = normalizeCountriesFromNavigationState(countriesFromOptions);
+    const fromNav = normalizeCountriesFromNavigationState(countriesFromNav);
     const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : '';
     const areaNav = normalizeAreaOfUseFromNavigationState(areaOfUseOptionsFromNav);
     const defaultArea = areaNav.length > 0 ? String(areaNav[0].id) : '';
@@ -1024,7 +1110,18 @@ export function CarsCheckoutDetailsContent() {
           <div className="flex gap-4 w-full max-w-[1000px]">
             <Button
               variant="outline"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate('/cars/checkout/options', { 
+                state: { 
+                  car: carData,
+                  searchParams: searchParams,
+                  locations: locations,
+                  extras: extras,
+                  damageOptions: damageOptions,
+                  selectedDamageOption: selectedDamageOption,
+                  countries: countriesList,
+                  areaOfUseOptions: areaOfUseList
+                } 
+              })}
               className="flex-1 rounded-full py-6 text-[#6b7280] font-bold text-[16px] border-gray-200 hover:bg-gray-50"
             >
               Go Back
