@@ -23,9 +23,11 @@ export function AccountUserProfileContent() {
       <div className="col-span-1">
         <div className="grid gap-5 lg:gap-7.5">
 
-          <CalendarAccounts />
+
 
           <RecentUploads title="My Files" />
+
+          <CalendarAccounts />
         </div>
       </div>
     </div>
