@@ -9,6 +9,7 @@ import {
   RCM_BOOKING_TYPE_QUOTE,
 } from '@/lib/rcm-booking';
 import { extractReservationNoForDisplay } from '@/utils/reservation-no';
+import { withPromoFields } from '@/utils/promo-code';
 
 export { extractReservationNoForDisplay, isLikelyRcmReservationNo } from '@/utils/reservation-no';
 
@@ -227,13 +228,8 @@ export function buildCreateBookingPayload(
     comments: nonEmpty(comments),
   };
 
-  const campaign = nonEmpty(campaigncode);
-  if (campaign) {
-    // RCM accepts multiple aliases; send all (matches car search payload).
-    payload.campaigncode = campaign;
-    payload.promocode = campaign;
-    payload.couponcode = campaign;
-  }
+  // RCM create booking: send campaigncode + promocode + couponcode (same value).
+  Object.assign(payload, withPromoFields(nonEmpty(campaigncode), {}));
 
   const agName = nonEmpty(agentname);
   if (agName) payload.agentname = agName;

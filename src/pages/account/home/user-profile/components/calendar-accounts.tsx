@@ -1,7 +1,10 @@
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { toAbsoluteUrl } from '@/lib/helpers';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useAuth } from '@/auth/context/auth-context';
+import { profileService } from '@/services/profile';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertIcon } from '@/components/ui/alert';
@@ -59,6 +62,28 @@ const CalendarAccounts = () => {
   const items = useSocialAccountRow();
   const { logout, auth } = useAuth();
   const isAuthed = Boolean(auth?.access_token);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    try {
+      setDeleting(true);
+      const result = await profileService.deleteAccount();
+      toast.success(
+        result.already_deleted
+          ? 'Your account was already deleted.'
+          : 'Account deleted successfully.',
+      );
+      setDeleteDialogOpen(false);
+      logout();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Failed to delete account',
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
   const renderItem = (item: ICalendarAccountsItem, index: number) => {
     return (
       <div
@@ -92,7 +117,7 @@ const CalendarAccounts = () => {
           {items.length === 0 ? <></> : items.map((item, index) => renderItem(item, index))}
         </div>
         {isAuthed && (
-          <Dialog>
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <DialogTrigger asChild>
               <button
                 className="h-8 rounded-full cursor-pointer border border-red-300 text-red-600 px-8 hover:bg-destructive hover:text-white text-[13px] font-medium"
@@ -123,7 +148,14 @@ const CalendarAccounts = () => {
                 <DialogClose asChild>
                   <Button variant="outline" className='py-2'>Cancel</Button>
                 </DialogClose>
-                <Button variant="destructive" className='py-2'>Continue</Button>
+                <Button
+                  variant="destructive"
+                  className="py-2"
+                  disabled={deleting}
+                  onClick={() => void handleDeleteAccount()}
+                >
+                  {deleting ? 'Deleting...' : 'Continue'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

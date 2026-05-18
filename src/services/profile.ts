@@ -78,6 +78,11 @@ export interface UpdateProfilePayload {
   profile_picture?: string | null;
 }
 
+export interface DeleteAccountResult {
+  deleted_at: string;
+  already_deleted: boolean;
+}
+
 export function normalizeProfilePicturePath(
   value: string | null | undefined,
 ): string | null {
@@ -329,74 +334,35 @@ export const profileService = {
     throw new Error(lastError);
   },
 
-  async deleteAccount(userId?: string): Promise<void> {
+  async deleteAccount(): Promise<DeleteAccountResult> {
     if (!API_BASE) throw new Error('VITE_API_BASE_URL is not configured');
 
-    const attempts: Array<{
-      endpoint: string;
-      method: 'DELETE' | 'POST';
-      body?: string;
-      headers: HeadersInit;
-    }> = [
-      {
-        endpoint: `${API_BASE}/profile/delete-account`,
-        method: 'DELETE',
-        headers: authBearerOnly(),
-      },
-      {
-        endpoint: `${API_BASE}/profile/delete-account`,
-        method: 'POST',
-        headers: authOptionalJsonHeaders(),
-        body: JSON.stringify(userId ? { user_id: userId } : {}),
-      },
-      {
-        endpoint: `${API_BASE}/profile`,
-        method: 'DELETE',
-        headers: authBearerOnly(),
-      },
-      ...(userId
-        ? [
-            {
-              endpoint: `${API_BASE}/user/${encodeURIComponent(userId)}`,
-              method: 'DELETE' as const,
-              headers: authBearerOnly(),
-            },
-          ]
-        : []),
-      {
-        endpoint: `${API_BASE}/user`,
-        method: 'DELETE',
-        headers: authOptionalJsonHeaders(),
-        body: JSON.stringify(userId ? { user_id: userId } : {}),
-      },
-    ];
+    const res = await fetch(`${API_BASE}/profile/account`, {
+      method: 'DELETE',
+      headers: authJsonHeaders(),
+      body: JSON.stringify({ confirm: true }),
+    });
 
-    let lastError = 'Delete account failed';
-    for (const attempt of attempts) {
-      const res = await fetch(attempt.endpoint, {
-        method: attempt.method,
-        headers: attempt.headers,
-        body: attempt.body,
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        lastError = getFriendlyErrorMessage({
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(
+        getFriendlyErrorMessage({
           status: res.status,
           message: text,
           fallback: 'Could not delete account. Please try again.',
-        });
-        continue;
-      }
-      if (text.trim()) {
-        try {
-          const json = JSON.parse(text) as Record<string, unknown>;
-          assertEnvelope(json);
-        } catch (e) {
-          if (!(e instanceof SyntaxError)) throw e;
-        }
-      }
-      return;
+        }),
+      );
     }
-    throw new Error(lastError);
+
+    const json = (text.trim()
+      ? (JSON.parse(text) as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    assertEnvelope(json);
+
+    const data = (json.data as Record<string, unknown> | undefined) ?? {};
+    return {
+      deleted_at: String(data.deleted_at ?? new Date().toISOString()),
+      already_deleted: Boolean(data.already_deleted),
+    };
   },
 };

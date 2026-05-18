@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/context/auth-context';
-import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { profileService } from '@/services/profile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +11,6 @@ import { Label } from '@/components/ui/label';
 const DeleteAccount = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const { rcmProfile } = useDashboardData();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -23,8 +21,12 @@ const DeleteAccount = () => {
     }
     try {
       setDeleting(true);
-      await profileService.deleteAccount(rcmProfile?.user_id);
-      toast.success('Account deleted');
+      const result = await profileService.deleteAccount();
+      toast.success(
+        result.already_deleted
+          ? 'Your account was already deleted.'
+          : 'Account deleted successfully.',
+      );
       logout();
     } catch (error) {
       toast.error(
