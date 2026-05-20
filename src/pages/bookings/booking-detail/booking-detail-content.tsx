@@ -22,6 +22,13 @@ import {
 import { getFriendlyError } from '@/utils/api-error-handler';
 import { normalizeMediaUrl } from '@/lib/helpers';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  isBookingHired,
+  isBookingReturned,
+} from '@/utils/booking-detail-flags';
+import { clearCheckoutPendingState } from '@/utils/checkout-session';
+import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
+import { saveReservationContext } from '@/utils/reservation-context';
 
 function statusStyle(label: string): { dot: string; text: string } {
   const s = label.toLowerCase();
@@ -120,6 +127,10 @@ function RentalFeeSummaryBlock({
   compact,
   onExpressCheckin,
   onSignAgreement,
+  onConvertToBooking,
+  showExpressCheckin,
+  showSignAgreement,
+  showConvertToBooking,
   isLaunchingCheckin,
   isExpanded,
   isMobile,
@@ -128,6 +139,10 @@ function RentalFeeSummaryBlock({
   compact?: boolean;
   onExpressCheckin: () => void;
   onSignAgreement: () => void;
+  onConvertToBooking?: () => void;
+  showExpressCheckin?: boolean;
+  showSignAgreement?: boolean;
+  showConvertToBooking?: boolean;
   isLaunchingCheckin?: boolean;
   isExpanded?: boolean;
   isMobile?: boolean;
@@ -202,26 +217,42 @@ function RentalFeeSummaryBlock({
 
       </div>
 
-      <div className="flex flex-row gap-2">
+      {showConvertToBooking && onConvertToBooking ? (
         <Button
-          onClick={onExpressCheckin}
-          disabled={view.expressCheckinCompleted || isLaunchingCheckin}
-          className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
+          type="button"
+          disabled={!view?.referenceKey?.trim() || isLaunchingCheckin}
+          onClick={() => void onConvertToBooking()}
+          className="w-full mt-5 bg-[#0061e0] hover:bg-[#0052cc] text-white font-bold h-[48px] rounded-full text-[16px]"
         >
-          {view.expressCheckinCompleted
-            ? 'Express check-in done'
-            : isLaunchingCheckin
-              ? 'Opening...'
-              : 'Express Check-in'}
+          Convert to a Booking Request
         </Button>
-        <Button
-          onClick={onSignAgreement}
-          disabled={view.agreementSigned}
-          className="w-full mt-5 bg-[#004a9f] hover:bg-[#0052cc] text-white font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
-        >
-          {view.agreementSigned ? 'Agreement signed' : 'Sign Agreement'}
-        </Button>
-      </div>
+      ) : null}
+      {showExpressCheckin || showSignAgreement ? (
+        <div className="flex flex-row gap-2">
+          {showExpressCheckin ? (
+            <Button
+              onClick={onExpressCheckin}
+              disabled={view.expressCheckinCompleted || isLaunchingCheckin}
+              className="w-full mt-5 bg-[#ffb700] hover:bg-[#e5a400] text-black font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
+            >
+              {view.expressCheckinCompleted
+                ? 'Express check-in done'
+                : isLaunchingCheckin
+                  ? 'Opening...'
+                  : 'Express Check-in'}
+            </Button>
+          ) : null}
+          {showSignAgreement ? (
+            <Button
+              onClick={onSignAgreement}
+              disabled={view.agreementSigned}
+              className="w-full mt-5 bg-[#004a9f] hover:bg-[#0052cc] text-white font-bold h-[48px] rounded-full text-[16px] disabled:opacity-60"
+            >
+              {view.agreementSigned ? 'Agreement signed' : 'Sign Agreement'}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -320,6 +351,87 @@ export function BookingDetailContent() {
 
   const { dot, text } = view ? statusStyle(view.bookingStatus) : statusStyle('');
 
+  const hired = view ? isBookingHired(view.bookingStatus) : false;
+  const returned = view ? isBookingReturned(view.bookingStatus) : false;
+  const isQuote = Boolean(view?.isQuote);
+  const showSelfService = Boolean(view && !isQuote && !returned);
+  const showExpressCheckin = Boolean(view && !isQuote && !hired && !returned);
+  const showSignAgreement = Boolean(view && !isQuote && !hired && !returned);
+  const showAgreementLinks = Boolean(view && !isQuote);
+  const showReceiptLink = Boolean(view && !isQuote && view.receiptUrl);
+  const showConvertToBooking = Boolean(
+    view && isQuote && view.canConvertToBooking,
+  );
+  const confirmationLabel = isQuote ? 'Quotation #' : 'Confirmation #';
+  const overviewLabel = isQuote ? 'QUOTATION OVERVIEW' : 'BOOKING OVERVIEW';
+  const pageTitle = isQuote ? 'Quotation Details' : 'Booking Details';
+
+  const handleConvertToBooking = async () => {
+    if (!view?.referenceKey?.trim()) return;
+    clearCheckoutPendingState();
+    clearQuoteConvertPending();
+    saveReservationContext({
+      reservation_ref: view.referenceKey,
+      reservation_no: view.confirmationLabel,
+      mode: 'convert-quote',
+    });
+    setLaunchingCheckin(true);
+    try {
+      const workflow = await fetchWorkflowChecklist(view.referenceKey, 'checkin');
+      navigate(
+        `/bookings/modify?reservation_ref=${encodeURIComponent(view.referenceKey)}&mode=convert-quote`,
+        {
+          state: {
+            reservationRef: view.referenceKey,
+            mode: 'convert-quote',
+            workflowChecklist: workflow.data ?? null,
+            bookingSnapshot: {
+              bookingId: view.bookingId,
+              reservationNumber: view.confirmationLabel,
+              carImage: view.carImage,
+              carTitle: view.carName,
+              carSubtitle: view.carSpecs,
+              pickupDate: view.pickupWhen,
+              pickupLocation: [view.pickupWhereName, view.pickupWhereAddress]
+                .filter(Boolean)
+                .join(' '),
+              returnDate: view.returnWhen,
+              returnLocation: [view.returnWhereName, view.returnWhereAddress]
+                .filter(Boolean)
+                .join(' '),
+              pickupLocationId: view.pickupLocationId,
+              bookingType: view.bookingType,
+              transmission: view.transmission,
+              customerId: view.customerId,
+            },
+            customerSnapshot: {
+              firstName: view.customerFirstName,
+              lastName: view.customerLastName,
+              email: view.customerEmail,
+              phone: view.customerPhone,
+              dateOfBirth: view.customerDateOfBirth,
+              licenseNo: view.customerLicenseNo,
+              licenseIssued: view.customerLicenseIssued,
+              licenseExpires: view.customerLicenseExpires,
+              address: view.customerAddress,
+              city: view.customerCity,
+              state: view.customerState,
+              country: view.customerCountry,
+              postcode: view.customerPostcode,
+              numberTravelling: view.numberTravelling,
+            },
+          },
+        },
+      );
+    } catch (e) {
+      setCheckinError(
+        getFriendlyError(e, 'Could not open quote conversion. Please try again.'),
+      );
+    } finally {
+      setLaunchingCheckin(false);
+    }
+  };
+
   const handleExpressCheckin = async () => {
     if (!view?.referenceKey?.trim()) {
       setCheckinError('Booking reference is missing for express check-in.');
@@ -393,8 +505,9 @@ export function BookingDetailContent() {
             <ArrowLeft size={24} className="text-black" />
           </button>
         </div>
-        <h1 className="text-[18px] font-extrabold text-black">Booking Details</h1>
+        <h1 className="text-[18px] font-extrabold text-black">{pageTitle}</h1>
         <div>
+          {showSelfService ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -491,6 +604,9 @@ export function BookingDetailContent() {
               </SupportIssueModal>
             </DropdownMenuContent>
           </DropdownMenu>
+          ) : (
+            <span className="w-[88px]" aria-hidden />
+          )}
         </div>
       </div>
 
@@ -521,11 +637,11 @@ export function BookingDetailContent() {
       {!loading && !error && view ? (
         <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 pt-6 px-4 sm:px-6">
           <div className="lg:hidden col-span-1 -mb-2">
-            <span className="text-[#6b7280] text-[15px]">Confirmation # </span>
+            <span className="text-[#6b7280] text-[15px]">{confirmationLabel} </span>
             <span className="font-bold text-[#004a9f] text-[15px]">
               {view.confirmationLabel}
             </span>
-            {view.referenceKey ? (
+            {view.referenceKey && !view.isQuote ? (
               <p className="text-[12px] text-[#6b7280] mt-1">
                 Ref. {view.referenceKey}
               </p>
@@ -534,11 +650,11 @@ export function BookingDetailContent() {
 
           <div className="col-span-1 flex flex-col gap-6 lg:order-last">
             <div className="hidden lg:block -mb-2">
-              <span className="text-[#6b7280] text-[15px]">Confirmation # </span>
+              <span className="text-[#6b7280] text-[15px]">{confirmationLabel} </span>
               <span className="font-bold text-[#004a9f] text-[15px]">
                 {view.confirmationLabel}
               </span>
-              {view.referenceKey ? (
+              {view.referenceKey && !view.isQuote ? (
                 <p className="text-[12px] text-[#6b7280] mt-1">
                   Ref. {view.referenceKey}
                 </p>
@@ -548,7 +664,7 @@ export function BookingDetailContent() {
             <div className="flex flex-col">
               <div className="flex justify-between items-center mb-2 px-1">
                 <span className="text-[14px] font-bold text-[#6b7280] tracking-wide">
-                  BOOKING OVERVIEW
+                  {overviewLabel}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <div className={`w-2 h-2 rounded-full ${dot}`} />
@@ -624,6 +740,7 @@ export function BookingDetailContent() {
                   </div>
                 </div>
 
+                {showAgreementLinks ? (
                 <div className="border-t border-gray-100 p-4 flex flex-col justify-center items-center">
                   {view.rentalAgreementUrl ? (
                     <BookingAgreementButton
@@ -635,13 +752,14 @@ export function BookingDetailContent() {
                     </span>
                   )}
 
-                  {view.receiptUrl ? (
+                  {showReceiptLink ? (
                     <BookingReceiptButton
                       receiptApiUrl={view.receiptUrl}
                       documentsBaseUrl={view.documentsBaseUrl}
                     />
                   ) : null}
                 </div>
+                ) : null}
               </div>
             </div>
 
@@ -655,6 +773,10 @@ export function BookingDetailContent() {
                       `/sign-agreements?reservation_ref=${encodeURIComponent(view.referenceKey)}`,
                     )
                   }
+                  onConvertToBooking={handleConvertToBooking}
+                  showExpressCheckin={showExpressCheckin}
+                  showSignAgreement={showSignAgreement}
+                  showConvertToBooking={showConvertToBooking}
                   isLaunchingCheckin={launchingCheckin}
                 />
               </div>
@@ -700,6 +822,10 @@ export function BookingDetailContent() {
                   `/sign-agreements?reservation_ref=${encodeURIComponent(view.referenceKey)}`,
                 )
               }
+              onConvertToBooking={handleConvertToBooking}
+              showExpressCheckin={showExpressCheckin}
+              showSignAgreement={showSignAgreement}
+              showConvertToBooking={showConvertToBooking}
               isLaunchingCheckin={launchingCheckin}
             />
           </div>

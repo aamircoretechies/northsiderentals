@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search as SearchIcon, Loader2, AlertCircle, X } from 'lucide-react';
 import { ScreenLoader } from '@/components/common/screen-loader';
-import { useNavigate } from 'react-router';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/context/auth-context';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,6 +23,10 @@ import {
 } from '@/services/bookings';
 import { getFriendlyError } from '@/utils/api-error-handler';
 import { queryKeys } from '@/lib/query-keys';
+import {
+  type BookingsRefreshLocationState,
+  refetchBookingsList,
+} from '@/utils/refresh-bookings-list';
 
 const PAGE_SIZE = 20;
 
@@ -91,6 +95,8 @@ function bookingUiStatus(
 
 export function BookingsContent() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const { auth, loading: authLoading } = useAuth();
   const isAuthed = Boolean(auth?.access_token);
 
@@ -132,6 +138,32 @@ export function BookingsContent() {
     },
     getNextPageParam: (lastPage) => lastPage.nextPage,
   });
+
+  useEffect(() => {
+    const state = (location.state ?? null) as BookingsRefreshLocationState | null;
+    if (!state?.refreshBookings || !isAuthed) return;
+
+    let cancelled = false;
+    void refetchBookingsList(queryClient, state.reservationRef).finally(() => {
+      if (cancelled) return;
+      navigate(
+        { pathname: location.pathname, search: location.search },
+        { replace: true, state: {} },
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    location.key,
+    location.pathname,
+    location.search,
+    location.state,
+    isAuthed,
+    queryClient,
+    navigate,
+  ]);
 
   useEffect(() => {
     if (!isAuthed) {
@@ -223,10 +255,6 @@ export function BookingsContent() {
         <div className="rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Find a booking</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter your confirmation or reservation number and the last name on the
-              reservation.
-            </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full">
             <Input

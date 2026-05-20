@@ -13,6 +13,8 @@ import { BookingDetailsCard, type BookingDetailsForm } from './components/bookin
 import { ExtraDriversCard, type ExtraDriversForm } from './components/extra-drivers-card';
 import { UploadImagesCard, type UploadImagesForm } from './components/upload-images-card';
 import { Button } from '@/components/ui/button';
+import { PaymentCardDisclaimer } from '@/components/payments/payment-card-disclaimer';
+import { WindcavePaymentModal } from '@/components/payments/windcave-payment-modal';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,7 @@ import {
   deleteRcmDocument,
   editBookingBasics,
   extractWorkflowChecklistArrays,
+  extractReservationReferenceFromEnvelope,
   fetchBookingByReference,
   fetchWorkflowChecklist,
   getCachedBookingByReference,
@@ -33,6 +36,8 @@ import {
   invalidateBookingsCache,
   listRcmDocuments,
   mapBookingDetailToView,
+  pickRcmLicenseExpires,
+  pickRcmLicenseIssued,
   storeRcmDocument,
   updateBooking,
   uploadRcmDocumentFile,
@@ -43,15 +48,34 @@ import {
   RCM_BOOKING_TYPE_BOOKING,
   resolveReferralId,
 } from '@/lib/rcm-booking';
-import { inferIsQuote } from '@/utils/booking-status';
+import { inferCanConvertToBooking, inferIsQuote } from '@/utils/booking-status';
 import {
   buildCheckoutConfirmationUrl,
   buildCheckoutPaymentCancelUrl,
-  saveCheckoutPendingState,
+  buildCheckoutPaymentFailureUrl,
+  normalizeHostedPaymentUrlForRcm,
+  buildQuoteConvertConfirmationUrl,
+  saveCheckoutPaymentSession,
 } from '@/utils/checkout-session';
+import {
+  loadQuoteConvertPending,
+  saveQuoteConvertPending,
+} from '@/utils/quote-convert-pending';
+import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
+import {
+  parsePaymentReturnParams,
+  paymentReturnApiReference,
+} from '@/utils/payment-return';
+import {
+  isShortReservationNo,
+  loadReservationContext,
+  pickRcmReservationRef,
+  resolveReservationRef,
+  saveReservationContext,
+} from '@/utils/reservation-context';
 
 interface ExpressCheckinRouteState {
-  mode?: 'update' | 'update-pay' | 'checkin';
+  mode?: 'update' | 'update-pay' | 'convert-quote' | 'checkin';
   reservationRef?: string;
   customerSnapshot?: {
     firstName?: string;
@@ -225,6 +249,18 @@ function validateCustomerDetailsForm(form: CustomerDetailsForm): string | null {
   return null;
 }
 
+function validateCustomerDetailsForQuoteConvert(form: CustomerDetailsForm): string | null {
+  const base = validateCustomerDetailsForm(form);
+  if (base) return base;
+  if (!form.licenseExpires.trim()) {
+    return 'Driver licence expiry is required to convert this quote to a booking.';
+  }
+  if (!isRecognizedDate(form.licenseExpires.trim())) {
+    return 'Please enter a valid driver licence expiry date.';
+  }
+  return null;
+}
+
 function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
   const raw = getFriendlyError(error, fallback);
   const msg = raw.toLowerCase();
@@ -238,10 +274,28 @@ function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
   if (msg.includes('postcode') || msg.includes('postal')) {
     return 'Please enter a valid post code.';
   }
-  if (msg.includes('date of birth') || msg.includes('dob')) {
+  if (msg.includes('date of birth') || msg.includes('dateofbirth') || msg.includes('dob')) {
     return 'Please enter a valid date of birth.';
   }
-  if (msg.includes('license') || msg.includes('licence')) {
+  // Licence expiry — do not confuse with licence number (DL432154 is valid).
+  if (
+    msg.includes('licenseexpires') ||
+    msg.includes('license_expir') ||
+    msg.includes('licence expir') ||
+    msg.includes('license expir') ||
+    (msg.includes('datetime') && (msg.includes('licen') || msg.includes('licence')))
+  ) {
+    return 'Please enter a valid driver licence expiry date.';
+  }
+  if (msg.includes('licenseissued') || msg.includes('license_issued')) {
+    return 'Please enter the driver licence issuing country or state.';
+  }
+  if (
+    msg.includes('licenseno') ||
+    msg.includes('license number') ||
+    msg.includes('driver_license_number') ||
+    msg.includes('driver license')
+  ) {
     return 'Please enter a valid licence number.';
   }
   if (msg.includes('first name') || msg.includes('last name')) {
@@ -512,12 +566,16 @@ export function ExpressCheckinContent() {
   const snapshot = routeState?.bookingSnapshot ?? null;
   const modeFromRoute = routeState?.mode;
   const modeFromQuery = searchParams.get('mode');
-  const isUpdatePayMode = modeFromRoute === 'update-pay' || modeFromQuery === 'update-pay';
-  const isUpdateMode =
+  const isConvertQuoteRoute =
+    modeFromRoute === 'convert-quote' || modeFromQuery === 'convert-quote';
+  const isUpdatePayMode =
+    modeFromRoute === 'update-pay' || modeFromQuery === 'update-pay';
+  const isModifyBookingMode =
     modeFromRoute === 'update' ||
     modeFromQuery === 'update' ||
-    isUpdatePayMode ||
-    location.pathname === '/bookings/modify';
+    (location.pathname === '/bookings/modify' &&
+      !isConvertQuoteRoute &&
+      loadReservationContext()?.mode !== 'convert-quote');
   const customerSnapshot = routeState?.customerSnapshot ?? null;
   const reservationRefFromQuery = searchParams.get('reservation_ref') ?? '';
   const reservationRef = firstText(routeState?.reservationRef, reservationRefFromQuery);
@@ -527,6 +585,8 @@ export function ExpressCheckinContent() {
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [launchingPayment, setLaunchingPayment] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentModalUrl, setPaymentModalUrl] = useState<string | null>(null);
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
   const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
@@ -542,13 +602,22 @@ export function ExpressCheckinContent() {
   // arrays are never missing due to stale/partial `location.state` payloads.
   useEffect(() => {
     if (!reservationRef) return;
-    const cachedWorkflow = getCachedWorkflowChecklist(reservationRef, 'checkin');
+    let workflowRef = reservationRef;
+    const cachedDetail = getCachedBookingByReference(reservationRef);
+    const detailData = cachedDetail?.data;
+    if (detailData && typeof detailData === 'object') {
+      const fromDetail = extractReservationReferenceFromEnvelope(
+        detailData as Record<string, unknown>,
+      );
+      if (fromDetail) workflowRef = fromDetail;
+    }
+    const cachedWorkflow = getCachedWorkflowChecklist(workflowRef, 'checkin');
     if (cachedWorkflow?.data && typeof cachedWorkflow.data === 'object') {
       setWorkflow(cachedWorkflow.data as Record<string, unknown>);
     }
     let cancelled = false;
     setLoadingWorkflow(true);
-    void fetchWorkflowChecklist(reservationRef, 'checkin')
+    void fetchWorkflowChecklist(workflowRef, 'checkin')
       .then((res) => {
         if (cancelled) return;
         const data = res?.data;
@@ -572,6 +641,58 @@ export function ExpressCheckinContent() {
       cancelled = true;
     };
   }, [reservationRef]);
+
+  const normalizedWorkflow = useMemo(
+    () => extractWorkflowChecklistArrays(workflow as Record<string, unknown> | undefined),
+    [workflow],
+  );
+  const steps = normalizedWorkflow.list;
+  const bookingInfo = normalizedWorkflow.bookinginfo[0];
+
+  const isQuoteBooking = useMemo(() => {
+    if (snapshot?.bookingType === 1) return true;
+    if (bookingInfo && typeof bookingInfo === 'object') {
+      return inferIsQuote({
+        bookingtype: bookingInfo.bookingtype ?? bookingInfo.booking_type,
+        reservation_type:
+          bookingInfo.reservationtype ?? bookingInfo.reservation_type,
+        booking_status: bookingInfo.bookingstatus ?? bookingInfo.booking_status,
+      });
+    }
+    const cachedDetail = reservationRef
+      ? getCachedBookingByReference(reservationRef)
+      : null;
+    const raw = cachedDetail?.data;
+    if (raw && typeof raw === 'object') {
+      return inferIsQuote(raw as Record<string, unknown>);
+    }
+    return false;
+  }, [snapshot?.bookingType, bookingInfo, reservationRef]);
+
+  const canConvertToBooking = useMemo(() => {
+    if (bookingInfo && typeof bookingInfo === 'object') {
+      if (
+        inferCanConvertToBooking(bookingInfo as Record<string, unknown>)
+      ) {
+        return true;
+      }
+    }
+    const cachedDetail = reservationRef
+      ? getCachedBookingByReference(reservationRef)
+      : null;
+    const raw = cachedDetail?.data;
+    if (raw && typeof raw === 'object') {
+      return inferCanConvertToBooking(raw as Record<string, unknown>);
+    }
+    return isQuoteBooking;
+  }, [bookingInfo, reservationRef, isQuoteBooking]);
+
+  const isConvertQuoteMode =
+    isConvertQuoteRoute ||
+    (isUpdatePayMode && (isQuoteBooking || canConvertToBooking)) ||
+    (loadReservationContext()?.mode === 'convert-quote' &&
+      location.pathname === '/bookings/modify');
+  const isUpdateMode = isModifyBookingMode || isConvertQuoteMode;
 
   useEffect(() => {
     if (!isUpdateMode) return;
@@ -611,22 +732,36 @@ export function ExpressCheckinContent() {
       cancelled = true;
     };
   }, [isUpdateMode, reservationRef]);
-  const normalizedWorkflow = useMemo(
-    () => extractWorkflowChecklistArrays(workflow as Record<string, unknown> | undefined),
-    [workflow],
-  );
-  const steps = normalizedWorkflow.list;
-  const bookingInfo = normalizedWorkflow.bookinginfo[0];
-  const isQuoteBooking = useMemo(() => {
-    if (snapshot?.bookingType === 1) return true;
-    if (!bookingInfo) return false;
-    return inferIsQuote({
-      bookingtype: bookingInfo.bookingtype ?? bookingInfo.booking_type,
-      reservation_type:
-        bookingInfo.reservationtype ?? bookingInfo.reservation_type,
+
+  const rcmReservationRef = useMemo(() => {
+    const cachedDetail = reservationRef
+      ? getCachedBookingByReference(reservationRef)
+      : null;
+    const detailData =
+      cachedDetail?.data && typeof cachedDetail.data === 'object'
+        ? (cachedDetail.data as Record<string, unknown>)
+        : null;
+    return pickRcmReservationRef(
+      reservationRef,
+      bookingInfo as Record<string, unknown> | undefined,
+      detailData,
+    );
+  }, [reservationRef, bookingInfo]);
+  useEffect(() => {
+    if (!isConvertQuoteMode) return;
+    setPaymentModalOpen(false);
+    setPaymentModalUrl(null);
+  }, [isConvertQuoteMode, location.key]);
+
+  useEffect(() => {
+    if (!rcmReservationRef) return;
+    saveReservationContext({
+      reservation_ref: rcmReservationRef,
+      reservation_no: firstText(snapshot?.reservationNumber),
+      mode: isConvertQuoteMode ? 'convert-quote' : isUpdateMode ? 'booking' : undefined,
     });
-  }, [snapshot?.bookingType, bookingInfo]);
-  const isConvertQuoteMode = isUpdatePayMode && isQuoteBooking;
+  }, [rcmReservationRef, isConvertQuoteMode, isUpdateMode, snapshot?.reservationNumber]);
+
   const customerInfo = normalizedWorkflow.customerinfo[0];
   const optionalFeesRaw = normalizedWorkflow.optionalfees;
   const extraFeesRaw = normalizedWorkflow.extrafees;
@@ -677,9 +812,11 @@ export function ExpressCheckinContent() {
 
   type StepId = 'customer' | 'booking' | 'drivers' | 'images' | 'creditcard';
   const [openCard, setOpenCard] = useState<string | null>('reservation');
-  const stepOrder: StepId[] = isUpdateMode
-    ? ['customer', 'booking']
-    : ['customer', 'booking', 'drivers', 'images', 'creditcard'];
+  const stepOrder: StepId[] = isConvertQuoteMode
+    ? ['customer', 'booking', 'creditcard']
+    : isModifyBookingMode
+      ? ['customer', 'booking']
+      : ['customer', 'booking', 'drivers', 'images', 'creditcard'];
   const [savingStep, setSavingStep] = useState<string | null>(null);
 
   // Refresh documents whenever Upload Images card opens so driver/document data stays in sync.
@@ -743,9 +880,15 @@ export function ExpressCheckinContent() {
       ),
       dateOfBirth: toHtmlDate(firstText(customerInfo?.dateofbirth, customerSnapshot?.dateOfBirth)),
       licenseNo: firstText(customerInfo?.licenseno, customerSnapshot?.licenseNo),
-      licenseIssued: firstText(customerInfo?.licenseissued, customerSnapshot?.licenseIssued),
+      licenseIssued: firstText(
+        pickRcmLicenseIssued(customerInfo as Record<string, unknown> | undefined),
+        customerSnapshot?.licenseIssued,
+      ),
       licenseExpires: toHtmlDate(
-        firstText(customerInfo?.licenseexpires, customerSnapshot?.licenseExpires),
+        firstText(
+          pickRcmLicenseExpires(customerInfo as Record<string, unknown> | undefined),
+          customerSnapshot?.licenseExpires,
+        ),
       ),
       address: firstText(customerInfo?.address, customerSnapshot?.address),
       city: firstText(customerInfo?.city, customerSnapshot?.city),
@@ -888,7 +1031,7 @@ export function ExpressCheckinContent() {
   };
 
   const refreshUploadDocuments = useCallback(async () => {
-    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    const reservationRefValue = rcmReservationRef;
     if (!reservationRefValue) return;
     const latest = await listRcmDocuments(reservationRefValue, 'checkin');
     const rows = Array.isArray(latest?.data) ? latest.data : [];
@@ -917,8 +1060,8 @@ export function ExpressCheckinContent() {
     firstText(customerInfo?.mobile, customerInfo?.phone),
     firstText(customerInfo?.dateofbirth),
     firstText(customerInfo?.licenseno),
-    firstText(customerInfo?.licenseissued),
-    firstText(customerInfo?.licenseexpires),
+    firstText(pickRcmLicenseIssued(customerInfo as Record<string, unknown> | undefined)),
+    firstText(pickRcmLicenseExpires(customerInfo as Record<string, unknown> | undefined)),
     firstText(customerInfo?.address),
     firstText(customerInfo?.city),
     firstText(customerInfo?.state),
@@ -938,7 +1081,7 @@ export function ExpressCheckinContent() {
     firstText(bookingInfo?.customerremark),
   ].join('|');
   const hydrationKey = [
-    firstText(reservationRef, bookingInfo?.reservationref),
+    rcmReservationRef,
     firstText(snapshot?.bookingId),
     String(normalizedWorkflow.list.length),
     String(normalizedWorkflow.bookinginfo.length),
@@ -1047,7 +1190,7 @@ export function ExpressCheckinContent() {
       legacyEditFieldsRef.current = current;
       return current;
     }
-    const ref = firstText(reservationRef, bookingInfo?.reservationref);
+    const ref = rcmReservationRef;
     if (!ref) {
       throw new Error('Missing reservation reference for booking update.');
     }
@@ -1128,11 +1271,11 @@ export function ExpressCheckinContent() {
         licenseno: customerForm.licenseNo,
         licenseissued: firstText(
           customerForm.licenseIssued,
-          customerInfo?.licenseissued,
+          pickRcmLicenseIssued(customerInfo as Record<string, unknown> | undefined),
         ),
         licenseexpires: firstText(
           normalizeDateForApi(customerForm.licenseExpires),
-          customerInfo?.licenseexpires,
+          pickRcmLicenseExpires(customerInfo as Record<string, unknown> | undefined),
         ),
         email: customerForm.email,
         phone: firstText(customerInfo?.phone),
@@ -1149,7 +1292,9 @@ export function ExpressCheckinContent() {
         mailinglist: Boolean(customerInfo?.mailinglist),
         loyaltycardno: firstText(customerInfo?.loyaltycardno),
       };
-      const formError = validateCustomerDetailsForm(customerForm);
+      const formError = isConvertQuoteMode
+        ? validateCustomerDetailsForQuoteConvert(customerForm)
+        : validateCustomerDetailsForm(customerForm);
       if (formError) {
         throw new Error(formError);
       }
@@ -1160,7 +1305,7 @@ export function ExpressCheckinContent() {
 
       const referralId = resolveReferralId(bookingInfo);
 
-      const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+      const reservationRefValue = rcmReservationRef;
       const editPayload = {
         booking_id: firstText(snapshot?.bookingId, bookingInfo?.booking_id, bookingInfo?.bookingid),
         reservation_ref: reservationRefValue,
@@ -1227,7 +1372,96 @@ export function ExpressCheckinContent() {
         optionalfees,
       };
 
-      if (isUpdateMode) {
+      if (isConvertQuoteMode) {
+        if (!firstText(customerPayload.licenseexpires)) {
+          throw new Error(
+            'Driver licence expiry is required to convert this quote to a booking.',
+          );
+        }
+        if (!rcmReservationRef) {
+          throw new Error(
+            'Could not resolve reservation reference. Open this quote from Booking Details and try again.',
+          );
+        }
+        const internalBookingId = firstText(
+          bookingInfo?.booking_id,
+          bookingInfo?.bookingid,
+          snapshot?.bookingId,
+        );
+        if (internalBookingId && rcmReservationRef === internalBookingId) {
+          throw new Error(
+            'Reservation reference is invalid (booking id was used). Reopen from Booking Details.',
+          );
+        }
+        const convertPayload = {
+          reservation_ref: rcmReservationRef,
+          booking_type: RCM_BOOKING_TYPE_BOOKING,
+          insurance_id: toFiniteNumber(bookingForm.selectedInsurance, 0),
+          extrakms_id: toFiniteNumber(selectedExtraKmsId, 0),
+          number_of_persons: travellerCount,
+          customer: {
+            customerid: customerPayload.customerid,
+            firstname: customerForm.firstName.trim(),
+            lastname: customerForm.lastName.trim(),
+            dateofbirth: customerPayload.dateofbirth,
+            licenseno: customerPayload.licenseno,
+            licenseissued: customerPayload.licenseissued,
+            licenseexpires: customerPayload.licenseexpires,
+            email: customerForm.email.trim(),
+            phone: customerPayload.phone,
+            mobile: customerPayload.mobile,
+            address: customerForm.address.trim(),
+            state: customerForm.state.trim(),
+            city: customerForm.city.trim(),
+            postcode: customerForm.postcode.trim(),
+            country: customerPayload.country,
+            countryid: customerPayload.countryid,
+          },
+          customer_details: {
+            first_name: customerForm.firstName.trim(),
+            last_name: customerForm.lastName.trim(),
+            date_of_birth: customerPayload.dateofbirth,
+            driver_license_number: customerPayload.licenseno,
+            email: customerForm.email.trim(),
+            state: customerForm.state.trim(),
+            city: customerForm.city.trim(),
+            postcode: customerForm.postcode.trim(),
+            address: customerForm.address.trim(),
+            licenseexpires: customerPayload.licenseexpires,
+            licenseissued: customerPayload.licenseissued,
+          },
+          emailoption: toFiniteNumber(
+            (bookingInfo as Record<string, unknown> | undefined)?.emailoption ?? 1,
+            1,
+          ),
+          referralid: referralId != null ? referralId : 0,
+          remark: firstText(bookingForm.notes, bookingInfo?.customerremark),
+          flightin: firstText(bookingInfo?.flightin),
+          flightout: firstText(bookingInfo?.flightout),
+          arrivalpoint: firstText(bookingInfo?.arrivalpoint),
+          departurepoint: firstText(bookingInfo?.departurepoint),
+          areaofuseid: toFiniteNumber(bookingInfo?.areaofuseid, 0),
+          newsletter: Boolean(customerInfo?.mailinglist),
+          agentcode: firstText(bookingInfo?.agentcode),
+          agentname: firstText(bookingInfo?.agentname),
+          agentemail: firstText(bookingInfo?.agentemail),
+          agentrefno: firstText(bookingInfo?.agentrefno),
+          optionalfees,
+        };
+        saveQuoteConvertPending({
+          payload: convertPayload,
+          reservation_ref: rcmReservationRef,
+        });
+        saveReservationContext({
+          reservation_ref: rcmReservationRef,
+          reservation_no: firstText(
+            snapshot?.reservationNumber,
+            bookingInfo?.reservationno,
+            bookingInfo?.reservationdocumentno,
+          ),
+          mode: 'convert-quote',
+        });
+      } else if (isUpdateMode && !isConvertQuoteMode) {
         await updateBooking({
           reservation_ref: reservationRefValue,
           bookingtype: effectiveBookingType,
@@ -1266,21 +1500,16 @@ export function ExpressCheckinContent() {
       } else {
         await editBookingBasics(editPayload);
       }
-      invalidateBookingsCache(firstText(reservationRef, bookingInfo?.reservationref));
-      if (isConvertQuoteMode && legacyEditFieldsRef.current) {
-        legacyEditFieldsRef.current = {
-          ...legacyEditFieldsRef.current,
-          bookingtype: RCM_BOOKING_TYPE_BOOKING,
-        };
+      if (!isConvertQuoteMode) {
+        invalidateBookingsCache(rcmReservationRef);
       }
-      if (isUpdatePayMode) {
-        toast.success(
-          isConvertQuoteMode
-            ? 'Details saved — continue to secure card entry'
-            : 'Booking details saved',
-        );
+      if (isConvertQuoteMode) {
+        toast.success('Details saved — opening secure payment…');
         await startSecurePaymentStep();
-      } else if (isUpdateMode) {
+      } else if (isUpdatePayMode) {
+        toast.success('Booking details saved');
+        await startSecurePaymentStep();
+      } else if (isModifyBookingMode) {
         setShowUpdateSuccessDialog(true);
       } else {
         toast.success('Booking details saved');
@@ -1302,10 +1531,7 @@ export function ExpressCheckinContent() {
     }
     setSavingStep('drivers');
     try {
-      const reservationRefValue = firstText(
-        reservationRef,
-        bookingInfo?.reservationref,
-      );
+      const reservationRefValue = rcmReservationRef;
       if (!reservationRefValue) throw new Error('Missing reservation reference');
 
       const ownerEmail = firstText(customerForm.email, customerSnapshot?.email);
@@ -1443,7 +1669,7 @@ export function ExpressCheckinContent() {
     }
     if (!(Number(driver.customerid) > 0)) return;
 
-    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    const reservationRefValue = rcmReservationRef;
     if (!reservationRefValue) {
       toast.error('Missing reservation reference');
       return;
@@ -1533,7 +1759,7 @@ export function ExpressCheckinContent() {
       toast.error(bookingLockedReason);
       return;
     }
-    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    const reservationRefValue = rcmReservationRef;
     if (!reservationRefValue) {
       toast.error('Missing reservation reference');
       return;
@@ -1624,55 +1850,73 @@ export function ExpressCheckinContent() {
       toast.error(bookingLockedReason);
       return;
     }
-    const bookingId = firstText(
-      snapshot?.bookingId,
+    if (isConvertQuoteMode && !loadQuoteConvertPending()) {
+      toast.error('Please save your booking details first, then add your card.');
+      return;
+    }
+    const reservationRefValue = firstText(rcmReservationRef, routeState?.reservationRef);
+    if (!reservationRefValue || isShortReservationNo(reservationRefValue)) {
+      toast.error(
+        'Reservation reference is missing. Open this booking from your bookings list and try again.',
+      );
+      return;
+    }
+    const internalBookingId = firstText(
       bookingInfo?.booking_id,
       bookingInfo?.bookingid,
+      snapshot?.bookingId,
     );
-    const reservationRefValue = firstText(
-      reservationRef,
-      bookingInfo?.reservationref,
-      routeState?.reservationRef,
-    );
-    if (!bookingId && !reservationRefValue) {
-      toast.error('Reservation reference is missing. Please save booking details first.');
+    if (internalBookingId && reservationRefValue === internalBookingId) {
+      toast.error(
+        'Cannot start payment with booking id — reopen this quote from Booking Details.',
+      );
       return;
     }
 
     try {
       setLaunchingPayment(true);
-      const confirmationUrl = buildCheckoutConfirmationUrl();
+      const returnOptions = { convertQuote: isConvertQuoteMode };
+      const successUrl = isConvertQuoteMode
+        ? buildQuoteConvertConfirmationUrl()
+        : buildCheckoutConfirmationUrl();
       const session = await carsService.createPaymentSession({
-        booking_id: bookingId || undefined,
-        reservationref: reservationRefValue || undefined,
-        success_url: confirmationUrl,
-        cancel_url: buildCheckoutPaymentCancelUrl(),
-        failure_url: `${confirmationUrl}${confirmationUrl.includes('?') ? '&' : '?'}status=failed`,
+        reservationref: reservationRefValue,
+        reservation_ref: reservationRefValue,
+        success_url: successUrl,
+        cancel_url: buildCheckoutPaymentCancelUrl(returnOptions),
+        failure_url: buildCheckoutPaymentFailureUrl(returnOptions),
       });
-      const url = String(
+      const rawUrl = String(
         (session?.data as Record<string, unknown> | undefined)?.payment_url ?? '',
       ).trim();
+      const url = normalizeHostedPaymentUrlForRcm(rawUrl, reservationRefValue);
       if (!/^https?:\/\//i.test(url)) {
         throw new Error('Payment URL is missing. Please try again.');
       }
-      saveCheckoutPendingState({
-        booking: {
-          reservation_ref: reservationRefValue,
-          reservationref: reservationRefValue,
-          booking_id: bookingId,
-          bookingtype: isConvertQuoteMode ? RCM_BOOKING_TYPE_BOOKING : undefined,
-        },
-        formData: customerForm as unknown as Record<string, unknown>,
+      saveReservationContext({
+        reservation_ref: reservationRefValue,
+        reservation_no: firstText(
+          snapshot?.reservationNumber,
+          bookingInfo?.reservationno,
+          bookingInfo?.reservationdocumentno,
+        ),
+        mode: isConvertQuoteMode ? 'convert-quote' : 'booking',
+      });
+      const paymentState = saveCheckoutPaymentSession({
+        reservationRef: reservationRefValue,
         paymentUrl: url,
+        formData: customerForm as unknown as Record<string, unknown>,
+        convertQuote: isConvertQuoteMode,
       });
       markSaved('creditcard');
-      navigate('/cars/checkout/payment', {
-        state: {
-          paymentUrl: url,
-          booking: workflow,
-          formData: customerForm,
-        },
-      });
+
+      if (isConvertQuoteMode) {
+        navigate('/cars/checkout/payment', { state: paymentState });
+        return;
+      }
+
+      setPaymentModalUrl(url);
+      setPaymentModalOpen(true);
     } catch (e) {
       toast.error(getFriendlyError(e, 'Could not start payment'));
     } finally {
@@ -1681,7 +1925,7 @@ export function ExpressCheckinContent() {
   };
 
   const deleteOneDocument = async (id: string) => {
-    const reservationRefValue = firstText(reservationRef, bookingInfo?.reservationref);
+    const reservationRefValue = rcmReservationRef;
     if (!reservationRefValue) {
       toast.error('Missing reservation reference');
       return;
@@ -1929,15 +2173,6 @@ export function ExpressCheckinContent() {
       </div> */}
 
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 ">
-        {isConvertQuoteMode ? (
-          <div className="lg:col-span-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-            <p className="font-semibold">Convert quote to booking request</p>
-            <p className="mt-1 text-amber-900/90">
-              Review your details, save changes, then add your card to submit this quote as a
-              booking request (same flow as a new reservation).
-            </p>
-          </div>
-        ) : null}
         {bookingLockedReason ? (
           <div className="lg:col-span-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             <p className="font-semibold">This booking cannot be updated</p>
@@ -2005,8 +2240,17 @@ export function ExpressCheckinContent() {
 
         {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
         <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
+          {isConvertQuoteMode ? (
+            <div className="mb-3 w-full bg-[#fff8d6] border border-[#ffec99] rounded-[8px] p-4 text-center shadow-sm">
+              <p className="text-[12px] text-[#8c6b1d] leading-tight font-medium">
+                <span className="font-bold">Convert quote to booking request.</span>{' '}
+                Review your details, save changes, then add your card to submit this quote as a
+                booking request.
+              </p>
+            </div>
+          ) : null}
 
-          {isUpdateMode ? (
+          {isModifyBookingMode ? (
             <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 sm:p-5">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">MODIFY BOOKING</h3>
               <div className="mb-5">
@@ -2014,6 +2258,7 @@ export function ExpressCheckinContent() {
                   value={customerForm}
                   onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
                   countries={rcmProfile?.countries ?? []}
+                  licenseExpiryRequired={isConvertQuoteMode}
                 />
               </div>
               {loadingWorkflow ? (
@@ -2047,6 +2292,7 @@ export function ExpressCheckinContent() {
                   value={customerForm}
                   onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
                   countries={rcmProfile?.countries ?? []}
+                  licenseExpiryRequired={isConvertQuoteMode}
                 />
                 <div className="flex gap-2 mt-4">
                   <Button
@@ -2160,17 +2406,18 @@ export function ExpressCheckinContent() {
             </CollapsibleCard>
           ) : null}
 
-          {!isUpdateMode || isConvertQuoteMode ? (
+          {isConvertQuoteMode || isUpdatePayMode || !isModifyBookingMode ? (
             <CollapsibleCard
               title={stepName(steps, 'createdpspaymentmethod', 'COLLECT CARD DETAIL')}
               isOpen={openCard === 'creditcard'}
               onToggle={() => toggleCard('creditcard')}
             >
-              <div className="rounded-xl border border-gray-100 bg-[#f8f9fa] p-4 text-[14px] text-[#4b5563]">
+              <PaymentCardDisclaimer className="mb-1" />
+              <p className="text-[14px] text-[#4b5563]">
                 {isConvertQuoteMode
-                  ? 'Save your booking details above first, then add your card on Windcave to convert this quote into a booking request.'
-                  : 'Card details are collected securely on Windcave. Click below to continue to the hosted payment page.'}
-              </div>
+                  ? 'Save your booking details above first, then add your card in the secure form below to convert this quote into a booking request.'
+                  : 'Card details are collected securely in a form on this page — you will not leave this screen.'}
+              </p>
               <div className="flex gap-2 mt-4">
                 <Button
                   type="button"
@@ -2179,7 +2426,7 @@ export function ExpressCheckinContent() {
                   className="bg-[#ffc107] text-black"
                 >
                   {launchingPayment
-                    ? 'Redirecting…'
+                    ? 'Opening secure form…'
                     : isConvertQuoteMode
                       ? 'Add card & submit booking request'
                       : 'Pay securely with Windcave'}
@@ -2203,6 +2450,52 @@ export function ExpressCheckinContent() {
         />
       </div>
       {/* ) : null} */}
+
+      <WindcavePaymentModal
+        open={paymentModalOpen}
+        paymentUrl={paymentModalUrl}
+        onClose={() => setPaymentModalOpen(false)}
+        onComplete={(search) => {
+          setPaymentModalOpen(false);
+          const raw = search.startsWith('?') ? search.slice(1) : search;
+          const returnParams = new URLSearchParams(raw);
+          returnParams.delete('reservation_ref');
+          returnParams.delete('reservationref');
+          returnParams.delete('booking_id');
+          returnParams.delete('bookingid');
+          if (!returnParams.get('status') && !raw) {
+            returnParams.set('status', 'success');
+          }
+          if (isConvertQuoteMode && returnParams.get('status') === 'success') {
+            returnParams.set('convert_quote', '1');
+          }
+          const suffix = returnParams.toString()
+            ? `?${returnParams.toString()}`
+            : isConvertQuoteMode
+              ? '?status=success&convert_quote=1'
+              : '?status=success';
+
+          const paymentReturn = parsePaymentReturnParams(suffix);
+          const ref =
+            resolveReservationRef(rcmReservationRef) ||
+            paymentReturnApiReference(paymentReturn);
+          if (ref && paymentReturn.status === 'success') {
+            void persistPaymentCardDetailsForRcm(ref, paymentReturn).catch(() => {
+              /* backend may persist during /payments/complete */
+            });
+          }
+
+          navigate(
+            { pathname: '/cars/checkout/success', search: suffix },
+            {
+              replace: true,
+              state: isConvertQuoteMode
+                ? { reservationRef: rcmReservationRef, mode: 'convert-quote' }
+                : undefined,
+            },
+          );
+        }}
+      />
     </div>
   );
 }

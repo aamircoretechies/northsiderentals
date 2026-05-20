@@ -1,27 +1,45 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { Loader2, Info } from 'lucide-react';
+import { CreditCard, Loader2 } from 'lucide-react';
+import { PaymentCardDisclaimer } from '@/components/payments/payment-card-disclaimer';
+import { WindcavePaymentModal } from '@/components/payments/windcave-payment-modal';
 import {
   extractHostedPaymentUrl,
-  extractBookingReference,
   mergeCreateBookingForUiState,
 } from '@/services/booking-payload';
+import { carsService } from '@/services/cars';
 import { fetchBookingByReference } from '@/services/bookings';
 import {
+  buildCheckoutConfirmationUrl,
+  buildCheckoutPaymentCancelUrl,
+  buildCheckoutPaymentFailureUrl,
+  buildQuoteConvertConfirmationUrl,
   loadCheckoutPendingState,
+  normalizeHostedPaymentUrlForRcm,
+  paymentUrlNeedsReservationRef,
+  resolveCheckoutReservationRef,
   saveCheckoutPendingState,
   type CheckoutPendingState,
 } from '@/utils/checkout-session';
-import { normalizePaymentReturnToAppOrigin } from '@/utils/app-origin';
+import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
+import { parsePaymentReturnParams, paymentReturnApiReference } from '@/utils/payment-return';
+import { isShortReservationNo, resolveReservationRef } from '@/utils/reservation-context';
 
-const PAYMENT_GATEWAY_LAUNCH_KEY = 'checkout_payment_gateway_launched';
+function buildConfirmationSearch(search: string, convertQuote: boolean): string {
+  const raw = search.startsWith('?') ? search.slice(1) : search;
+  const params = new URLSearchParams(raw);
+  if (!params.get('status') && !raw) {
+    params.set('status', 'success');
+  }
+  if (convertQuote && params.get('status') === 'success') {
+    params.set('convert_quote', '1');
+  }
+  const qs = params.toString();
+  if (qs) return `?${qs}`;
+  return convertQuote ? '?status=success&convert_quote=1' : '?status=success';
+}
 
-/**
- * Full-page redirect to Windcave (not an iframe).
- * Iframes + "Next" on Windcave often trigger Chrome Private Network Access blocks
- * when the API redirects to localhost or a private IP.
- */
 export function CarsCheckoutPaymentContent() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,17 +55,21 @@ export function CarsCheckoutPaymentContent() {
   };
 
   const pendingFromStorage = loadCheckoutPendingState();
+  const convertQuote = Boolean(pendingFromStorage?.convertQuote);
   const booking = stateBooking ?? pendingFromStorage?.booking;
   const formData = stateFormData ?? pendingFromStorage?.formData;
   const carData = stateCarData ?? pendingFromStorage?.carData;
   const searchParams = stateSearchParams ?? pendingFromStorage?.searchParams;
   const locations = stateLocations ?? pendingFromStorage?.locations;
 
-  const [redirecting, setRedirecting] = useState(true);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  const launchedRef = useRef(false);
+  const [activePaymentUrl, setActivePaymentUrl] = useState<string | null>(null);
+  const [refreshingSession, setRefreshingSession] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const pollRef = useRef<number | null>(null);
+  const paymentDoneRef = useRef(false);
+  const autoOpenedModalRef = useRef(false);
 
-  const paymentUrl = useMemo(() => {
+  const storedPaymentUrl = useMemo(() => {
     const direct =
       statePaymentUrl ||
       pendingFromStorage?.paymentUrl ||
@@ -57,72 +79,198 @@ export function CarsCheckoutPaymentContent() {
       : null;
   }, [booking, pendingFromStorage?.paymentUrl, statePaymentUrl]);
 
-  const reservationRef = useMemo(
-    () => extractBookingReference(mergeCreateBookingForUiState(booking)),
+  const mergedBooking = useMemo(
+    () => (booking ? mergeCreateBookingForUiState(booking) : null),
     [booking],
   );
 
-  const goToConfirmation = () => {
-    navigate('/cars/checkout/success', {
-      replace: true,
-      state: {
-        booking: mergeCreateBookingForUiState(booking),
-        formData,
-        carData,
-        searchParams,
-        locations,
-      },
-    });
-  };
+  const reservationRef = useMemo(
+    () => resolveCheckoutReservationRef(mergedBooking, pendingFromStorage),
+    [mergedBooking, pendingFromStorage],
+  );
+
+  const paymentUrl = activePaymentUrl ?? storedPaymentUrl;
+
+  const normalizedPaymentUrl = useMemo(() => {
+    if (!paymentUrl) return null;
+    return reservationRef
+      ? normalizeHostedPaymentUrlForRcm(paymentUrl, reservationRef)
+      : paymentUrl.trim();
+  }, [paymentUrl, reservationRef]);
+
+  const goToConfirmation = useCallback(
+    (search = '') => {
+      navigate(`/cars/checkout/success${search}`, {
+        replace: true,
+        state: {
+          booking: mergedBooking ?? {},
+          formData,
+          carData,
+          searchParams,
+          locations,
+        },
+      });
+    },
+    [navigate, mergedBooking, formData, carData, searchParams, locations],
+  );
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current != null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const completePayment = useCallback(
+    (search: string) => {
+      if (paymentDoneRef.current) return;
+      paymentDoneRef.current = true;
+      stopPolling();
+      setPaymentModalOpen(false);
+
+      const paymentReturn = parsePaymentReturnParams(search);
+      const ref =
+        resolveReservationRef(reservationRef) ||
+        paymentReturnApiReference(paymentReturn);
+      if (ref && paymentReturn.status === 'success') {
+        void persistPaymentCardDetailsForRcm(ref, paymentReturn).catch(() => {
+          /* backend may persist during /payments/complete */
+        });
+      }
+
+      goToConfirmation(buildConfirmationSearch(search, convertQuote));
+    },
+    [goToConfirmation, stopPolling, convertQuote, reservationRef],
+  );
+
+  const handleCancelPayment = useCallback(() => {
+    paymentDoneRef.current = true;
+    stopPolling();
+    setPaymentModalOpen(false);
+    goToConfirmation('?status=cancelled');
+  }, [goToConfirmation, stopPolling]);
+
+  /** Recreate Windcave session with reservationref when stored URL used booking_id path */
+  useEffect(() => {
+    if (!reservationRef || isShortReservationNo(reservationRef)) {
+      setActivePaymentUrl(storedPaymentUrl);
+      return;
+    }
+    if (!storedPaymentUrl) {
+      setActivePaymentUrl(null);
+      return;
+    }
+    if (!paymentUrlNeedsReservationRef(storedPaymentUrl, reservationRef)) {
+      setActivePaymentUrl(
+        normalizeHostedPaymentUrlForRcm(storedPaymentUrl, reservationRef),
+      );
+      return;
+    }
+
+    let cancelled = false;
+    setRefreshingSession(true);
+    const returnOptions = { convertQuote };
+    const successUrl = convertQuote
+      ? buildQuoteConvertConfirmationUrl()
+      : buildCheckoutConfirmationUrl();
+
+    void carsService
+      .createPaymentSession({
+        reservationref: reservationRef,
+        reservation_ref: reservationRef,
+        success_url: successUrl,
+        cancel_url: buildCheckoutPaymentCancelUrl(returnOptions),
+        failure_url: buildCheckoutPaymentFailureUrl(returnOptions),
+      })
+      .then((session) => {
+        if (cancelled) return;
+        const url = String(
+          (session?.data as Record<string, unknown> | undefined)?.payment_url ?? '',
+        ).trim();
+        const normalizedUrl = normalizeHostedPaymentUrlForRcm(url, reservationRef);
+        if (
+          /^https?:\/\//i.test(normalizedUrl) &&
+          !paymentUrlNeedsReservationRef(normalizedUrl, reservationRef)
+        ) {
+          setActivePaymentUrl(normalizedUrl);
+          saveCheckoutPendingState({
+            booking: mergedBooking ?? pendingFromStorage?.booking ?? {},
+            formData,
+            carData,
+            searchParams,
+            locations,
+            paymentUrl: normalizedUrl,
+            reservation_ref: reservationRef,
+            convertQuote,
+          });
+        } else {
+          setActivePaymentUrl(storedPaymentUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setActivePaymentUrl(storedPaymentUrl);
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshingSession(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    reservationRef,
+    storedPaymentUrl,
+    convertQuote,
+    mergedBooking,
+    formData,
+    carData,
+    searchParams,
+    locations,
+    pendingFromStorage?.booking,
+  ]);
 
   useEffect(() => {
-    if (booking && paymentUrl) {
+    if (mergedBooking && paymentUrl) {
       saveCheckoutPendingState({
-        booking: mergeCreateBookingForUiState(booking),
+        booking: mergedBooking,
         formData,
         carData,
         searchParams,
         locations,
         paymentUrl,
+        reservation_ref: reservationRef || pendingFromStorage?.reservation_ref,
+        convertQuote,
       });
     }
-  }, [booking, carData, formData, locations, paymentUrl, searchParams]);
+  }, [
+    mergedBooking,
+    carData,
+    formData,
+    locations,
+    paymentUrl,
+    reservationRef,
+    searchParams,
+    convertQuote,
+    pendingFromStorage?.reservation_ref,
+  ]);
 
+  /** Open Windcave in an in-app modal once the session URL is ready. */
   useEffect(() => {
-    if (!paymentUrl || launchedRef.current) return;
-
-    const launchKey = `${PAYMENT_GATEWAY_LAUNCH_KEY}:${paymentUrl}`;
-    const alreadyLaunched = sessionStorage.getItem(launchKey) === '1';
-
-    if (alreadyLaunched) {
-      setRedirecting(false);
+    if (!normalizedPaymentUrl || refreshingSession || autoOpenedModalRef.current) {
       return;
     }
+    autoOpenedModalRef.current = true;
+    setPaymentModalOpen(true);
+  }, [normalizedPaymentUrl, refreshingSession]);
 
-    launchedRef.current = true;
-    sessionStorage.setItem(launchKey, '1');
-
-    try {
-      const target = normalizePaymentReturnToAppOrigin(paymentUrl);
-      window.location.replace(target);
-    } catch (e) {
-      launchedRef.current = false;
-      sessionStorage.removeItem(launchKey);
-      setLaunchError(
-        e instanceof Error ? e.message : 'Could not open the payment page.',
-      );
-      setRedirecting(false);
-    }
-  }, [paymentUrl]);
-
+  /** Poll booking payment status while the modal is open (iframe redirect fallback). */
   useEffect(() => {
-    if (!reservationRef || redirecting) return;
+    if (!reservationRef || paymentDoneRef.current || !paymentModalOpen) return;
 
-    let cancelled = false;
     const poll = async () => {
+      if (paymentDoneRef.current) return;
       try {
         const res = await fetchBookingByReference(reservationRef);
-        if (cancelled) return;
         const data = res?.data as Record<string, unknown> | undefined;
         const status = String(data?.payment_status ?? '').toLowerCase();
         const paid =
@@ -133,52 +281,38 @@ export function CarsCheckoutPaymentContent() {
           status.includes('authorized') ||
           data?.payment_id != null;
         if (paid) {
-          goToConfirmation();
+          completePayment('?status=success');
         }
       } catch {
-        /* still on Windcave or API unavailable */
+        /* still on Windcave */
       }
     };
 
     void poll();
-    const id = window.setInterval(() => void poll(), 4000);
+    pollRef.current = window.setInterval(() => void poll(), 4000);
     return () => {
-      cancelled = true;
-      window.clearInterval(id);
+      stopPolling();
     };
-  }, [reservationRef, redirecting]);
+  }, [reservationRef, completePayment, stopPolling, paymentModalOpen]);
 
-  if (!paymentUrl) {
+  if (refreshingSession) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] max-w-md mx-auto p-8 text-center gap-4">
-        <p className="text-muted-foreground text-[15px] leading-relaxed">
-          No payment session found. If you have already paid, you can view your booking
-          confirmation.
-        </p>
-        <Button className="rounded-full" onClick={goToConfirmation}>
-          View booking confirmation
-        </Button>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <Loader2 className="w-10 h-10 text-[#0061e0] animate-spin" />
+        <p className="text-slate-600 text-[15px]">Preparing secure payment…</p>
       </div>
     );
   }
 
-  if (launchError) {
+  if (!normalizedPaymentUrl) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] max-w-md mx-auto p-8 text-center gap-4">
-        <p className="text-destructive text-[15px] leading-relaxed">{launchError}</p>
-        <Button
-          className="rounded-full"
-          onClick={() => {
-            sessionStorage.removeItem(`${PAYMENT_GATEWAY_LAUNCH_KEY}:${paymentUrl}`);
-            launchedRef.current = false;
-            setLaunchError(null);
-            setRedirecting(true);
-            window.location.replace(paymentUrl);
-          }}
-        >
-          Open payment page
-        </Button>
-        <Button variant="outline" className="rounded-full" onClick={goToConfirmation}>
+        <PaymentCardDisclaimer />
+        <p className="text-muted-foreground text-[15px] leading-relaxed">
+          No payment session found. If you have already paid, you can view your booking
+          confirmation.
+        </p>
+        <Button className="rounded-full" onClick={() => goToConfirmation()}>
           View booking confirmation
         </Button>
       </div>
@@ -186,44 +320,45 @@ export function CarsCheckoutPaymentContent() {
   }
 
   return (
-    <div className="flex flex-col w-full bg-[#f8fafc] min-h-screen">
-      <div className="w-full p-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-3 bg-[#0061e0]/5 border border-[#0061e0]/10 rounded-2xl p-4 sm:p-5">
-          <div className="flex-shrink-0 bg-[#0061e0]/10 p-2.5 rounded-full">
-            <Info className="w-5 h-5 text-[#0061e0]" />
-          </div>
-          <div>
-            <h3 className="text-[#0061e0] font-bold text-[15px] sm:text-[16px]">
-              Your card won&apos;t be charged now.
-            </h3>
-            <p className="text-slate-600 text-sm sm:text-[14px] leading-relaxed mt-0.5">
-              We only take payment at the time of pickup. You will be redirected to Windcave
-              to verify your card, then returned to this site to confirm your booking.
+    <>
+      <div className="flex flex-col w-full bg-[#f8fafc] min-h-[60vh] p-4 sm:p-6">
+        <div className="max-w-2xl mx-auto w-full space-y-4">
+          <PaymentCardDisclaimer />
+          <div className="flex flex-col items-center justify-center gap-5 py-10 text-center bg-white rounded-2xl border border-border shadow-sm px-6">
+            <p className="text-slate-700 font-medium max-w-md text-[15px] leading-relaxed">
+              {convertQuote
+                ? 'Add your card in the secure form below to convert this quote into a booking request. You stay on this page the whole time.'
+                : 'Enter your card details in the secure form below to complete your booking request. You stay on this page the whole time.'}
             </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+              <Button
+                type="button"
+                className="rounded-full flex-1 gap-2"
+                onClick={() => setPaymentModalOpen(true)}
+              >
+                <CreditCard className="size-4" />
+                {paymentModalOpen ? 'Continue card verification' : 'Verify card securely'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full flex-1"
+                onClick={handleCancelPayment}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
-        <Loader2 className="w-10 h-10 text-[#0061e0] animate-spin" />
-        <p className="text-slate-600 font-medium text-center max-w-md">
-          {redirecting
-            ? 'Redirecting to secure payment…'
-            : 'Complete payment in the Windcave window, then return here. This page will update when your card is verified.'}
-        </p>
-        {!redirecting ? (
-          <div className="flex flex-col gap-2 w-full max-w-sm">
-            <Button
-              className="rounded-full"
-              onClick={() => window.location.replace(paymentUrl)}
-            >
-              Open payment page again
-            </Button>
-            <Button variant="outline" className="rounded-full" onClick={goToConfirmation}>
-              I finished — view confirmation
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </div>
+
+      <WindcavePaymentModal
+        open={paymentModalOpen}
+        paymentUrl={normalizedPaymentUrl}
+        onClose={() => setPaymentModalOpen(false)}
+        onComplete={completePayment}
+      />
+    </>
   );
 }

@@ -45,10 +45,13 @@ export function CustomerDetailsCard({
   value,
   onChange,
   countries = [],
+  licenseExpiryRequired = false,
 }: {
   value: CustomerDetailsForm;
   onChange: (patch: Partial<CustomerDetailsForm>) => void;
   countries?: RcmCountry[];
+  /** Quote convert: expiry is required by RCM (not the licence number). */
+  licenseExpiryRequired?: boolean;
 }) {
   const [comboboxOpen, setComboboxOpen] = useState(false);
 
@@ -86,7 +89,7 @@ export function CustomerDetailsCard({
       />
       <input
         type="tel"
-        placeholder="Phone (with country code)"
+        placeholder="Phone Number"
         value={value.phone}
         onChange={(e) => {
           const val = e.target.value;
@@ -165,10 +168,20 @@ export function CustomerDetailsCard({
         onChange={(e) => onChange({ licenseExpires: e.target.value })}
         onKeyDown={(e) => e.preventDefault()}
         onClick={(e) => (e.target as any).showPicker?.()}
-        className={cn(inputClass, "cursor-pointer")}
+        className={cn(inputClass, 'cursor-pointer')}
         aria-label="Driver licence expiry date"
-        title="Driver licence expiry date"
+        title={
+          licenseExpiryRequired
+            ? 'Driver licence expiry date (required to convert quote)'
+            : 'Driver licence expiry date'
+        }
+        required={licenseExpiryRequired}
       />
+      {licenseExpiryRequired && !value.licenseExpires.trim() ? (
+        <p className="text-[12px] text-[#b45309] -mt-1">
+          Licence expiry is required to convert this quote (licence number alone is not enough).
+        </p>
+      ) : null}
       <input
         type="text"
         placeholder="Address"

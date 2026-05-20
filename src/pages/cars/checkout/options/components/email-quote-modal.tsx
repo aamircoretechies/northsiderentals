@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ArrowLeft, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import {
 import {
   buildCreateBookingPayload,
   extractReservationNo,
+  extractReservationRef,
   mapUiExtrasToPayload,
   mergeCreateBookingForUiState,
   parseTravellerCount,
@@ -27,6 +29,8 @@ import { getFriendlyError } from '@/utils/api-error-handler';
 import { ReservationConfirmationCard } from '@/pages/cars/checkout/components/reservation-confirmation-card';
 import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { useAuth } from '@/auth/context/auth-context';
+import { bookingsListRefreshNavigateOptions } from '@/utils/refresh-bookings-list';
+import { saveReservationContext, loadReservationContext } from '@/utils/reservation-context';
 
 type SearchParams = Record<string, unknown> | undefined;
 
@@ -50,6 +54,7 @@ export function EmailQuoteModal({
   extras,
   selectedDamageOption,
 }: EmailQuoteModalProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { profile, apiProfile, rcmProfile } = useDashboardData();
   const [open, setOpen] = useState(false);
@@ -163,9 +168,18 @@ export function EmailQuoteModal({
     setSubmitting(true);
     try {
       const response = await carsService.createBooking(payload);
+      const merged = mergeCreateBookingForUiState(response);
       const reference =
         extractReservationNo(response) ||
-        extractReservationNo(mergeCreateBookingForUiState(response));
+        extractReservationNo(merged);
+      const reservationRef = extractReservationRef(response) || extractReservationRef(merged);
+      if (reservationRef) {
+        saveReservationContext({
+          reservation_ref: reservationRef,
+          reservation_no: reference || undefined,
+          mode: 'quote',
+        });
+      }
       setQuoteReference(reference || '—');
       toast.success('Quote request submitted.');
     } catch (e: unknown) {
@@ -217,7 +231,12 @@ export function EmailQuoteModal({
                 reservationNo={quoteReference}
                 numberLabel="Quote no"
                 message="A copy of your quote will be sent to your email. Please save your quote number for reference."
-                onDone={closeModal}
+                onDone={() => {
+                  closeModal();
+                  const ref =
+                    loadReservationContext()?.reservation_ref?.trim() || undefined;
+                  navigate('/bookings', bookingsListRefreshNavigateOptions(ref));
+                }}
               />
             ) : (
               <>

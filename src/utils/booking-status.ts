@@ -27,6 +27,40 @@ export function inferIsQuote(record: {
 }
 
 /**
+ * Whether the API allows converting this quote to a booking request (card + convert).
+ * Falls back to quote detection when `can_convert_to_booking` is omitted.
+ */
+export function inferCanConvertToBooking(record: {
+  can_convert_to_booking?: unknown;
+  canConvertToBooking?: unknown;
+  is_quote?: unknown;
+  isQuote?: unknown;
+  bookingtype?: unknown;
+  booking_type?: unknown;
+  reservation_type?: unknown;
+  reservationtype?: unknown;
+  booking_status?: unknown;
+}): boolean {
+  if (
+    record.can_convert_to_booking === true ||
+    record.can_convert_to_booking === 1 ||
+    record.can_convert_to_booking === '1' ||
+    record.canConvertToBooking === true
+  ) {
+    return true;
+  }
+  if (
+    record.can_convert_to_booking === false ||
+    record.can_convert_to_booking === 0 ||
+    record.can_convert_to_booking === '0' ||
+    record.canConvertToBooking === false
+  ) {
+    return false;
+  }
+  return inferIsQuote(record);
+}
+
+/**
  * RCM often returns "Reservation Request" for quotes; show a clear quote label instead.
  */
 export function formatBookingStatusLabel(

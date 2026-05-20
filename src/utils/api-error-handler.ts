@@ -31,6 +31,12 @@ const ERROR_MAP: Record<string, string> = {
     'Please enter a valid number of passengers.',
   'is too big':
     'Please enter a smaller number of passengers.',
+  licenseexpires:
+    'Please enter a valid driver licence expiry date.',
+  'license expires':
+    'Please enter a valid driver licence expiry date.',
+  'licence expiry':
+    'Please enter a valid driver licence expiry date.',
 
   // Rental / Driver
   'age not eligible': 'Driver does not meet the minimum age requirement.',

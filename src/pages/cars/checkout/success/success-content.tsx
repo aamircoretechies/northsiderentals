@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { XCircle, AlertCircle } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { normalizeMediaUrl } from '@/lib/helpers';
 import {
@@ -9,28 +10,52 @@ import {
   extractReservationRef,
   extractReservationNo,
 } from '@/services/booking-payload';
-import { fetchBookingByReference } from '@/services/bookings';
+import { fetchBookingByReference, invalidateBookingsCache } from '@/services/bookings';
 import {
   clearCheckoutPendingState,
   loadCheckoutPendingState,
+  resolveCheckoutReservationRef,
 } from '@/utils/checkout-session';
-import { saveCheckoutCardBrand, formatCardBrand } from '@/utils/card-brand';
+import { saveCheckoutCardBrand, formatCardBrand as formatCardBrandLabel } from '@/utils/card-brand';
+import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
 import {
+  buildWindcaveResultFromPaymentReturn,
   parsePaymentReturnParams,
+  paymentReturnApiReference,
   paymentReturnReference,
   paymentReturnReservationNo,
 } from '@/utils/payment-return';
 import { inferIsQuote } from '@/utils/booking-status';
 import { ReservationConfirmationCard } from '@/pages/cars/checkout/components/reservation-confirmation-card';
+import { getFriendlyError } from '@/utils/api-error-handler';
+import {
+  finalizeQuoteConvertAfterPayment,
+  loadQuoteConvertPending,
+  shouldConvertQuoteOnPaymentReturn,
+} from '@/utils/quote-convert-pending';
+import {
+  loadReservationContext,
+  resolveReservationRef,
+} from '@/utils/reservation-context';
+import { toast } from 'sonner';
+import { bookingsListRefreshNavigateOptions } from '@/utils/refresh-bookings-list';
 
 export function CarsCheckoutSuccessContent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [fetching, setFetching] = useState(false);
+  const [convertingQuote, setConvertingQuote] = useState(false);
+  const [quoteConvertDone, setQuoteConvertDone] = useState(false);
+  const quoteConvertInFlightRef = useRef(false);
   const [apiBooking, setApiBooking] = useState<Record<string, unknown> | null>(
     null,
   );
+
+  const pendingQuoteConvert = loadQuoteConvertPending();
+  const shouldFinalizeQuoteConvert =
+    shouldConvertQuoteOnPaymentReturn(searchParams) || Boolean(pendingQuoteConvert);
 
   const paymentReturn = useMemo(
     () => parsePaymentReturnParams(searchParams),
@@ -67,7 +92,7 @@ export function CarsCheckoutSuccessContent() {
   }, [apiBooking, paymentReturn, booking, resolvedBooking]);
 
   const cardTypeLabel = useMemo(() => {
-    const fromUrl = formatCardBrand(paymentReturn.cardType);
+    const fromUrl = formatCardBrandLabel(paymentReturn.cardType);
     return fromUrl || '';
   }, [paymentReturn.cardType]);
 
@@ -82,36 +107,56 @@ export function CarsCheckoutSuccessContent() {
   const isBookingSubmittedWithoutPayment =
     !hasUrlStatus && hasBookingReference && !isFailed && !isCancelled;
 
+  const reservationContextMode = loadReservationContext()?.mode;
+  const isConvertQuoteFlow =
+    shouldFinalizeQuoteConvert ||
+    quoteConvertDone ||
+    paymentReturn.convertQuote ||
+    reservationContextMode === 'convert-quote' ||
+    searchParams.get('mode') === 'convert-quote';
+
   const isQuoteOnly = useMemo(() => {
-    if (isPaymentSuccess) return false;
+    if (isPaymentSuccess || isConvertQuoteFlow) return false;
     return inferIsQuote({
       is_quote: resolvedBooking.is_quote,
       bookingtype: resolvedBooking.bookingtype ?? resolvedBooking.booking_type,
       reservation_type: resolvedBooking.reservation_type,
       booking_status: resolvedBooking.booking_status,
     });
-  }, [resolvedBooking, isPaymentSuccess]);
+  }, [resolvedBooking, isPaymentSuccess, isConvertQuoteFlow]);
 
-  const successTitle = isPaymentSuccess
-    ? 'Booking confirmed'
-    : isQuoteOnly
-      ? 'Quotation submitted'
-      : isBookingSubmittedWithoutPayment
-        ? 'Booking request submitted'
-        : 'Submission received';
+  const successTitle = isConvertQuoteFlow
+    ? quoteConvertDone || (isPaymentSuccess && !convertingQuote)
+      ? 'Booking request submitted'
+      : 'Convert quote to booking'
+    : isPaymentSuccess
+      ? 'Booking confirmed'
+      : isQuoteOnly
+        ? 'Quotation submitted'
+        : isBookingSubmittedWithoutPayment
+          ? 'Booking request submitted'
+          : 'Submission received';
 
-  const confirmationMessage = isQuoteOnly
-    ? 'A copy of your quote will be sent to your email. Please save your reservation number for reference.'
-    : 'Please note your reservation is NOT confirmed until you receive a booking confirmation email from Northside Rentals.';
+  const bookingNotConfirmedNotice =
+    'Please note your reservation is not confirmed until you receive a confirmation email from Northside Rentals confirming your vehicle reservation is now booked.';
 
-  const lookupRef = useMemo(() => {
-    const fromPayment = paymentReturnReference(paymentReturn);
-    if (fromPayment) return fromPayment;
-    return (
-      extractReservationRef(resolvedBooking) ||
-      extractBookingReference(resolvedBooking)
-    );
-  }, [paymentReturn, resolvedBooking]);
+  const confirmationMessage =
+    successTitle === 'Quotation submitted'
+      ? 'A copy of your quote will be sent to your email. Please save your reservation number for reference.'
+      : bookingNotConfirmedNotice;
+
+  const lookupRef = useMemo(
+    () =>
+      resolveCheckoutReservationRef(
+        resolvedBooking as Record<string, unknown>,
+        pending,
+      ) ||
+      paymentReturnApiReference(paymentReturn) ||
+      resolveReservationRef(loadReservationContext()?.reservation_ref) ||
+      resolveReservationRef(loadQuoteConvertPending()?.reservation_ref) ||
+      extractReservationRef(resolvedBooking),
+    [paymentReturn, resolvedBooking, pending],
+  );
 
   useEffect(() => {
     if (paymentReturn.cardType) {
@@ -120,7 +165,7 @@ export function CarsCheckoutSuccessContent() {
   }, [paymentReturn.cardType]);
 
   useEffect(() => {
-    if (!lookupRef) return;
+    if (!lookupRef || isFailed || isCancelled) return;
 
     let cancelled = false;
     setFetching(true);
@@ -142,12 +187,94 @@ export function CarsCheckoutSuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [lookupRef]);
+  }, [lookupRef, isFailed, isCancelled]);
 
   useEffect(() => {
     if (!isPaymentSuccess || !reservationNo) return;
-    clearCheckoutPendingState();
-  }, [isPaymentSuccess, reservationNo]);
+    if (!shouldFinalizeQuoteConvert || quoteConvertDone) {
+      clearCheckoutPendingState();
+    }
+  }, [isPaymentSuccess, reservationNo, shouldFinalizeQuoteConvert, quoteConvertDone]);
+
+  useEffect(() => {
+    if (!isPaymentSuccess || !shouldFinalizeQuoteConvert || quoteConvertDone) return;
+    if (!loadQuoteConvertPending()) return;
+
+    const windcaveResult = buildWindcaveResultFromPaymentReturn(
+      paymentReturn,
+      searchParams,
+    );
+    if (quoteConvertInFlightRef.current) return;
+
+    let cancelled = false;
+    quoteConvertInFlightRef.current = true;
+    setConvertingQuote(true);
+
+    void finalizeQuoteConvertAfterPayment(windcaveResult)
+      .then((converted) => {
+        if (cancelled) return;
+        if (converted) {
+          setQuoteConvertDone(true);
+          clearCheckoutPendingState();
+          toast.success('Your quote has been converted to a booking request.');
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          toast.error(
+            getFriendlyError(
+              e,
+              'Card saved but quote conversion failed. Please contact us.',
+            ),
+          );
+        }
+      })
+      .finally(() => {
+        quoteConvertInFlightRef.current = false;
+        if (!cancelled) setConvertingQuote(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isPaymentSuccess,
+    shouldFinalizeQuoteConvert,
+    quoteConvertDone,
+    paymentReturn,
+    searchParams,
+    lookupRef,
+  ]);
+
+  useEffect(() => {
+    if (!quoteConvertDone) return;
+    const ref = resolveReservationRef(lookupRef);
+    if (!ref) return;
+    invalidateBookingsCache(ref);
+    void queryClient.invalidateQueries({ queryKey: ['bookings', 'list'] });
+  }, [quoteConvertDone, lookupRef, queryClient]);
+
+  const goToBookingsList = useCallback(() => {
+    const ref =
+      resolveReservationRef(lookupRef) ||
+      paymentReturnApiReference(paymentReturn) ||
+      undefined;
+    navigate('/bookings', bookingsListRefreshNavigateOptions(ref));
+  }, [navigate, lookupRef, paymentReturn]);
+
+  useEffect(() => {
+    if (!isPaymentSuccess) return;
+    const ref = resolveReservationRef(lookupRef) || paymentReturnApiReference(paymentReturn);
+    if (!ref) return;
+
+    if (paymentReturn.cardType) {
+      saveCheckoutCardBrand(paymentReturn.cardType);
+    }
+
+    void persistPaymentCardDetailsForRcm(ref, paymentReturn).catch(() => {
+      /* backend may persist card details during /payments/complete */
+    });
+  }, [isPaymentSuccess, lookupRef, paymentReturn]);
 
   const formatDateTime = (dateStr?: string, timeStr?: string) => {
     if (!dateStr || !timeStr) return undefined;
@@ -238,14 +365,30 @@ export function CarsCheckoutSuccessContent() {
         <div className="p-4 sm:p-6 flex flex-col items-center gap-3 w-full">
           <Button
             className="w-full rounded-full py-6 bg-[#0061e0] hover:bg-[#0052cc] text-white font-bold"
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              const ref = resolveCheckoutReservationRef(
+                resolvedBooking as Record<string, unknown>,
+                pending,
+              );
+              if (ref && pending?.convertQuote) {
+                navigate(
+                  `/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`,
+                  {
+                    replace: true,
+                    state: { reservationRef: ref, mode: 'update-pay' },
+                  },
+                );
+                return;
+              }
+              navigate(-1);
+            }}
           >
             Try again
           </Button>
           <Button
             variant="outline"
             className="w-full rounded-full"
-            onClick={() => navigate('/bookings')}
+            onClick={() => goToBookingsList()}
           >
             View bookings
           </Button>
@@ -293,8 +436,12 @@ export function CarsCheckoutSuccessContent() {
           title={successTitle}
           reservationNo={reservationNo}
           numberLabel={isQuoteOnly ? 'Quote no' : 'Reservation no'}
-          message={confirmationMessage}
-          loading={fetching && !reservationNo}
+          message={
+            convertingQuote
+              ? 'Saving your card and converting your quote to a booking request…'
+              : confirmationMessage
+          }
+          loading={(fetching && !reservationNo) || convertingQuote}
           extra={
             <>
               {cardTypeLabel ? (
@@ -303,7 +450,7 @@ export function CarsCheckoutSuccessContent() {
               {tripSummary}
             </>
           }
-          onDone={() => navigate('/bookings', { replace: true })}
+          onDone={() => goToBookingsList()}
         />
       </div>
 

@@ -311,22 +311,25 @@ export function mergeCreateBookingForUiState(res: unknown): Record<string, unkno
   const r =
     res && typeof res === 'object' ? { ...(res as Record<string, unknown>) } : {};
   if (!d) return r;
-  const reference = extractBookingReferenceFromData(d) || extractBookingReferenceFromData(r);
+  const reservationRef =
+    extractReservationRefForDisplay(d) || extractReservationRefForDisplay(r);
   return {
     ...r,
     ...d,
-    booking_id: d.booking_id ?? d.bookingid ?? r.booking_id ?? reference,
+    booking_id: d.booking_id ?? d.bookingid ?? r.booking_id ?? '',
     quote_id: d.quote_id ?? d.quoteid ?? r.quote_id,
     confirmation_number:
       d.confirmation_number ?? d.confirmation_no ?? r.confirmation_number,
     rcm_reference_key:
       d.rcm_reference_key ??
-      d.rcm_reservation_no ??
       d.reservation_ref ??
       d.reservationref ??
-      r.rcm_reference_key,
+      r.rcm_reference_key ??
+      reservationRef,
     reservation_ref:
-      d.reservation_ref ?? d.reservationref ?? r.reservation_ref ?? reference,
+      d.reservation_ref ?? d.reservationref ?? r.reservation_ref ?? reservationRef,
+    reservationref:
+      d.reservationref ?? d.reservation_ref ?? r.reservationref ?? reservationRef,
     reservation_no:
       extractReservationNoForDisplay(d) ||
       extractReservationNoForDisplay(r) ||

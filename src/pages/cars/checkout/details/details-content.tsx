@@ -26,7 +26,8 @@ import {
 import {
   buildCheckoutConfirmationUrl,
   buildCheckoutPaymentCancelUrl,
-  saveCheckoutPendingState,
+  normalizeHostedPaymentUrlForRcm,
+  saveCheckoutPaymentSession,
 } from '@/utils/checkout-session';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -652,12 +653,10 @@ export function CarsCheckoutDetailsContent() {
       ).trim();
 
       const confirmationUrl = buildCheckoutConfirmationUrl();
-      const bookingId = String(booking.booking_id ?? booking.bookingid ?? '').trim();
-
-      if (!paymentUrl && (bookingId || reservationRef)) {
+      if (!paymentUrl && reservationRef) {
         const paymentSession = await carsService.createPaymentSession({
-          booking_id: bookingId || undefined,
-          reservationref: reservationRef || undefined,
+          reservationref: reservationRef,
+          reservation_ref: reservationRef,
           success_url: confirmationUrl,
           cancel_url: buildCheckoutPaymentCancelUrl(),
           failure_url: `${confirmationUrl}${confirmationUrl.includes('?') ? '&' : '?'}status=failed`,
@@ -666,24 +665,20 @@ export function CarsCheckoutDetailsContent() {
       }
 
       if (paymentUrl) {
-        saveCheckoutPendingState({
+        const normalizedPaymentUrl = normalizeHostedPaymentUrlForRcm(
+          paymentUrl,
+          reservationRef,
+        );
+        const paymentState = saveCheckoutPaymentSession({
+          reservationRef,
+          paymentUrl: normalizedPaymentUrl,
           booking,
           formData,
           carData,
           searchParams,
           locations,
-          paymentUrl,
         });
-        navigate('/cars/checkout/payment', {
-          state: {
-            paymentUrl,
-            booking,
-            formData,
-            carData,
-            searchParams,
-            locations,
-          },
-        });
+        navigate('/cars/checkout/payment', { state: paymentState });
         return;
       }
 
@@ -776,7 +771,7 @@ export function CarsCheckoutDetailsContent() {
                       setFormData((prev: any) => ({ ...prev, phone: next }));
                     }
                   }}
-                  placeholder="Phone (with country code)"
+                  placeholder="Phone Number"
                   autoComplete="tel"
                   inputMode="tel"
                   maxLength={20}
@@ -1107,7 +1102,7 @@ export function CarsCheckoutDetailsContent() {
           <div className="flex flex-col gap-6 mt-0">
             <div className="bg-[#fff8d6] border border-[#ffec99] rounded-[8px] p-4 text-center shadow-sm">
               <p className="text-[12px] text-[#8c6b1d] leading-tight font-medium">
-                Please note: your reservation is not confirmed until you receive a confirmation email from Northside Rentals confirming your vehicle reservation is now booked.
+                Please note your reservation is not confirmed until you receive a confirmation email from Northside Rentals confirming your vehicle reservation is now booked.
               </p>
               <a href="#" onClick={openNoticeModal} className="text-[12px] text-[#6b5212] font-bold underline mt-2 block">
                 See Important Notice

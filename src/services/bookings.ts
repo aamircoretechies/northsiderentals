@@ -5,6 +5,7 @@ import { sanitizeApiText } from '@/utils/sanitize-api-text';
 import { RCM_BOOKING_TYPE_BOOKING } from '@/lib/rcm-booking';
 import {
   formatBookingStatusLabel,
+  inferCanConvertToBooking,
   inferIsQuote,
 } from '@/utils/booking-status';
 import { extractReservationNoForDisplay } from '@/utils/reservation-no';
@@ -106,6 +107,126 @@ function assertApiSuccess(
 function toFiniteNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function rcmDateString(value: unknown): string {
+  const s = String(value ?? '').trim();
+  if (!s || s === 'null' || s === 'undefined') return '';
+  return s;
+}
+
+/** Read licence expiry from RCM customer/workflow rows (several key variants). */
+export function pickRcmLicenseExpires(
+  record?: Record<string, unknown> | null,
+): string {
+  if (!record) return '';
+  for (const key of [
+    'licenseexpires',
+    'license_expiry',
+    'licenseexpiry',
+    'license_expires',
+    'driver_license_expiry',
+  ]) {
+    const s = rcmDateString(record[key]);
+    if (s) return s;
+  }
+  return '';
+}
+
+export function pickRcmLicenseIssued(
+  record?: Record<string, unknown> | null,
+): string {
+  if (!record) return '';
+  for (const key of [
+    'licenseissued',
+    'license_issued',
+    'licenseissuedstate',
+    'license_state',
+  ]) {
+    const s = rcmDateString(record[key]);
+    if (s) return s;
+  }
+  return '';
+}
+
+/** Omit null/undefined so .NET DateTime binders never see JSON `null`. */
+function stripNullishDeep(value: unknown): unknown {
+  if (value === null || value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripNullishDeep(item))
+      .filter((item) => item !== undefined);
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const cleaned = stripNullishDeep(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
+
+/** RCM `customer` for POST /bookings/edit — only include date fields when non-empty. */
+export function buildRcmCustomerPayloadForApi(customer: {
+  customerid?: number;
+  firstname: string;
+  lastname: string;
+  dateofbirth: string;
+  licenseno: string;
+  licenseissued?: string;
+  licenseexpires?: string;
+  email: string;
+  phone?: string;
+  mobile?: string;
+  fulladdress?: string;
+  state: string;
+  city: string;
+  postcode: string;
+  country?: string;
+  countryid?: number;
+  localaddress?: string;
+  passport?: string;
+  mailinglist?: boolean;
+  loyaltycardno?: string;
+  address: string;
+}): Record<string, unknown> {
+  const customerid = toFiniteNumber(customer.customerid, 0);
+  const out: Record<string, unknown> = {
+    ...(customerid > 0 ? { customerid } : {}),
+    firstname: String(customer.firstname ?? '').trim(),
+    lastname: String(customer.lastname ?? '').trim(),
+    dateofbirth: rcmDateString(customer.dateofbirth),
+    licenseno: String(customer.licenseno ?? '').trim(),
+    email: String(customer.email ?? '').trim(),
+    address: String(customer.address ?? '').trim(),
+    state: String(customer.state ?? '').trim(),
+    city: String(customer.city ?? '').trim(),
+    postcode: String(customer.postcode ?? '').trim(),
+  };
+  const phone = String(customer.phone ?? '').trim();
+  if (phone) out.phone = phone;
+  const mobile = String(customer.mobile ?? '').trim();
+  if (mobile) out.mobile = mobile;
+  const fulladdress = String(customer.fulladdress ?? '').trim();
+  if (fulladdress) out.fulladdress = fulladdress;
+  const country = String(customer.country ?? '').trim();
+  if (country) out.country = country;
+  const countryid = toFiniteNumber(customer.countryid, 0);
+  if (countryid > 0) out.countryid = countryid;
+  const localaddress = String(customer.localaddress ?? '').trim();
+  if (localaddress) out.localaddress = localaddress;
+  const passport = String(customer.passport ?? '').trim();
+  if (passport) out.passport = passport;
+  if (customer.mailinglist != null) out.mailinglist = Boolean(customer.mailinglist);
+  const loyaltycardno = String(customer.loyaltycardno ?? '').trim();
+  if (loyaltycardno) out.loyaltycardno = loyaltycardno;
+  const issued = rcmDateString(customer.licenseissued);
+  const expires = rcmDateString(customer.licenseexpires);
+  if (issued) out.licenseissued = issued;
+  if (expires) out.licenseexpires = expires;
+  return out;
 }
 
 function getValidationFailureMessage(
@@ -412,6 +533,13 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
       b.reservation_type != null ? sanitizeApiText(b.reservation_type) : '',
     totalDisplay: `${currency} ${total.toFixed(2)}`,
     isQuote,
+    canConvertToBooking: inferCanConvertToBooking({
+      can_convert_to_booking: b.can_convert_to_booking,
+      is_quote: b.is_quote,
+      bookingtype: b.bookingtype ?? b.booking_type,
+      reservation_type: b.reservation_type,
+      booking_status: b.booking_status,
+    }),
   };
 }
 
@@ -744,13 +872,18 @@ export async function updateBooking(
   const reservationRef = String(payload.reservation_ref ?? '').trim();
   if (!reservationRef) throw new Error('Missing reservation reference');
 
+  const requestBody = stripNullishDeep({
+    ...payload,
+    customer: buildRcmCustomerPayloadForApi(payload.customer),
+  });
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       ...buildAuthHeaders(),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -950,6 +1083,234 @@ export async function editBookingBasics(
       getFriendlyErrorMessage({
         message: json.message,
         fallback: 'Could not update booking details.',
+      }),
+    );
+  }
+  return json as {
+    success?: boolean;
+    status?: number;
+    message?: string;
+    data?: unknown;
+  };
+}
+
+/** Customer block for POST /bookings/edit (quote → booking). */
+export interface ConvertQuoteCustomerDetails {
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  driver_license_number: string;
+  email: string;
+  state: string;
+  city: string;
+  postcode: string;
+  address: string;
+  license_expiry?: string;
+  licenseexpires?: string;
+  licenseissued?: string;
+}
+
+/** RCM `customer` object on quote convert (same shape as update-booking). */
+export type ConvertQuoteRcmCustomer = Parameters<typeof buildRcmCustomerPayloadForApi>[0];
+
+/** Full payload for POST /bookings/edit when converting a quote to a booking request. */
+export interface ConvertQuoteToBookingPayload {
+  reservation_ref: string;
+  booking_type?: number;
+  insurance_id: number;
+  extrakms_id?: number;
+  number_of_persons: number;
+  customer_details: ConvertQuoteCustomerDetails;
+  /** Required by RCM convert — omit empty license date keys to avoid `null` DateTime errors. */
+  customer?: ConvertQuoteRcmCustomer;
+  emailoption?: number;
+  referralid?: number;
+  remark?: string;
+  flightin?: string;
+  flightout?: string;
+  arrivalpoint?: string;
+  departurepoint?: string;
+  areaofuseid?: number;
+  newsletter?: boolean;
+  agentcode?: string;
+  agentname?: string;
+  agentemail?: string;
+  agentrefno?: string;
+  optionalfees?: Array<{ id: number; qty: number }>;
+  /**
+   * Windcave redirect / complete payload — required when converting after card capture.
+   * Set `VITE_QUOTE_CONVERT_ENDPOINT` to `quotations/convert` if the API uses that route.
+   */
+  windcave_result?: Record<string, unknown>;
+  /** @deprecated Prefer `windcave_result` after POST /payments/create */
+  payment?: ConvertQuotePayment;
+}
+
+/** RCM payment block for /bookings/edit when card data is already captured. */
+export interface ConvertQuotePayment {
+  amount: number;
+  success: boolean;
+  paytype: string;
+  paydate: string;
+  supplierid: number;
+}
+
+function quoteConvertApiPath(): string {
+  const configured = (
+    import.meta.env.VITE_QUOTE_CONVERT_ENDPOINT as string | undefined
+  )?.trim();
+  if (configured === 'quotations/convert' || configured === '/quotations/convert') {
+    return 'quotations/convert';
+  }
+  return 'bookings/edit';
+}
+
+/**
+ * Convert quotation → booking request after Windcave (POST /bookings/edit or /quotations/convert).
+ * Card capture: POST /payments/create first; pass `windcave_result` on this call.
+ */
+export async function convertQuoteToBooking(
+  payload: ConvertQuoteToBookingPayload,
+): Promise<{
+  success?: boolean;
+  status?: number;
+  message?: string;
+  data?: unknown;
+}> {
+  const reservationRef = String(payload.reservation_ref ?? '').trim();
+  if (!reservationRef) {
+    throw new Error('Missing reservation reference');
+  }
+
+  const cd = payload.customer_details;
+  const licenseExpires = rcmDateString(
+    cd.licenseexpires ?? cd.license_expiry ?? payload.customer?.licenseexpires,
+  );
+  const licenseIssued = rcmDateString(
+    cd.licenseissued ?? payload.customer?.licenseissued,
+  );
+  const customerDetails: Record<string, unknown> = {
+    first_name: String(cd.first_name ?? '').trim(),
+    last_name: String(cd.last_name ?? '').trim(),
+    date_of_birth: String(cd.date_of_birth ?? '').trim(),
+    driver_license_number: String(cd.driver_license_number ?? '').trim(),
+    email: String(cd.email ?? '').trim(),
+    state: String(cd.state ?? '').trim(),
+    city: String(cd.city ?? '').trim(),
+    postcode: String(cd.postcode ?? '').trim(),
+    address: String(cd.address ?? '').trim(),
+  };
+  if (licenseExpires) {
+    customerDetails.license_expiry = licenseExpires;
+    customerDetails.licenseexpires = licenseExpires;
+  }
+  if (licenseIssued) customerDetails.licenseissued = licenseIssued;
+
+  const requestPayload: Record<string, unknown> = {
+    reservation_ref: reservationRef,
+    reservationref: reservationRef,
+    booking_type: toFiniteNumber(
+      payload.booking_type ?? RCM_BOOKING_TYPE_BOOKING,
+      RCM_BOOKING_TYPE_BOOKING,
+    ),
+    insurance_id: toFiniteNumber(payload.insurance_id, 0),
+    extrakms_id: toFiniteNumber(payload.extrakms_id ?? 0, 0),
+    number_of_persons: Math.max(1, toFiniteNumber(payload.number_of_persons, 1)),
+    customer_details: customerDetails,
+    emailoption: toFiniteNumber(payload.emailoption ?? 1, 1),
+    referralid: toFiniteNumber(payload.referralid ?? 0, 0),
+    remark: String(payload.remark ?? ''),
+    flightin: String(payload.flightin ?? ''),
+    flightout: String(payload.flightout ?? ''),
+    arrivalpoint: String(payload.arrivalpoint ?? ''),
+    departurepoint: String(payload.departurepoint ?? ''),
+    areaofuseid: toFiniteNumber(payload.areaofuseid ?? 0, 0),
+    newsletter: Boolean(payload.newsletter),
+    agentcode: String(payload.agentcode ?? ''),
+    agentname: String(payload.agentname ?? ''),
+    agentemail: String(payload.agentemail ?? ''),
+    agentrefno: String(payload.agentrefno ?? ''),
+    optionalfees: Array.isArray(payload.optionalfees)
+      ? payload.optionalfees.map((x) => ({
+          id: toFiniteNumber(x.id, 0),
+          qty: Math.max(0, toFiniteNumber(x.qty, 0)),
+        }))
+      : [],
+  };
+
+  if (payload.customer) {
+    requestPayload.customer = buildRcmCustomerPayloadForApi(payload.customer);
+  }
+
+  if (payload.windcave_result && typeof payload.windcave_result === 'object') {
+    requestPayload.windcave_result = payload.windcave_result;
+  } else if (payload.payment) {
+    const p = payload.payment;
+    requestPayload.payment = {
+      amount: toFiniteNumber(p.amount, 0),
+      success: Boolean(p.success),
+      paytype: String(p.paytype ?? '').trim(),
+      paydate: String(p.paydate ?? '').trim(),
+      supplierid: toFiniteNumber(p.supplierid, 0),
+    };
+  }
+
+  const path = quoteConvertApiPath();
+  const url = `${API_BASE_URL.replace(/\/$/, '')}/${path}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(stripNullishDeep(requestPayload)),
+  });
+
+  if (!response.ok) {
+    let msg = response.statusText;
+    try {
+      const err = await response.json();
+      msg = err.message || msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(
+      getFriendlyErrorMessage({
+        status: response.status,
+        message: msg,
+        fallback: 'Could not convert quote to booking request.',
+      }),
+    );
+  }
+
+  const json = (await response.json()) as Record<string, unknown>;
+  const dataObj =
+    json.data && typeof json.data === 'object'
+      ? (json.data as Record<string, unknown>)
+      : null;
+  const validationDetails = Array.isArray(dataObj?.validation_error_details)
+    ? dataObj.validation_error_details
+    : [];
+  const nestedSuccess = dataObj?.success;
+  if (nestedSuccess === false || validationDetails.length > 0) {
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: getValidationFailureMessage(
+          dataObj,
+          String(json.message ?? 'Could not convert quote to booking request.'),
+        ),
+        fallback: 'Could not convert quote to booking request.',
+      }),
+    );
+  }
+  const okBySuccess = json.success === true;
+  const okByStatus =
+    json.status === 1 || json.status === '1' || json.status === undefined;
+  if (!okBySuccess && !okByStatus) {
+    throw new Error(
+      getFriendlyErrorMessage({
+        message: json.message,
+        fallback: 'Could not convert quote to booking request.',
       }),
     );
   }
@@ -1465,6 +1826,7 @@ export interface BookingDetailView {
   paymentStatus: string | null;
   reservationType: string;
   isQuote: boolean;
+  canConvertToBooking: boolean;
   carName: string;
   carSpecs: string;
   carImage: string;
@@ -1709,6 +2071,16 @@ export function mapBookingDetailToView(
         : null,
     reservationType: sanitizeApiText(String(data.reservation_type ?? '')),
     isQuote,
+    canConvertToBooking: inferCanConvertToBooking({
+      can_convert_to_booking: data.can_convert_to_booking,
+      is_quote: data.is_quote,
+      bookingtype:
+        bookingInfo?.bookingtype ??
+        bookingInfo?.booking_type ??
+        bookingInfo?.reservationtype,
+      reservation_type: data.reservation_type,
+      booking_status: data.booking_status,
+    }),
     carName: sanitizeApiText(String(data.car_name ?? vd.vehicle_name ?? 'Vehicle')),
     carSpecs: carSpecsJoined,
     carImage,

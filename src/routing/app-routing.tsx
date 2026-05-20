@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/context/auth-context';
 import { useLocation } from 'react-router';
 import { useLoadingBar } from 'react-top-loading-bar';
 import { AppRoutingSetup } from './app-routing-setup';
+import { PaymentReturnGuard } from './payment-return-guard';
 
 export function AppRouting() {
   const { start, complete } = useLoadingBar({
@@ -44,5 +45,10 @@ export function AppRouting() {
     }
   }, [previousLocation]);
 
-  return <AppRoutingSetup />;
+  return (
+    <>
+      <PaymentReturnGuard />
+      <AppRoutingSetup />
+    </>
+  );
 }

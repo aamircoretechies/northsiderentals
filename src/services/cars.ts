@@ -118,13 +118,15 @@ export const carsService = {
     }
 
     const body: Record<string, string> = {};
-    if (bookingId) {
-      body.booking_id = bookingId;
-      body.bookingid = bookingId;
-    }
     if (reservationRef) {
       body.reservationref = reservationRef;
       body.reservation_ref = reservationRef;
+      // `/payments/complete` accepts reservation_ref as `booking_id` on redirect.
+      body.booking_id = reservationRef;
+      body.bookingid = reservationRef;
+    } else if (bookingId) {
+      body.booking_id = bookingId;
+      body.bookingid = bookingId;
     }
 
     // Windcave returns to backend `/payments/complete` by default; success_url is where
@@ -143,6 +145,7 @@ export const carsService = {
       const failure = params.failure_url.trim();
       body.failure_url = failure;
       body.failureUrl = failure;
+      body.failed_url = failure;
     }
 
     const appOrigin = getAppOrigin();
@@ -170,5 +173,48 @@ export const carsService = {
       );
     }
     return json as CreatePaymentSessionResponse;
+  },
+
+  /**
+   * Persist masked card details on the RCM booking after Windcave token capture
+   * (required for signature capture on the rental agreement).
+   */
+  async savePaymentCardDetails(params: {
+    reservation_ref?: string;
+    reservationref?: string;
+    booking_id?: string;
+    masked_card_number: string;
+    card_expiry: string;
+    cardholder_name: string;
+    card_type: string;
+  }): Promise<Record<string, unknown>> {
+    const reservationRef = String(
+      params.reservationref ?? params.reservation_ref ?? '',
+    ).trim();
+    const bookingId = String(params.booking_id ?? '').trim();
+    if (!reservationRef && !bookingId) {
+      throw new Error('Reservation reference is required to save card details');
+    }
+
+    const body: Record<string, string> = {
+      masked_card_number: params.masked_card_number.trim(),
+      card_expiry: params.card_expiry.trim(),
+      cardholder_name: params.cardholder_name.trim(),
+      card_type: params.card_type.trim(),
+    };
+    if (reservationRef) {
+      body.reservation_ref = reservationRef;
+      body.reservationref = reservationRef;
+    } else if (bookingId) {
+      body.booking_id = bookingId;
+      body.bookingid = bookingId;
+    }
+
+    return apiJson<Record<string, unknown>>(`${getApiBaseUrl()}/payments/card-details`, {
+      method: 'POST',
+      auth: 'optional',
+      body,
+      fallbackError: 'Could not save card details on booking.',
+    });
   },
 };

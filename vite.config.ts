@@ -34,7 +34,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const proxyTarget =
     env.VITE_DEV_PROXY_TARGET?.replace(/\/$/, '') ||
-    'https://api.bookings.northsiderentals.com.au';
+    'https://rcm-api.coretechiestest.org';
 
   return {
   plugins: [react(), tailwindcss(), coopAllowPopups()],

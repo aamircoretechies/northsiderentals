@@ -16,6 +16,7 @@ import {
   AccordionMenuSubTrigger,
 } from '@/components/ui/accordion-menu';
 import { Badge } from '@/components/ui/badge';
+import { BackToWebsiteLink } from '@/components/common/back-to-website-link';
 
 export interface MenuItem {
   title?: string;
@@ -209,7 +210,7 @@ export function MegaMenuMobile() {
   };
 
   return (
-    <div className="flex grow shrink-0 py-5 px-5">
+    <div className="flex flex-col grow shrink-0 py-5 px-5">
       <AccordionMenu
         selectedValue={pathname}
         matchPath={matchPath}
@@ -219,6 +220,9 @@ export function MegaMenuMobile() {
       >
         {buildMenu(MENU_MEGA_MOBILE)}
       </AccordionMenu>
+      <div className="mt-6 pt-4 border-t border-border">
+        <BackToWebsiteLink variant="outline" className="w-full justify-center" />
+      </div>
     </div>
   );
 }

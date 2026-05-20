@@ -3,7 +3,8 @@ import { addDays, format } from 'date-fns';
 import { CalendarDays, Download } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import { Helmet } from 'react-helmet-async';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Link, Outlet } from 'react-router';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { MENU_SIDEBAR } from '@/config/menu.config';
 import { useBodyClass } from '@/hooks/use-body-class';
 import { useMenu } from '@/hooks/use-menu';
@@ -20,11 +21,23 @@ import { Footer } from './components/footer';
 import { Header } from './components/header';
 import { Navbar } from './components/navbar';
 import { Toolbar, ToolbarActions, ToolbarHeading } from './components/toolbar';
-import { useNavigate } from "react-router-dom";
+
+/** Router location state passed between checkout steps */
+type CheckoutNavState = {
+  carData?: unknown;
+  searchParams?: unknown;
+  locations?: unknown;
+  extras?: unknown;
+  damageOptions?: unknown;
+  selectedDamageOption?: unknown;
+  countries?: unknown;
+  areaOfUseOptions?: unknown;
+};
 
 export function Demo9Layout() {
   const { setOption } = useSettings();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const { getCurrentItem } = useMenu(pathname);
   const isMobile = useIsMobile();
   const item = getCurrentItem(MENU_SIDEBAR);
@@ -68,7 +81,7 @@ export function Demo9Layout() {
                     onClick={() => {
                       if (pathname === '/cars/checkout/details') {
                         // Reconstruct options state: carData in details is the car object in options
-                        const state = location.state as any;
+                        const state = (location.state ?? {}) as CheckoutNavState;
                         navigate('/cars/checkout/options', { 
                           state: { 
                             car: state?.carData,

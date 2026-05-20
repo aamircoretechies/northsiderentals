@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizeMediaUrl } from '@/lib/helpers';
 import { fetchBookingByReference, fetchWorkflowChecklist } from '@/services/bookings';
+import { clearCheckoutPendingState } from '@/utils/checkout-session';
+import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
+import { saveReservationContext } from '@/utils/reservation-context';
 import { queryKeys } from '@/lib/query-keys';
 
 export interface BookingCardProps {
@@ -21,6 +24,7 @@ export interface BookingCardProps {
   reservationType?: string;
   totalDisplay?: string;
   isQuote?: boolean;
+  canConvertToBooking?: boolean;
 }
 
 function statusStyle(label: string): { dot: string; text: string } {
@@ -51,13 +55,16 @@ export function BookingCard({
   reservationType,
   totalDisplay,
   isQuote,
+  canConvertToBooking,
 }: BookingCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const imgSrc = normalizeMediaUrl(carImage);
   const { dot, text } = statusStyle(statusLabel);
   /** Prefer RCM reservation ref; fall back to booking id when list row shape differs. */
-  const refForNav = (detailReference?.trim() || bookingId?.trim() || '').trim();
+  /** RCM reservationref only — never internal booking_id */
+  const refForNav = detailReference?.trim() || '';
+  const showConvertCta = canConvertToBooking ?? isQuote;
   const prefetchBooking = () => {
     const ref = refForNav;
     if (!ref) return;
@@ -88,7 +95,9 @@ export function BookingCard({
 
         <div className="flex flex-col justify-center h-full gap-2 sm:gap-3 min-w-0 flex-1">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[#6b7280] text-[14px]">Confirmation #</span>
+            <span className="text-[#6b7280] text-[14px]">
+              {isQuote ? 'Quotation #' : 'Confirmation #'}
+            </span>
             <span className="font-bold text-[#0061e0] text-[18px] sm:text-[20px]">
               {reservationNumber}
             </span>
@@ -154,38 +163,52 @@ export function BookingCard({
             variant="outline"
             className="px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
             onClick={() => {
-              const ref = refForNav;
-              if (ref) navigate(`/bookings/${encodeURIComponent(ref)}`);
+              if (!refForNav) return;
+              navigate(`/bookings/${encodeURIComponent(refForNav)}`);
             }}
             onMouseEnter={prefetchBooking}
             onFocus={prefetchBooking}
           >
             View details
           </Button>
-          <Button
-            className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
-            onClick={() => {
-              const ref = refForNav;
-              if (ref) {
+          {showConvertCta || !isQuote ? (
+            <Button
+              className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
+              disabled={!refForNav}
+              onClick={() => {
+                if (!refForNav) return;
+                if (showConvertCta) {
+                  clearCheckoutPendingState();
+                  clearQuoteConvertPending();
+                }
+                saveReservationContext({
+                  reservation_ref: refForNav,
+                  reservation_no: reservationNumber,
+                  mode: showConvertCta ? 'convert-quote' : 'booking',
+                });
                 navigate(
-                  `/bookings/modify?reservation_ref=${encodeURIComponent(ref)}&mode=update-pay`,
+                  `/bookings/modify?reservation_ref=${encodeURIComponent(refForNav)}&mode=${
+                    showConvertCta ? 'convert-quote' : 'update-pay'
+                  }`,
                   {
                     state: {
-                      reservationRef: ref,
-                      mode: 'update-pay',
-                      bookingSnapshot: isQuote
+                      reservationRef: refForNav,
+                      mode: showConvertCta ? 'convert-quote' : 'update-pay',
+                      bookingSnapshot: showConvertCta
                         ? { bookingType: 1, reservationNumber }
                         : undefined,
                     },
                   },
                 );
-              }
-            }}
-            onMouseEnter={prefetchBooking}
-            onFocus={prefetchBooking}
-          >
-            {isQuote ? 'Convert to booking request' : 'Modify Booking & Pay'}
-          </Button>
+              }}
+              onMouseEnter={prefetchBooking}
+              onFocus={prefetchBooking}
+            >
+              {showConvertCta
+                ? 'Convert to booking request'
+                : 'Modify Booking & Pay'}
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
