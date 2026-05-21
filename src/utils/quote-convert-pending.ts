@@ -3,6 +3,8 @@ import {
   invalidateBookingsCache,
   type ConvertQuoteToBookingPayload,
 } from '@/services/bookings';
+import { loadCheckoutPendingState } from '@/utils/checkout-session';
+import { RCM_BOOKING_TYPE_BOOKING } from '@/lib/rcm-booking';
 import {
   clearReservationContext,
   extractRcmReservationRefFromRecord,
@@ -64,26 +66,50 @@ export function clearQuoteConvertPending(): void {
 export function shouldConvertQuoteOnPaymentReturn(
   search: string | URLSearchParams,
 ): boolean {
+  const pending = loadQuoteConvertPending();
+  if (!pending) return false;
+
   const params =
     typeof search === 'string' ? new URLSearchParams(search) : search;
-  if (
+  const explicitConvert =
     params.get('convert_quote') === '1' ||
-    params.get('convert_quote') === 'true'
-  ) {
-    return true;
-  }
-  return Boolean(loadQuoteConvertPending());
+    params.get('convert_quote') === 'true';
+  if (explicitConvert) return true;
+
+  // Standard new booking checkout — never convert; API finalizes on `/payments/complete`.
+  const checkout = loadCheckoutPendingState();
+  return checkout?.convertQuote === true;
 }
 
 /**
  * After backend `/payments/complete` success: POST convert (payment already finalized server-side).
  * `windcave_result` is optional — redirect usually has `status=success` and `booking_id` only.
  */
+/** Drop stale convert session when user paid via standard checkout (not quote → booking). */
+export function clearStaleQuoteConvertForCheckoutPayment(): void {
+  const checkout = loadCheckoutPendingState();
+  if (!checkout || checkout.convertQuote === true) return;
+  const bt = Number(
+    checkout.booking?.bookingtype ??
+      checkout.booking?.booking_type ??
+      0,
+  );
+  if (bt === RCM_BOOKING_TYPE_BOOKING || bt === 0) {
+    clearQuoteConvertPending();
+  }
+}
+
 export async function finalizeQuoteConvertAfterPayment(
   windcaveResult?: WindcaveResultPayload | null,
 ): Promise<boolean> {
   const pending = loadQuoteConvertPending();
   if (!pending) return false;
+
+  const checkout = loadCheckoutPendingState();
+  if (checkout && checkout.convertQuote !== true) {
+    clearQuoteConvertPending();
+    return false;
+  }
 
   // Always use ref saved before Windcave — redirect `booking_id` may be short res no only.
   const rawRef = pending.reservation_ref ?? pending.payload.reservation_ref;

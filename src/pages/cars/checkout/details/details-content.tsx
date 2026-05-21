@@ -9,6 +9,7 @@ import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
+import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 
 import {
   resolveRatePeriodTypeId,
@@ -642,6 +643,8 @@ export function CarsCheckoutDetailsContent() {
       }),
       areaofuseid,
     });
+
+    clearQuoteConvertPending();
 
     setLoading(true);
     try {

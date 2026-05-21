@@ -16,6 +16,7 @@ import {
   loadCheckoutPendingState,
   resolveCheckoutReservationRef,
 } from '@/utils/checkout-session';
+import { inferIsQuote } from '@/utils/booking-status';
 import { saveCheckoutCardBrand, formatCardBrand as formatCardBrandLabel } from '@/utils/card-brand';
 import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
 import {
@@ -25,10 +26,10 @@ import {
   paymentReturnReference,
   paymentReturnReservationNo,
 } from '@/utils/payment-return';
-import { inferIsQuote } from '@/utils/booking-status';
 import { ReservationConfirmationCard } from '@/pages/cars/checkout/components/reservation-confirmation-card';
 import { getFriendlyError } from '@/utils/api-error-handler';
 import {
+  clearStaleQuoteConvertForCheckoutPayment,
   finalizeQuoteConvertAfterPayment,
   loadQuoteConvertPending,
   shouldConvertQuoteOnPaymentReturn,
@@ -53,9 +54,11 @@ export function CarsCheckoutSuccessContent() {
     null,
   );
 
-  const pendingQuoteConvert = loadQuoteConvertPending();
-  const shouldFinalizeQuoteConvert =
-    shouldConvertQuoteOnPaymentReturn(searchParams) || Boolean(pendingQuoteConvert);
+  const shouldFinalizeQuoteConvert = shouldConvertQuoteOnPaymentReturn(searchParams);
+
+  useEffect(() => {
+    clearStaleQuoteConvertForCheckoutPayment();
+  }, []);
 
   const paymentReturn = useMemo(
     () => parsePaymentReturnParams(searchParams),
@@ -108,12 +111,16 @@ export function CarsCheckoutSuccessContent() {
     !hasUrlStatus && hasBookingReference && !isFailed && !isCancelled;
 
   const reservationContextMode = loadReservationContext()?.mode;
+  const checkoutPending = loadCheckoutPendingState();
+  const isNewBookingCheckout =
+    Boolean(checkoutPending) && checkoutPending?.convertQuote !== true;
   const isConvertQuoteFlow =
-    shouldFinalizeQuoteConvert ||
-    quoteConvertDone ||
-    paymentReturn.convertQuote ||
-    reservationContextMode === 'convert-quote' ||
-    searchParams.get('mode') === 'convert-quote';
+    !isNewBookingCheckout &&
+    (shouldFinalizeQuoteConvert ||
+      quoteConvertDone ||
+      paymentReturn.convertQuote ||
+      reservationContextMode === 'convert-quote' ||
+      searchParams.get('mode') === 'convert-quote');
 
   const isQuoteOnly = useMemo(() => {
     if (isPaymentSuccess || isConvertQuoteFlow) return false;

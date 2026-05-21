@@ -23,6 +23,7 @@ import {
   type CheckoutPendingState,
 } from '@/utils/checkout-session';
 import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
+import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 import { parsePaymentReturnParams, paymentReturnApiReference } from '@/utils/payment-return';
 import { isShortReservationNo, resolveReservationRef } from '@/utils/reservation-context';
 
@@ -56,6 +57,10 @@ export function CarsCheckoutPaymentContent() {
 
   const pendingFromStorage = loadCheckoutPendingState();
   const convertQuote = Boolean(pendingFromStorage?.convertQuote);
+
+  useEffect(() => {
+    if (!convertQuote) clearQuoteConvertPending();
+  }, [convertQuote]);
   const booking = stateBooking ?? pendingFromStorage?.booking;
   const formData = stateFormData ?? pendingFromStorage?.formData;
   const carData = stateCarData ?? pendingFromStorage?.carData;

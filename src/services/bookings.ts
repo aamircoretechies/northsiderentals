@@ -1242,8 +1242,11 @@ export async function convertQuoteToBooking(
     requestPayload.customer = buildRcmCustomerPayloadForApi(payload.customer);
   }
 
-  if (payload.windcave_result && typeof payload.windcave_result === 'object') {
-    requestPayload.windcave_result = payload.windcave_result;
+  if (payload.windcave_result != null && payload.windcave_result !== '') {
+    requestPayload.windcave_result =
+      typeof payload.windcave_result === 'string'
+        ? payload.windcave_result
+        : JSON.stringify(payload.windcave_result);
   } else if (payload.payment) {
     const p = payload.payment;
     requestPayload.payment = {
