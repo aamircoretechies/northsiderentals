@@ -21,8 +21,6 @@ import { Icons } from '@/components/common/icons';
 import { firebaseAuth, googleProvider } from '@/lib/firebase';
 import { getSigninSchema, SigninSchemaType } from '../forms/signin-schema';
 import { LoaderCircleIcon } from 'lucide-react';
-import { BackToWebsiteLink } from '@/components/common/back-to-website-link';
-
 export function SignInPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -167,17 +165,6 @@ export function SignInPage() {
         className="block w-full space-y-5"
         noValidate
       >
-
-        <div className="flex flex-col items-center gap-3 pb-2">
-          <Link to="/home">
-            <img
-              src="/media/app/logo-nsr.svg"
-              className="h-10 shrink-0"
-              alt="Logo"
-            />
-          </Link>
-          <BackToWebsiteLink variant="outline" />
-        </div>
 
         <div className="text-center space-y-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight">Sign In</h1>
