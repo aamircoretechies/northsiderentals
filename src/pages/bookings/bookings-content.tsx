@@ -27,70 +27,12 @@ import {
   type BookingsRefreshLocationState,
   refetchBookingsList,
 } from '@/utils/refresh-bookings-list';
+import { bookingUiStatus } from '@/utils/booking-ui-status';
 
 const PAGE_SIZE = 20;
 
 function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function parseBookingDate(value: string): Date | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  // Try native parser first for ISO-like strings.
-  const native = new Date(trimmed);
-  if (!Number.isNaN(native.getTime())) return native;
-
-  // Supports values like "17/Apr/2026" or "17/Apr/2026 09:00".
-  const m = trimmed.match(
-    /^(\d{1,2})\/([A-Za-z]{3})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/,
-  );
-  if (!m) return null;
-  const day = Number(m[1]);
-  const mon = m[2].toLowerCase();
-  const year = Number(m[3]);
-  const hour = Number(m[4] ?? 0);
-  const min = Number(m[5] ?? 0);
-  const monthMap: Record<string, number> = {
-    jan: 0,
-    feb: 1,
-    mar: 2,
-    apr: 3,
-    may: 4,
-    jun: 5,
-    jul: 6,
-    aug: 7,
-    sep: 8,
-    oct: 9,
-    nov: 10,
-    dec: 11,
-  };
-  const monthIdx = monthMap[mon];
-  if (monthIdx == null) return null;
-  const d = new Date(year, monthIdx, day, hour, min, 0, 0);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function bookingUiStatus(
-  booking: BookingCardProps,
-  now: Date,
-): 'active' | 'upcoming' | 'completed' {
-  const status = booking.statusLabel.toLowerCase();
-  if (
-    status.includes('cancel') ||
-    status.includes('complete') ||
-    status.includes('closed')
-  ) {
-    return 'completed';
-  }
-
-  const pickupAt = parseBookingDate(booking.pickupDate);
-  const returnAt = parseBookingDate(booking.returnDate);
-
-  if (returnAt && returnAt.getTime() < now.getTime()) return 'completed';
-  if (pickupAt && pickupAt.getTime() > now.getTime()) return 'upcoming';
-  return 'active';
 }
 
 export function BookingsContent() {

@@ -1,11 +1,23 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizeMediaUrl } from '@/lib/helpers';
-import { fetchBookingByReference, fetchWorkflowChecklist } from '@/services/bookings';
+import {
+  fetchBookingByReference,
+  fetchWorkflowChecklist,
+  mapBookingDetailToView,
+} from '@/services/bookings';
+import { getFriendlyError } from '@/utils/api-error-handler';
+import { toast } from 'sonner';
 import { clearCheckoutPendingState } from '@/utils/checkout-session';
 import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 import { saveReservationContext } from '@/utils/reservation-context';
+import { QuoteExpiredNotice } from '@/components/bookings/quote-expired-notice';
+import {
+  isBookingUpcomingForModifyOrConvert,
+  isQuoteExpiredByPickup,
+} from '@/utils/booking-ui-status';
 import { queryKeys } from '@/lib/query-keys';
 
 export interface BookingCardProps {
@@ -59,12 +71,25 @@ export function BookingCard({
 }: BookingCardProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [openingModify, setOpeningModify] = useState(false);
   const imgSrc = normalizeMediaUrl(carImage);
   const { dot, text } = statusStyle(statusLabel);
   /** Prefer RCM reservation ref; fall back to booking id when list row shape differs. */
   /** RCM reservationref only — never internal booking_id */
   const refForNav = detailReference?.trim() || '';
-  const showConvertCta = canConvertToBooking ?? isQuote;
+  const isUpcoming = isBookingUpcomingForModifyOrConvert({
+    statusLabel,
+    pickupDate,
+    returnDate,
+  });
+  const quoteExpired = isQuoteExpiredByPickup({
+    isQuote,
+    pickupDate,
+    statusLabel,
+  });
+  const showConvertCta =
+    !quoteExpired && isUpcoming && (canConvertToBooking ?? isQuote);
+  const showModifyAndPay = !quoteExpired && isUpcoming && !showConvertCta;
   const prefetchBooking = () => {
     const ref = refForNav;
     if (!ref) return;
@@ -158,7 +183,10 @@ export function BookingCard({
             {statusLabel}
           </span>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:items-center">
+          {quoteExpired ? (
+            <QuoteExpiredNotice className="w-full sm:max-w-[420px] sm:text-left sm:px-4" />
+          ) : null}
           <Button
             variant="outline"
             className="px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
@@ -171,42 +199,123 @@ export function BookingCard({
           >
             View details
           </Button>
-          {showConvertCta || !isQuote ? (
+          {showConvertCta || showModifyAndPay ? (
             <Button
               className="bg-[#0061e0] hover:bg-[#0052cc] text-white px-6 py-2 h-auto text-[15px] font-medium rounded-[8px] w-full sm:w-auto"
-              disabled={!refForNav}
+              disabled={!refForNav || openingModify}
               onClick={() => {
                 if (!refForNav) return;
-                if (showConvertCta) {
-                  clearCheckoutPendingState();
-                  clearQuoteConvertPending();
-                }
-                saveReservationContext({
-                  reservation_ref: refForNav,
-                  reservation_no: reservationNumber,
-                  mode: showConvertCta ? 'convert-quote' : 'booking',
-                });
-                navigate(
-                  `/bookings/modify?reservation_ref=${encodeURIComponent(refForNav)}&mode=${
-                    showConvertCta ? 'convert-quote' : 'update-pay'
-                  }`,
-                  {
-                    state: {
-                      reservationRef: refForNav,
-                      mode: showConvertCta ? 'convert-quote' : 'update-pay',
-                      bookingSnapshot: showConvertCta
-                        ? { bookingType: 1, reservationNumber }
-                        : undefined,
-                    },
-                  },
-                );
+                void (async () => {
+                  if (showConvertCta) {
+                    clearCheckoutPendingState();
+                    clearQuoteConvertPending();
+                  }
+                  setOpeningModify(true);
+                  try {
+                    const detailRes = await fetchBookingByReference(refForNav);
+                    const raw = detailRes?.data;
+                    const view =
+                      raw && typeof raw === 'object'
+                        ? mapBookingDetailToView(raw as Record<string, unknown>)
+                        : null;
+                    const workflowRes = await fetchWorkflowChecklist(
+                      refForNav,
+                      'checkin',
+                    ).catch(() => null);
+                    const workflowFromDetail =
+                      raw && typeof raw === 'object'
+                        ? (raw as Record<string, unknown>).rcm_booking_info
+                        : null;
+                    saveReservationContext({
+                      reservation_ref: refForNav,
+                      reservation_no: reservationNumber,
+                      mode: showConvertCta ? 'convert-quote' : 'booking',
+                    });
+                    navigate(
+                      `/bookings/modify?reservation_ref=${encodeURIComponent(refForNav)}&mode=${
+                        showConvertCta ? 'convert-quote' : 'update-pay'
+                      }`,
+                      {
+                        state: {
+                          reservationRef: refForNav,
+                          mode: showConvertCta ? 'convert-quote' : 'update-pay',
+                          workflowChecklist:
+                            workflowRes?.data ??
+                            (workflowFromDetail && typeof workflowFromDetail === 'object'
+                              ? workflowFromDetail
+                              : null),
+                          bookingSnapshot: view
+                            ? {
+                                bookingId: view.bookingId,
+                                reservationNumber: view.confirmationLabel,
+                                carImage: view.carImage,
+                                carTitle: view.carName,
+                                carSubtitle: view.carSpecs,
+                                pickupDate: view.pickupWhen,
+                                pickupLocation: [
+                                  view.pickupWhereName,
+                                  view.pickupWhereAddress,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' '),
+                                returnDate: view.returnWhen,
+                                returnLocation: [
+                                  view.returnWhereName,
+                                  view.returnWhereAddress,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' '),
+                                pickupLocationId: view.pickupLocationId,
+                                bookingType: view.bookingType,
+                                transmission: view.transmission,
+                                customerId: view.customerId,
+                              }
+                            : showConvertCta
+                              ? { bookingType: 1, reservationNumber }
+                              : undefined,
+                          customerSnapshot: view
+                            ? {
+                                firstName: view.customerFirstName,
+                                lastName: view.customerLastName,
+                                email: view.customerEmail,
+                                phone: view.customerPhone,
+                                dateOfBirth: view.customerDateOfBirth,
+                                licenseNo: view.customerLicenseNo,
+                                licenseIssued: view.customerLicenseIssued,
+                                licenseExpires: view.customerLicenseExpires,
+                                address: view.customerAddress,
+                                city: view.customerCity,
+                                state: view.customerState,
+                                country: view.customerCountry,
+                                postcode: view.customerPostcode,
+                                numberTravelling: view.numberTravelling,
+                              }
+                            : undefined,
+                        },
+                      },
+                    );
+                  } catch (e) {
+                    toast.error(
+                      getFriendlyError(
+                        e,
+                        showConvertCta
+                          ? 'Could not open quote conversion.'
+                          : 'Could not open booking update.',
+                      ),
+                    );
+                  } finally {
+                    setOpeningModify(false);
+                  }
+                })();
               }}
               onMouseEnter={prefetchBooking}
               onFocus={prefetchBooking}
             >
-              {showConvertCta
-                ? 'Convert to booking request'
-                : 'Modify Booking & Pay'}
+              {openingModify
+                ? 'Opening…'
+                : showConvertCta
+                  ? 'Convert to booking request'
+                  : 'Modify Booking & Pay'}
             </Button>
           ) : null}
         </div>

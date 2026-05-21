@@ -48,7 +48,12 @@ import {
   RCM_BOOKING_TYPE_BOOKING,
   resolveReferralId,
 } from '@/lib/rcm-booking';
+import { QuoteExpiredNotice } from '@/components/bookings/quote-expired-notice';
 import { inferCanConvertToBooking, inferIsQuote } from '@/utils/booking-status';
+import {
+  isQuoteExpiredByPickup,
+  QUOTE_EXPIRED_PICKUP_MESSAGE,
+} from '@/utils/booking-ui-status';
 import {
   buildCheckoutConfirmationUrl,
   buildCheckoutPaymentCancelUrl,
@@ -570,6 +575,12 @@ export function ExpressCheckinContent() {
     modeFromRoute === 'convert-quote' || modeFromQuery === 'convert-quote';
   const isUpdatePayMode =
     modeFromRoute === 'update-pay' || modeFromQuery === 'update-pay';
+  const isBookingEditFlow =
+    isConvertQuoteRoute ||
+    isUpdatePayMode ||
+    modeFromRoute === 'update' ||
+    modeFromQuery === 'update' ||
+    location.pathname === '/bookings/modify';
   const isModifyBookingMode =
     modeFromRoute === 'update' ||
     modeFromQuery === 'update' ||
@@ -628,8 +639,16 @@ export function ExpressCheckinContent() {
       })
       .catch((e) => {
         if (cancelled) return;
-        const msg =
-          e instanceof Error ? e.message : 'Could not load workflow checklist';
+        const msg = getFriendlyError(e, 'Could not load workflow checklist');
+        const cachedDetail = getCachedBookingByReference(reservationRef);
+        const hasDetail =
+          cachedDetail?.data &&
+          typeof cachedDetail.data === 'object' &&
+          (cachedDetail.data as Record<string, unknown>).rcm_booking_info;
+        if (isBookingEditFlow && hasDetail) {
+          setBookingLockedReason(null);
+          return;
+        }
         setWorkflow(null);
         setBookingLockedReason(msg);
         toast.error(msg);
@@ -640,7 +659,39 @@ export function ExpressCheckinContent() {
     return () => {
       cancelled = true;
     };
-  }, [reservationRef]);
+  }, [reservationRef, isBookingEditFlow]);
+
+  // Modify / convert: always load booking detail so forms hydrate even if checklist fails.
+  useEffect(() => {
+    if (!isBookingEditFlow) return;
+    if (!reservationRef) return;
+    let cancelled = false;
+    void fetchBookingByReference(reservationRef)
+      .then((res) => {
+        if (cancelled) return;
+        const raw = res?.data;
+        if (!raw || typeof raw !== 'object') return;
+        const rcm = (raw as Record<string, unknown>).rcm_booking_info;
+        if (rcm && typeof rcm === 'object') {
+          setWorkflow((prev) => {
+            if (prev && Object.keys(prev).length > 0) return prev;
+            return rcm as Record<string, unknown>;
+          });
+        }
+        setBookingLockedReason(null);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (!getCachedBookingByReference(reservationRef)?.data) {
+          setBookingLockedReason(
+            getFriendlyError(e, 'Could not load booking details'),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isBookingEditFlow, reservationRef]);
 
   const normalizedWorkflow = useMemo(
     () => extractWorkflowChecklistArrays(workflow as Record<string, unknown> | undefined),
@@ -693,6 +744,55 @@ export function ExpressCheckinContent() {
     (loadReservationContext()?.mode === 'convert-quote' &&
       location.pathname === '/bookings/modify');
   const isUpdateMode = isModifyBookingMode || isConvertQuoteMode;
+
+  const quotePickupForExpiry = useMemo(() => {
+    const fromWorkflow =
+      bookingInfo && typeof bookingInfo === 'object'
+        ? [firstText(bookingInfo.pickupdate), firstText(bookingInfo.pickuptime)]
+            .filter(Boolean)
+            .join(' ')
+        : '';
+    if (fromWorkflow.trim()) return fromWorkflow.trim();
+    const cachedDetail = reservationRef
+      ? getCachedBookingByReference(reservationRef)
+      : null;
+    const raw = cachedDetail?.data;
+    if (raw && typeof raw === 'object') {
+      const dates = (raw as Record<string, unknown>).booking_dates as
+        | Record<string, unknown>
+        | undefined;
+      if (dates && typeof dates === 'object') {
+        const fromDates = [dates.pickup_date, dates.pickup_time]
+          .filter((x) => x != null && String(x).trim())
+          .map((x) => String(x).trim())
+          .join(' ');
+        if (fromDates.trim()) return fromDates.trim();
+      }
+    }
+    return firstText(snapshot?.pickupDate);
+  }, [bookingInfo, reservationRef, snapshot?.pickupDate]);
+
+  const quoteExpiredByPickup = useMemo(() => {
+    if (!isQuoteBooking || !isConvertQuoteMode) return false;
+    const status =
+      bookingInfo && typeof bookingInfo === 'object'
+        ? firstText(bookingInfo.bookingstatus, bookingInfo.booking_status)
+        : '';
+    return isQuoteExpiredByPickup({
+      isQuote: true,
+      pickupDate: quotePickupForExpiry,
+      statusLabel: status,
+    });
+  }, [
+    isQuoteBooking,
+    isConvertQuoteMode,
+    quotePickupForExpiry,
+    bookingInfo,
+  ]);
+
+  const effectiveBookingLockedReason = quoteExpiredByPickup
+    ? QUOTE_EXPIRED_PICKUP_MESSAGE
+    : bookingLockedReason;
 
   useEffect(() => {
     if (!isUpdateMode) return;
@@ -845,13 +945,13 @@ export function ExpressCheckinContent() {
   }, [openCard, isUpdateMode, reservationRef]);
 
   const toggleCard = (id: string) => {
-    if (bookingLockedReason && id !== 'reservation') return;
+    if (effectiveBookingLockedReason && id !== 'reservation') return;
     setOpenCard(openCard === id ? null : id);
   };
 
   const saveCustomerStep = () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     const formError = validateCustomerDetailsForm(customerForm);
@@ -1214,8 +1314,8 @@ export function ExpressCheckinContent() {
   };
 
   const saveBookingStep = async () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     setSavingStep('booking');
@@ -1525,8 +1625,8 @@ export function ExpressCheckinContent() {
   };
 
   const saveExtraDriversStep = async () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     setSavingStep('drivers');
@@ -1663,8 +1763,8 @@ export function ExpressCheckinContent() {
   };
 
   const removeExtraDriverNow = async (driver: ExtraDriversForm['drivers'][number]) => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     if (!(Number(driver.customerid) > 0)) return;
@@ -1755,8 +1855,8 @@ export function ExpressCheckinContent() {
   };
 
   const saveUploadImagesStep = async () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     const reservationRefValue = rcmReservationRef;
@@ -1846,8 +1946,8 @@ export function ExpressCheckinContent() {
   };
 
   const startSecurePaymentStep = async () => {
-    if (bookingLockedReason) {
-      toast.error(bookingLockedReason);
+    if (effectiveBookingLockedReason) {
+      toast.error(effectiveBookingLockedReason);
       return;
     }
     if (isConvertQuoteMode && !loadQuoteConvertPending()) {
@@ -2173,19 +2273,6 @@ export function ExpressCheckinContent() {
       </div> */}
 
       <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 ">
-        {bookingLockedReason ? (
-          <div className="lg:col-span-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            <p className="font-semibold">This booking cannot be updated</p>
-            <p className="mt-1 text-destructive/90">{bookingLockedReason}</p>
-          </div>
-        ) : null}
-        {bookingSaveError ? (
-          <div className="lg:col-span-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            <p className="font-semibold">Unable to save booking details</p>
-            <p className="mt-1 text-destructive/90">{bookingSaveError}</p>
-          </div>
-        ) : null}
-
         {/* Small Grid: Reservation Details & Fee Summary (Right side on desktop, top on mobile) */}
         <div className="col-span-1 flex flex-col lg:order-last">
 
@@ -2240,7 +2327,21 @@ export function ExpressCheckinContent() {
 
         {/* Large Grid: The rest of the collapsible cards (Left side on desktop, below on mobile) */}
         <div className="col-span-1 lg:col-span-2 flex flex-col h-full">
-          {isConvertQuoteMode ? (
+          {quoteExpiredByPickup ? (
+            <QuoteExpiredNotice className="mb-3 w-full" />
+          ) : bookingLockedReason ? (
+            <div className="mb-3 w-full rounded-[8px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] leading-snug text-destructive">
+              <span className="font-semibold">This booking cannot be updated.</span>{' '}
+              <span className="text-destructive/90">{bookingLockedReason}</span>
+            </div>
+          ) : null}
+          {bookingSaveError ? (
+            <div className="mb-3 w-full rounded-[8px] border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] leading-snug text-destructive">
+              <span className="font-semibold">Unable to save booking details.</span>{' '}
+              <span className="text-destructive/90">{bookingSaveError}</span>
+            </div>
+          ) : null}
+          {isConvertQuoteMode && !quoteExpiredByPickup ? (
             <div className="mb-3 w-full bg-[#fff8d6] border border-[#ffec99] rounded-[8px] p-4 text-center shadow-sm">
               <p className="text-[12px] text-[#8c6b1d] leading-tight font-medium">
                 <span className="font-bold">Convert quote to booking request.</span>{' '}
@@ -2274,7 +2375,7 @@ export function ExpressCheckinContent() {
                 <Button
                   type="button"
                   onClick={() => void saveBookingStep()}
-                  disabled={savingStep === 'booking' || Boolean(bookingLockedReason)}
+                  disabled={savingStep === 'booking' || Boolean(effectiveBookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
                   {savingStep === 'booking' ? 'Saving…' : 'Save Changes'}
@@ -2298,7 +2399,7 @@ export function ExpressCheckinContent() {
                   <Button
                     type="button"
                     onClick={saveCustomerStep}
-                    disabled={Boolean(bookingLockedReason)}
+                    disabled={Boolean(effectiveBookingLockedReason)}
                     className="bg-[#ffc107] text-black"
                   >
                     Save
@@ -2327,7 +2428,7 @@ export function ExpressCheckinContent() {
                   <Button
                     type="button"
                     onClick={() => void saveBookingStep()}
-                    disabled={savingStep === 'booking' || Boolean(bookingLockedReason)}
+                    disabled={savingStep === 'booking' || Boolean(effectiveBookingLockedReason)}
                     className="bg-[#ffc107] text-black"
                   >
                     {savingStep === 'booking'
@@ -2364,7 +2465,7 @@ export function ExpressCheckinContent() {
                 <Button
                   type="button"
                   onClick={() => void saveExtraDriversStep()}
-                  disabled={savingStep === 'drivers' || Boolean(bookingLockedReason)}
+                  disabled={savingStep === 'drivers' || Boolean(effectiveBookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
                   {savingStep === 'drivers' ? 'Saving…' : 'Save & Continue'}
@@ -2394,7 +2495,7 @@ export function ExpressCheckinContent() {
                 <Button
                   type="button"
                   onClick={() => void saveUploadImagesStep()}
-                  disabled={savingStep === 'images' || Boolean(bookingLockedReason)}
+                  disabled={savingStep === 'images' || Boolean(effectiveBookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
                   {savingStep === 'images' ? 'Saving…' : 'Save'}
@@ -2422,7 +2523,7 @@ export function ExpressCheckinContent() {
                 <Button
                   type="button"
                   onClick={() => void startSecurePaymentStep()}
-                  disabled={launchingPayment || Boolean(bookingLockedReason)}
+                  disabled={launchingPayment || Boolean(effectiveBookingLockedReason)}
                   className="bg-[#ffc107] text-black"
                 >
                   {launchingPayment

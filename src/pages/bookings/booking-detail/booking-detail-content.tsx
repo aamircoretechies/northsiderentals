@@ -29,6 +29,11 @@ import {
 import { clearCheckoutPendingState } from '@/utils/checkout-session';
 import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 import { saveReservationContext } from '@/utils/reservation-context';
+import { QuoteExpiredNotice } from '@/components/bookings/quote-expired-notice';
+import {
+  isBookingUpcomingForModifyOrConvert,
+  isQuoteExpiredByPickup,
+} from '@/utils/booking-ui-status';
 
 function statusStyle(label: string): { dot: string; text: string } {
   const s = label.toLowerCase();
@@ -131,6 +136,7 @@ function RentalFeeSummaryBlock({
   showExpressCheckin,
   showSignAgreement,
   showConvertToBooking,
+  showQuoteExpiredNotice,
   isLaunchingCheckin,
   isExpanded,
   isMobile,
@@ -143,6 +149,7 @@ function RentalFeeSummaryBlock({
   showExpressCheckin?: boolean;
   showSignAgreement?: boolean;
   showConvertToBooking?: boolean;
+  showQuoteExpiredNotice?: boolean;
   isLaunchingCheckin?: boolean;
   isExpanded?: boolean;
   isMobile?: boolean;
@@ -217,6 +224,9 @@ function RentalFeeSummaryBlock({
 
       </div>
 
+      {showQuoteExpiredNotice ? (
+        <QuoteExpiredNotice className="w-full mt-5" />
+      ) : null}
       {showConvertToBooking && onConvertToBooking ? (
         <Button
           type="button"
@@ -359,8 +369,29 @@ export function BookingDetailContent() {
   const showSignAgreement = Boolean(view && !isQuote && !hired && !returned);
   const showAgreementLinks = Boolean(view && !isQuote);
   const showReceiptLink = Boolean(view && !isQuote && view.receiptUrl);
+  const isUpcomingBooking = view
+    ? isBookingUpcomingForModifyOrConvert({
+        statusLabel: view.bookingStatus,
+        pickupDate: view.pickupWhen,
+        returnDate: view.returnWhen,
+      })
+    : false;
+  const quoteExpiredByPickup = Boolean(
+    view &&
+      isQuote &&
+      isQuoteExpiredByPickup({
+        isQuote: true,
+        pickupDate: view.pickupWhen,
+        statusLabel: view.bookingStatus,
+      }),
+  );
+  const showQuoteExpiredNotice = quoteExpiredByPickup;
   const showConvertToBooking = Boolean(
-    view && isQuote && view.canConvertToBooking,
+    view &&
+      isQuote &&
+      view.canConvertToBooking &&
+      isUpcomingBooking &&
+      !quoteExpiredByPickup,
   );
   const confirmationLabel = isQuote ? 'Quotation #' : 'Confirmation #';
   const overviewLabel = isQuote ? 'QUOTATION OVERVIEW' : 'BOOKING OVERVIEW';
@@ -777,6 +808,7 @@ export function BookingDetailContent() {
                   showExpressCheckin={showExpressCheckin}
                   showSignAgreement={showSignAgreement}
                   showConvertToBooking={showConvertToBooking}
+                  showQuoteExpiredNotice={showQuoteExpiredNotice}
                   isLaunchingCheckin={launchingCheckin}
                 />
               </div>
@@ -826,6 +858,7 @@ export function BookingDetailContent() {
               showExpressCheckin={showExpressCheckin}
               showSignAgreement={showSignAgreement}
               showConvertToBooking={showConvertToBooking}
+              showQuoteExpiredNotice={showQuoteExpiredNotice}
               isLaunchingCheckin={launchingCheckin}
             />
           </div>
