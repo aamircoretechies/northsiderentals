@@ -44,6 +44,7 @@ import {
   type WorkflowChecklistStep,
 } from '@/services/bookings';
 import { getFriendlyError } from '@/utils/api-error-handler';
+import { type FieldErrors, hasFieldErrors } from '@/utils/inline-form-validation';
 import {
   RCM_BOOKING_TYPE_BOOKING,
   resolveReferralId,
@@ -212,7 +213,8 @@ function isValidPhone(phone: string): boolean {
   return digits.length >= 8 && digits.length <= 15;
 }
 
-function validateCustomerDetailsForm(form: CustomerDetailsForm): string | null {
+function validateCustomerDetailsFormFields(form: CustomerDetailsForm): FieldErrors {
+  const errors: FieldErrors = {};
   const firstName = form.firstName.trim();
   const lastName = form.lastName.trim();
   const email = form.email.trim();
@@ -226,44 +228,67 @@ function validateCustomerDetailsForm(form: CustomerDetailsForm): string | null {
   const country = form.country.trim();
   const postcode = form.postcode.trim();
 
-  if (!firstName || !lastName) return 'First name and last name are required.';
-  if (!NAME_PATTERN.test(firstName) || !NAME_PATTERN.test(lastName)) {
-    return 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+  if (!firstName) errors.firstName = 'First name is required.';
+  else if (!NAME_PATTERN.test(firstName)) {
+    errors.firstName = 'Name can only contain letters, spaces, hyphens, and apostrophes.';
   }
-  if (!isValidEmail(email)) return 'Please enter a valid email address.';
-  if (!isValidPhone(phone)) return 'Please enter a valid phone number.';
+  if (!lastName) errors.lastName = 'Last name is required.';
+  else if (!NAME_PATTERN.test(lastName)) {
+    errors.lastName = 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+  }
+  if (!isValidEmail(email)) errors.email = 'Please enter a valid email address.';
+  if (!isValidPhone(phone)) errors.phone = 'Please enter a valid phone number.';
   if (!Number.isFinite(travellers) || travellers <= 0) {
-    return 'Number of people traveling must be at least 1.';
+    errors.numberTravelling = 'Number of people traveling must be at least 1.';
   }
-  if (!dob) return 'Date of birth is required.';
-  if (!isRecognizedDate(dob)) {
-    return 'Please enter a valid date of birth.';
+  if (!dob) errors.dateOfBirth = 'Date of birth is required.';
+  else if (!isRecognizedDate(dob)) {
+    errors.dateOfBirth = 'Please enter a valid date of birth.';
   }
-  if (!licenseNo) return 'Licence number is required.';
+  if (!licenseNo) errors.licenseNo = 'Licence number is required.';
   if (form.licenseExpires.trim() && !isRecognizedDate(form.licenseExpires.trim())) {
-    return 'Please enter a valid driver licence expiry date.';
+    errors.licenseExpires = 'Please enter a valid driver licence expiry date.';
   }
-  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
-  if ((city && !LOCATION_ALLOWED_PATTERN.test(city)) || (state && !LOCATION_ALLOWED_PATTERN.test(state))) {
-    return 'City and state contain invalid characters.';
+  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) {
+    errors.address = 'Address contains invalid characters.';
+  }
+  if (city && !LOCATION_ALLOWED_PATTERN.test(city)) {
+    errors.city = 'City contains invalid characters.';
+  }
+  if (state && !LOCATION_ALLOWED_PATTERN.test(state)) {
+    errors.state = 'State contains invalid characters.';
   }
   if (country && !LOCATION_ALLOWED_PATTERN.test(country)) {
-    return 'Country contains invalid characters.';
+    errors.country = 'Country contains invalid characters.';
   }
-  if (postcode && !POSTCODE_PATTERN.test(postcode)) return 'Please enter a valid post code.';
-  return null;
+  if (postcode && !POSTCODE_PATTERN.test(postcode)) {
+    errors.postcode = 'Please enter a valid post code.';
+  }
+  return errors;
 }
 
-function validateCustomerDetailsForQuoteConvert(form: CustomerDetailsForm): string | null {
-  const base = validateCustomerDetailsForm(form);
-  if (base) return base;
+function validateCustomerDetailsForQuoteConvertFields(
+  form: CustomerDetailsForm,
+): FieldErrors {
+  const errors = validateCustomerDetailsFormFields(form);
   if (!form.licenseExpires.trim()) {
-    return 'Driver licence expiry is required to convert this quote to a booking.';
+    errors.licenseExpires =
+      'Driver licence expiry is required to convert this quote to a booking.';
+  } else if (!isRecognizedDate(form.licenseExpires.trim())) {
+    errors.licenseExpires = 'Please enter a valid driver licence expiry date.';
   }
-  if (!isRecognizedDate(form.licenseExpires.trim())) {
-    return 'Please enter a valid driver licence expiry date.';
+  return errors;
+}
+
+function clearCustomerFieldErrorsOnPatch(
+  prev: FieldErrors,
+  patch: Partial<CustomerDetailsForm>,
+): FieldErrors {
+  const next = { ...prev };
+  for (const key of Object.keys(patch)) {
+    delete next[key];
   }
-  return null;
+  return next;
 }
 
 function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
@@ -954,11 +979,14 @@ export function ExpressCheckinContent() {
       toast.error(effectiveBookingLockedReason);
       return;
     }
-    const formError = validateCustomerDetailsForm(customerForm);
-    if (formError) {
-      toast.error(formError);
+    const errs = isConvertQuoteMode
+      ? validateCustomerDetailsForQuoteConvertFields(customerForm)
+      : validateCustomerDetailsFormFields(customerForm);
+    if (hasFieldErrors(errs)) {
+      setCustomerFieldErrors(errs);
       return;
     }
+    setCustomerFieldErrors({});
 
     markSaved('customer');
     toast.success('Customer details saved');
@@ -999,6 +1027,12 @@ export function ExpressCheckinContent() {
     [bookingInfo, customerInfo, customerSnapshot],
   );
   const [customerForm, setCustomerForm] = useState<CustomerDetailsForm>(initialCustomerForm);
+  const [customerFieldErrors, setCustomerFieldErrors] = useState<FieldErrors>({});
+
+  const updateCustomerForm = useCallback((patch: Partial<CustomerDetailsForm>) => {
+    setCustomerForm((prev) => ({ ...prev, ...patch }));
+    setCustomerFieldErrors((prev) => clearCustomerFieldErrorsOnPatch(prev, patch));
+  }, []);
 
   const initialBookingForm = useMemo<BookingDetailsForm>(() => {
     const selectedInsuranceFromExtraFees = extraFeesRaw.find(
@@ -1392,16 +1426,16 @@ export function ExpressCheckinContent() {
         mailinglist: Boolean(customerInfo?.mailinglist),
         loyaltycardno: firstText(customerInfo?.loyaltycardno),
       };
-      const formError = isConvertQuoteMode
-        ? validateCustomerDetailsForQuoteConvert(customerForm)
-        : validateCustomerDetailsForm(customerForm);
-      if (formError) {
-        throw new Error(formError);
+      const customerErrs = isConvertQuoteMode
+        ? validateCustomerDetailsForQuoteConvertFields(customerForm)
+        : validateCustomerDetailsFormFields(customerForm);
+      if (hasFieldErrors(customerErrs)) {
+        setCustomerFieldErrors(customerErrs);
+        setOpenCard('customer');
+        return;
       }
+      setCustomerFieldErrors({});
       const travellerCount = toFiniteNumber(customerForm.numberTravelling, 0);
-      if (travellerCount <= 0) {
-        throw new Error('Number of people traveling must be at least 1.');
-      }
 
       const referralId = resolveReferralId(bookingInfo);
 
@@ -2357,9 +2391,10 @@ export function ExpressCheckinContent() {
               <div className="mb-5">
                 <CustomerDetailsCard
                   value={customerForm}
-                  onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                  onChange={updateCustomerForm}
                   countries={rcmProfile?.countries ?? []}
                   licenseExpiryRequired={isConvertQuoteMode}
+                  fieldErrors={customerFieldErrors}
                 />
               </div>
               {loadingWorkflow ? (
@@ -2391,9 +2426,10 @@ export function ExpressCheckinContent() {
               >
                 <CustomerDetailsCard
                   value={customerForm}
-                  onChange={(patch) => setCustomerForm((prev) => ({ ...prev, ...patch }))}
+                  onChange={updateCustomerForm}
                   countries={rcmProfile?.countries ?? []}
                   licenseExpiryRequired={isConvertQuoteMode}
+                  fieldErrors={customerFieldErrors}
                 />
                 <div className="flex gap-2 mt-4">
                   <Button
@@ -2404,7 +2440,13 @@ export function ExpressCheckinContent() {
                   >
                     Save
                   </Button>
-                  <Button variant="outline" onClick={() => setCustomerForm(initialCustomerForm)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCustomerForm(initialCustomerForm);
+                      setCustomerFieldErrors({});
+                    }}
+                  >
                     Cancel
                   </Button>
                 </div>

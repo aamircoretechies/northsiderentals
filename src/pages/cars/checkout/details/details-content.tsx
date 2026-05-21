@@ -10,6 +10,10 @@ import { carsService } from '@/services/cars';
 import { apiJson } from '@/utils/api-client';
 import { getFriendlyError } from '@/utils/api-error-handler';
 import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
+import {
+  hasFieldErrors,
+  type FieldErrors,
+} from '@/utils/inline-form-validation';
 
 import {
   resolveRatePeriodTypeId,
@@ -76,9 +80,23 @@ function isValidPhone(phone: string): boolean {
   return digits.length >= 8 && digits.length <= 15;
 }
 
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-[11px] text-destructive mt-0.5">{message}</p>;
+}
+
+function fieldInputClass(hasError: boolean): string {
+  const base =
+    'w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 border-none';
+  return hasError
+    ? `${base} ring-2 ring-destructive focus:ring-destructive`
+    : `${base} focus:ring-[#0061e0]`;
+}
+
 function validateBookingCustomerForm(
   formData: Record<string, string>,
-): string | null {
+): FieldErrors {
+  const errors: FieldErrors = {};
   const firstName = formData.firstName?.trim() ?? '';
   const lastName = formData.lastName?.trim() ?? '';
   const email = formData.email?.trim() ?? '';
@@ -96,36 +114,48 @@ function validateBookingCustomerForm(
   const arrivalpoint = formData.arrivalpoint?.trim() ?? '';
   const departurepoint = formData.departurepoint?.trim() ?? '';
 
-  if (!firstName || !lastName) return 'First name and last name are required.';
-  if (!NAME_PATTERN.test(firstName) || !NAME_PATTERN.test(lastName)) {
-    return 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+  if (!firstName) errors.firstName = 'First name is required.';
+  else if (!NAME_PATTERN.test(firstName)) {
+    errors.firstName = 'Name can only contain letters, spaces, hyphens, and apostrophes.';
   }
-  if (!isValidEmail(email)) return 'Please enter a valid email address.';
-  if (!isValidPhone(phone)) return 'Please enter a valid phone number.';
-  if (!numberOfPeople) return 'Number of travellers is required.';
-  if (!dob) return 'Date of birth is required.';
-  if (!licenseNumber) return 'Licence number is required.';
-  if (!licenseExpiry) return 'Licence expiry date is required.';
-  if (!city) return 'City is required.';
-  if (!stateRegion) return 'State is required.';
-  if (!postCode) return 'Post code is required.';
-  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return 'Address contains invalid characters.';
-  if (
-    (city && !LOCATION_ALLOWED_PATTERN.test(city)) ||
-    (stateRegion && !LOCATION_ALLOWED_PATTERN.test(stateRegion))
-  ) {
-    return 'City and state contain invalid characters.';
+  if (!lastName) errors.lastName = 'Last name is required.';
+  else if (!NAME_PATTERN.test(lastName)) {
+    errors.lastName = 'Name can only contain letters, spaces, hyphens, and apostrophes.';
   }
-  if (!POSTCODE_PATTERN.test(postCode)) return 'Please enter a valid post code.';
-  if (flightin && !FLIGHT_PATTERN.test(flightin)) return 'Inbound flight format looks invalid.';
-  if (flightout && !FLIGHT_PATTERN.test(flightout)) return 'Outbound flight format looks invalid.';
+  if (!isValidEmail(email)) errors.email = 'Please enter a valid email address.';
+  if (!isValidPhone(phone)) errors.phone = 'Please enter a valid phone number.';
+  if (!numberOfPeople) errors.numberOfPeople = 'Number of travellers is required.';
+  if (!dob) errors.dob = 'Date of birth is required.';
+  if (!licenseNumber) errors.licenseNumber = 'Licence number is required.';
+  if (!licenseExpiry) errors.licenseExpiry = 'Licence expiry date is required.';
+  if (!city) errors.city = 'City is required.';
+  else if (!LOCATION_ALLOWED_PATTERN.test(city)) {
+    errors.city = 'City contains invalid characters.';
+  }
+  if (!stateRegion) errors.stateRegion = 'State is required.';
+  else if (!LOCATION_ALLOWED_PATTERN.test(stateRegion)) {
+    errors.stateRegion = 'State contains invalid characters.';
+  }
+  if (!postCode) errors.postCode = 'Post code is required.';
+  else if (!POSTCODE_PATTERN.test(postCode)) {
+    errors.postCode = 'Please enter a valid post code.';
+  }
+  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) {
+    errors.address = 'Address contains invalid characters.';
+  }
+  if (flightin && !FLIGHT_PATTERN.test(flightin)) {
+    errors.flightin = 'Inbound flight format looks invalid.';
+  }
+  if (flightout && !FLIGHT_PATTERN.test(flightout)) {
+    errors.flightout = 'Outbound flight format looks invalid.';
+  }
   if (arrivalpoint && !LOCATION_ALLOWED_PATTERN.test(arrivalpoint)) {
-    return 'Arrival point contains invalid characters.';
+    errors.arrivalpoint = 'Arrival point contains invalid characters.';
   }
   if (departurepoint && !LOCATION_ALLOWED_PATTERN.test(departurepoint)) {
-    return 'Departure point contains invalid characters.';
+    errors.departurepoint = 'Departure point contains invalid characters.';
   }
-  return null;
+  return errors;
 }
 
 function normalizeCountriesFromNavigationState(raw: unknown): CheckoutCountry[] {
@@ -386,6 +416,9 @@ export function CarsCheckoutDetailsContent() {
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
   const [noticeData, setNoticeData] = useState<{ title: string; content: string } | null>(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const [formData, setFormData] = useState(() => {
     const fromNav = normalizeCountriesFromNavigationState(countriesFromNav);
     const defaultCountry = fromNav.length > 0 ? String(fromNav[0].id) : '';
@@ -455,6 +488,13 @@ export function CarsCheckoutDetailsContent() {
     const nextValue =
       typeof limit === 'number' ? String(value ?? '').slice(0, limit) : value;
     setFormData((prev: any) => ({ ...prev, [name]: nextValue }));
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    setSubmitError(null);
   };
 
   useEffect(() => {
@@ -551,16 +591,17 @@ export function CarsCheckoutDetailsContent() {
       quantity?: number;
     }>;
 
+    setSubmitError(null);
+    const nextErrors: FieldErrors = {};
     if (!agreed) {
-      toast.error('Please agree to the Terms and Conditions.');
+      nextErrors.terms = 'Please agree to the Terms and Conditions.';
+    }
+    Object.assign(nextErrors, validateBookingCustomerForm(formData as Record<string, string>));
+    if (hasFieldErrors(nextErrors)) {
+      setFieldErrors(nextErrors);
       return;
     }
-
-    const formError = validateBookingCustomerForm(formData as Record<string, string>);
-    if (formError) {
-      toast.error(formError);
-      return;
-    }
+    setFieldErrors({});
 
     const sp = searchParams || {};
     const categoryFromSearch = parseInt(String(sp.category_id ?? '0'), 10);
@@ -705,7 +746,7 @@ export function CarsCheckoutDetailsContent() {
         },
       });
     } catch (e: unknown) {
-      toast.error(getFriendlyError(e, 'Could not create booking.'));
+      setSubmitError(getFriendlyError(e, 'Could not create booking.'));
     } finally {
       setLoading(false);
     }
@@ -733,8 +774,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.firstName}
                   onChange={handleChange}
                   placeholder="First Name"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.firstName)}
                 />
+                <FieldError message={fieldErrors.firstName} />
               </div>
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="lastName" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Last Name</label>
@@ -745,8 +787,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.lastName}
                   onChange={handleChange}
                   placeholder="Last Name"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.lastName)}
                 />
+                <FieldError message={fieldErrors.lastName} />
               </div>
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="email" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Email</label>
@@ -758,8 +801,9 @@ export function CarsCheckoutDetailsContent() {
                   onChange={handleChange}
                   placeholder="Email"
                   autoComplete="email"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.email)}
                 />
+                <FieldError message={fieldErrors.email} />
               </div>
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="phone" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Phone</label>
@@ -772,14 +816,22 @@ export function CarsCheckoutDetailsContent() {
                     const next = e.target.value;
                     if (!next || PHONE_ALLOWED_CHARS.test(next)) {
                       setFormData((prev: any) => ({ ...prev, phone: next }));
+                      setFieldErrors((prev) => {
+                        if (!prev.phone) return prev;
+                        const n = { ...prev };
+                        delete n.phone;
+                        return n;
+                      });
+                      setSubmitError(null);
                     }
                   }}
                   placeholder="Phone Number"
                   autoComplete="tel"
                   inputMode="tel"
                   maxLength={20}
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.phone)}
                 />
+                <FieldError message={fieldErrors.phone} />
               </div>
               <div className="relative flex flex-col gap-1 md:col-span-1">
                 <label htmlFor="numberOfPeople" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Number of travellers</label>
@@ -789,7 +841,7 @@ export function CarsCheckoutDetailsContent() {
                     name="numberOfPeople"
                     value={formData.numberOfPeople}
                     onChange={handleChange}
-                    className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none pr-10"
+                    className={`${fieldInputClass(!!fieldErrors.numberOfPeople)} appearance-none pr-10`}
                   >
                     <option value="1">1 person</option>
                     <option value="2">2 people</option>
@@ -803,6 +855,7 @@ export function CarsCheckoutDetailsContent() {
                     </svg>
                   </div>
                 </div>
+                <FieldError message={fieldErrors.numberOfPeople} />
               </div>
             </div>
           </div>
@@ -827,8 +880,9 @@ export function CarsCheckoutDetailsContent() {
                   onChange={handleChange}
                   onKeyDown={(e) => e.preventDefault()}
                   onClick={(e) => (e.target as any).showPicker?.()}
-                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none cursor-pointer"
+                  className={`${fieldInputClass(!!fieldErrors.dob)} cursor-pointer`}
                 />
+                <FieldError message={fieldErrors.dob} />
               </div>
 
               <div className="relative flex flex-col gap-1">
@@ -840,8 +894,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.licenseNumber}
                   onChange={handleChange}
                   placeholder="License Number"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.licenseNumber)}
                 />
+                <FieldError message={fieldErrors.licenseNumber} />
               </div>
 
               <div className="relative flex flex-col gap-1">
@@ -895,8 +950,9 @@ export function CarsCheckoutDetailsContent() {
                   onChange={handleChange}
                   onKeyDown={(e) => e.preventDefault()}
                   onClick={(e) => (e.target as any).showPicker?.()}
-                  className="w-full bg-[#f4f5f8] text-[#333] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none cursor-pointer"
+                  className={`${fieldInputClass(!!fieldErrors.licenseExpiry)} cursor-pointer`}
                 />
+                <FieldError message={fieldErrors.licenseExpiry} />
               </div>
 
               <div className="relative flex flex-col gap-1">
@@ -974,8 +1030,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.address}
                   onChange={handleChange}
                   placeholder="Address"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.address)}
                 />
+                <FieldError message={fieldErrors.address} />
               </div>
 
               <div className="relative flex flex-col gap-1">
@@ -987,8 +1044,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.city}
                   onChange={handleChange}
                   placeholder="City"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.city)}
                 />
+                <FieldError message={fieldErrors.city} />
               </div>
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="stateRegion" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">State</label>
@@ -999,8 +1057,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.stateRegion}
                   onChange={handleChange}
                   placeholder="State"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.stateRegion)}
                 />
+                <FieldError message={fieldErrors.stateRegion} />
               </div>
               <div className="relative flex flex-col gap-1">
                 <label htmlFor="postCode" className="text-[11px] font-medium text-[#6b7280] uppercase tracking-wide">Post Code</label>
@@ -1011,8 +1070,9 @@ export function CarsCheckoutDetailsContent() {
                   value={formData.postCode}
                   onChange={handleChange}
                   placeholder="Post Code"
-                  className="w-full bg-[#f4f5f8] text-[#333] placeholder-[#8e95a5] rounded-[12px] px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0061e0] border-none"
+                  className={fieldInputClass(!!fieldErrors.postCode)}
                 />
+                <FieldError message={fieldErrors.postCode} />
               </div>
 
               <div className="relative flex flex-col gap-1 md:col-span-3">
@@ -1112,13 +1172,35 @@ export function CarsCheckoutDetailsContent() {
               </a>
             </div>
 
-            <div className="flex items-start gap-3 px-1">
-              <Checkbox id="terms" checked={agreed} onCheckedChange={(checked) => setAgreed(!!checked)} className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]" />
-              <label htmlFor="terms" className="text-[13px] text-gray-700 leading-tight" style={{ lineHeight: '24px' }}>
-                I have read and accept the <a href="#" onClick={openTermsModal} className="text-[#0061e0]">Terms and Condition</a>
-              </label>
+            <div className="flex flex-col gap-1 px-1">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="terms"
+                  checked={agreed}
+                  onCheckedChange={(checked) => {
+                    setAgreed(!!checked);
+                    if (checked) {
+                      setFieldErrors((prev) => {
+                        if (!prev.terms) return prev;
+                        const next = { ...prev };
+                        delete next.terms;
+                        return next;
+                      });
+                    }
+                  }}
+                  className="mt-0.5 border-gray-300 data-[state=checked]:bg-[#0061e0] data-[state=checked]:border-[#0061e0]"
+                />
+                <label htmlFor="terms" className="text-[13px] text-gray-700 leading-tight" style={{ lineHeight: '24px' }}>
+                  I have read and accept the <a href="#" onClick={openTermsModal} className="text-[#0061e0]">Terms and Condition</a>
+                </label>
+              </div>
+              <FieldError message={fieldErrors.terms} />
             </div>
           </div>
+
+          {submitError ? (
+            <p className="text-sm text-destructive px-1">{submitError}</p>
+          ) : null}
         </div>
 
         {/* Footer Buttons */}

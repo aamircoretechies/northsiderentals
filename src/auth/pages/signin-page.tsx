@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -20,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Icons } from '@/components/common/icons';
 import { firebaseAuth, googleProvider } from '@/lib/firebase';
 import { getSigninSchema, SigninSchemaType } from '../forms/signin-schema';
+import { mapAuthErrorToField } from '@/utils/inline-form-validation';
 import { LoaderCircleIcon } from 'lucide-react';
 export function SignInPage() {
   const [searchParams] = useSearchParams();
@@ -28,11 +28,20 @@ export function SignInPage() {
   const nextPath = searchParams.get('next') || '/home';
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // Check for success message from password reset or error messages
+  const form = useForm<SigninSchemaType>({
+    resolver: zodResolver(getSigninSchema()),
+    mode: 'onTouched',
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: true,
+    },
+  });
+
+  // Password reset success or OAuth redirect errors — show inline on fields, not above the card.
   useEffect(() => {
     const pwdReset = searchParams.get('pwd_reset');
     const errorParam = searchParams.get('error');
@@ -42,68 +51,41 @@ export function SignInPage() {
       setSuccessMessage(
         'Your password has been successfully reset. You can now sign in with your new password.',
       );
-      setError(null);
+      form.clearErrors();
+      return;
     }
 
     if (errorParam) {
       setSuccessMessage(null);
-      switch (errorParam) {
-        case 'auth_callback_failed':
-          setError(
-            errorDescription || 'Authentication failed. Please try again.',
-          );
-          break;
-        case 'auth_callback_error':
-          setError(
-            errorDescription ||
-            'An error occurred during authentication. Please try again.',
-          );
-          break;
-        case 'auth_token_error':
-          setError(
-            errorDescription ||
-            'Failed to set authentication session. Please try again.',
-          );
-          break;
-        default:
-          setError(
-            errorDescription || 'Authentication error. Please try again.',
-          );
-          break;
-      }
+      const msg =
+        errorDescription ||
+        (errorParam === 'auth_callback_failed'
+          ? 'Authentication failed. Please try again.'
+          : errorParam === 'auth_token_error'
+            ? 'Failed to set authentication session. Please try again.'
+            : 'Authentication error. Please try again.');
+      form.setError('email', { type: 'server', message: msg });
     }
-  }, [searchParams]);
-
-  const form = useForm<SigninSchemaType>({
-    resolver: zodResolver(getSigninSchema()),
-    defaultValues: {
-      email: '',
-      password: '',
-      rememberMe: true,
-    },
-  });
+  }, [searchParams, form]);
 
   async function onSubmit(values: SigninSchemaType) {
     try {
       setIsProcessing(true);
-      setError(null);
+      form.clearErrors();
       setSuccessMessage(null);
 
-      console.log('Attempting to sign in with email:', values.email);
-
-      // Sign in using the auth context
       await login(values.email, values.password);
 
-      // Use navigate for navigation
       navigate(nextPath);
     } catch (err) {
       console.error('Unexpected sign-in error:', err);
       setSuccessMessage(null);
-      setError(
+      const msg =
         err instanceof Error
           ? err.message
-          : 'An unexpected error occurred. Please try again.',
-      );
+          : 'An unexpected error occurred. Please try again.';
+      const field = mapAuthErrorToField(msg);
+      form.setError(field, { type: 'server', message: msg });
     } finally {
       setIsProcessing(false);
     }
@@ -112,7 +94,7 @@ export function SignInPage() {
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      setError(null);
+      form.clearErrors();
       setSuccessMessage(null);
 
       const googleUserCredential = await signInWithPopup(
@@ -135,20 +117,27 @@ export function SignInPage() {
           : '';
       if (errorCode === 'auth/popup-closed-by-user') {
         setSuccessMessage(null);
-        setError('Sign-in was cancelled. Please try again.');
+        form.setError('email', {
+          type: 'server',
+          message: 'Sign-in was cancelled. Please try again.',
+        });
         return;
       }
       if (errorCode === 'auth/popup-blocked') {
         setSuccessMessage(null);
-        setError('Popup was blocked by your browser. Please allow popups and try again.');
+        form.setError('email', {
+          type: 'server',
+          message:
+            'Popup was blocked by your browser. Please allow popups and try again.',
+        });
         return;
       }
       setSuccessMessage(null);
-      setError(
+      const msg =
         err instanceof Error
           ? err.message
-          : 'Failed to sign in with Google. Please try again.',
-      );
+          : 'Failed to sign in with Google. Please try again.';
+      form.setError('email', { type: 'server', message: msg });
     } finally {
       setIsGoogleLoading(false);
     }
@@ -181,6 +170,9 @@ export function SignInPage() {
           <p className="text-sm text-muted-foreground">
             Welcome back! Log in with your credentials.
           </p>
+          {successMessage ? (
+            <p className="text-sm text-emerald-700 pt-2">{successMessage}</p>
+          ) : null}
         </div>
 
         {/*  <Alert appearance="light" size="sm" close={false}>
@@ -222,26 +214,6 @@ export function SignInPage() {
           </div>
         </div>
 
-        {error ? (
-          <Alert
-            variant="destructive"
-            appearance="light"
-            onClose={() => setError(null)}
-          >
-            <AlertIcon>
-              <AlertCircle />
-            </AlertIcon>
-            <AlertTitle>{error}</AlertTitle>
-          </Alert>
-        ) : successMessage ? (
-          <Alert appearance="light" onClose={() => setSuccessMessage(null)}>
-            <AlertIcon>
-              <Check />
-            </AlertIcon>
-            <AlertTitle>{successMessage}</AlertTitle>
-          </Alert>
-        ) : null}
-
         <FormField
           control={form.control}
           name="email"
@@ -249,7 +221,14 @@ export function SignInPage() {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input placeholder="Your email" {...field} />
+                <Input
+                  placeholder="Your email"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('email');
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -267,8 +246,12 @@ export function SignInPage() {
               <div className="relative">
                 <Input
                   placeholder="Your password"
-                  type={passwordVisible ? 'text' : 'password'} // Toggle input type
+                  type={passwordVisible ? 'text' : 'password'}
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('password');
+                  }}
                 />
                 <Button
                   type="button"

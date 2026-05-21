@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from '@/auth/context/auth-context';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Check, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Alert, AlertIcon, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -17,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoaderCircleIcon } from 'lucide-react';
 import { getSignupSchema, SignupSchemaType } from '../forms/signup-schema';
+import { mapAuthErrorToField } from '@/utils/inline-form-validation';
 
 export function SignUpPage() {
   const navigate = useNavigate();
@@ -27,11 +27,11 @@ export function SignUpPage() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const form = useForm<SignupSchemaType>({
     resolver: zodResolver(getSignupSchema()),
+    mode: 'onTouched',
     defaultValues: {
       email: '',
       country_code: '+61',
@@ -44,9 +44,8 @@ export function SignUpPage() {
   async function onSubmit(values: SignupSchemaType) {
     try {
       setIsProcessing(true);
-      setError(null);
+      form.clearErrors();
 
-      // Register the user with Supabase
       await register(values.email, values.password, values.country_code, values.mobile);
       setSuccessMessage('OTP sent successfully. Please verify to complete signup.');
       setTimeout(() => {
@@ -54,11 +53,12 @@ export function SignUpPage() {
       }, 500);
     } catch (err) {
       console.error('Registration error:', err);
-      setError(
+      const msg =
         err instanceof Error
           ? err.message
-          : 'An unexpected error occurred during registration. Please try again.',
-      );
+          : 'An unexpected error occurred during registration. Please try again.';
+      const field = mapAuthErrorToField(msg);
+      form.setError(field, { type: 'server', message: msg });
     } finally {
       setIsProcessing(false);
     }
@@ -88,29 +88,10 @@ export function SignUpPage() {
           <p className="text-sm text-muted-foreground">
             Create your account to get started
           </p>
+          {successMessage ? (
+            <p className="text-sm text-emerald-700 pt-2">{successMessage}</p>
+          ) : null}
         </div>
-
-        {error && (
-          <Alert
-            variant="destructive"
-            appearance="light"
-            onClose={() => setError(null)}
-          >
-            <AlertIcon>
-              <AlertCircle />
-            </AlertIcon>
-            <AlertTitle>{error}</AlertTitle>
-          </Alert>
-        )}
-
-        {successMessage && (
-          <Alert appearance="light" onClose={() => setSuccessMessage(null)}>
-            <AlertIcon>
-              <Check />
-            </AlertIcon>
-            <AlertTitle>{successMessage}</AlertTitle>
-          </Alert>
-        )}
 
         <FormField
           control={form.control}
@@ -124,6 +105,10 @@ export function SignUpPage() {
                   type="email"
                   autoComplete="off"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('email');
+                  }}
                 />
               </FormControl>
               <FormMessage />
@@ -142,6 +127,10 @@ export function SignUpPage() {
                   placeholder="+61"
                   autoComplete="tel-country-code"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('country_code');
+                  }}
                 />
               </FormControl>
               <FormMessage />
@@ -160,6 +149,10 @@ export function SignUpPage() {
                   placeholder="0430123456"
                   autoComplete="tel"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('mobile');
+                  }}
                 />
               </FormControl>
               <FormMessage />
@@ -179,6 +172,10 @@ export function SignUpPage() {
                   type={passwordVisible ? 'text' : 'password'}
                   autoComplete="new-password"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('password');
+                  }}
                 />
                 <Button
                   type="button"
@@ -211,6 +208,10 @@ export function SignUpPage() {
                   type={confirmPasswordVisible ? 'text' : 'password'}
                   autoComplete="new-password"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('confirmPassword');
+                  }}
                 />
                 <Button
                   type="button"
