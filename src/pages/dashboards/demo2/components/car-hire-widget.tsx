@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/popover';
 import { addDays, format, parse, startOfDay } from 'date-fns';
 import { useCarSearch } from '@/hooks/use-car-search';
+import { saveCheckoutSearchState } from '@/utils/checkout-search-state';
 import {
   effectiveDropoffWindow,
   effectivePickupWindow,
@@ -236,13 +237,13 @@ export function CarHireWidget({
           toast.error('Invalid promo code or no discount available for this search.');
         }
       }
-      navigate('/cars/search-results-grid', {
-        state: {
-          searchData: result,
-          searchParams: params,
-          locations,
-        },
-      });
+      const searchState = {
+        searchData: result,
+        searchParams: params,
+        locations,
+      };
+      saveCheckoutSearchState(searchState);
+      navigate('/cars/search-results-grid', { state: searchState });
     } catch (error) {
       console.error('Failed to search cars:', error);
     }

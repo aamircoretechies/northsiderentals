@@ -17,6 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { loadCheckoutSearchState } from '@/utils/checkout-search-state';
 import { Footer } from './components/footer';
 import { Header } from './components/header';
 import { Navbar } from './components/navbar';
@@ -96,7 +97,25 @@ export function Demo9Layout() {
                           } 
                         });
                       } else if (pathname === '/cars/checkout/options') {
-                        navigate('/cars/search-results-grid', { state: location.state });
+                        const nav = (location.state ?? {}) as CheckoutNavState & {
+                          car?: Record<string, unknown>;
+                          searchData?: unknown;
+                        };
+                        const car = nav.car as Record<string, unknown> | undefined;
+                        const persisted = loadCheckoutSearchState();
+                        navigate('/cars/search-results-grid', {
+                          state: {
+                            searchData: nav.searchData ?? persisted?.searchData,
+                            searchParams:
+                              nav.searchParams ??
+                              car?.searchParams ??
+                              persisted?.searchParams,
+                            locations:
+                              nav.locations ??
+                              car?.locations ??
+                              persisted?.locations,
+                          },
+                        });
                       } else {
                         navigate(-1);
                       }

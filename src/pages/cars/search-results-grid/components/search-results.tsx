@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import {
+  loadCheckoutSearchState,
+  saveCheckoutSearchState,
+} from '@/utils/checkout-search-state';
 import { Funnel, LayoutGrid, List, Search as SearchIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -356,11 +360,23 @@ export function SearchResults({ mode }: { mode: SearchResultsType }) {
   });
 
   const location = useLocation();
-  const searchData = location.state?.searchData;
-  const searchParams = location.state?.searchParams;
-  const locations = location.state?.locations;
+  const persistedSearch = loadCheckoutSearchState();
+  const searchData =
+    location.state?.searchData ?? persistedSearch?.searchData;
+  const searchParams =
+    location.state?.searchParams ?? persistedSearch?.searchParams;
+  const locations = location.state?.locations ?? persistedSearch?.locations;
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!location.state?.searchData) return;
+    saveCheckoutSearchState({
+      searchData: location.state.searchData,
+      searchParams: location.state.searchParams,
+      locations: location.state.locations,
+    });
+  }, [location.state]);
 
   const apiPayload = searchData as Record<string, unknown> | undefined;
   const nestedData = apiPayload?.data;
