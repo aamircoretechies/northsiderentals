@@ -3,6 +3,9 @@ const GENERIC_ERROR = 'Something went wrong. Please try again.';
 const ERROR_MAP: Record<string, string> = {
   // Auth
   'invalid credentials': 'Incorrect email or password. Please try again.',
+  'invalid or expired otp': 'Invalid OTP.',
+  'invalid otp': 'Invalid OTP.',
+  'expired otp': 'Invalid OTP.',
   'token expired': 'Your session has expired. Please log in again.',
   unauthorized: 'You are not authorized to perform this action.',
   'account not found': 'No account found with these details.',
@@ -85,6 +88,24 @@ export function getFriendlyErrorMessage(input: {
   if (direct) return direct;
 
   return input.fallback || GENERIC_ERROR;
+}
+
+/** Password-reset / signup OTP failures — never surface "expired" on first wrong entry. */
+export function getOtpErrorMessage(
+  message: unknown,
+  fallback = 'Invalid OTP.',
+): string {
+  const lower = normalize(message);
+  if (
+    lower.includes('otp') &&
+    (lower.includes('invalid') ||
+      lower.includes('expired') ||
+      lower.includes('incorrect') ||
+      lower.includes('wrong'))
+  ) {
+    return 'Invalid OTP.';
+  }
+  return getFriendlyErrorMessage({ message, fallback });
 }
 
 export function getFriendlyError(error: unknown, fallback?: string): string {

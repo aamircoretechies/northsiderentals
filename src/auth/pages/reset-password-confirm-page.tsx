@@ -24,7 +24,11 @@ import {
   getOtpPasswordResetSchema,
   OtpPasswordResetSchemaType,
 } from '../forms/reset-password-schema';
-import { resetPasswordWithOtp } from '@/services/auth-reset-password';
+import {
+  requestPasswordResetOtp,
+  resetPasswordWithOtp,
+} from '@/services/auth-reset-password';
+import { getOtpErrorMessage } from '@/utils/api-error-handler';
 
 export function ResetPasswordConfirmPage() {
   const navigate = useNavigate();
@@ -40,8 +44,17 @@ export function ResetPasswordConfirmPage() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showResendMessage, setShowResendMessage] = useState(false);
+  const [resendMessageCycle, setResendMessageCycle] = useState(0);
+
+  useEffect(() => {
+    if (resendMessageCycle <= 0) return;
+    const timeout = window.setTimeout(() => setShowResendMessage(false), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [resendMessageCycle]);
 
   useEffect(() => {
     if (!emailFromUrl) {
@@ -77,13 +90,30 @@ export function ResetPasswordConfirmPage() {
         navigate(`${signinPath}?pwd_reset=success`);
       }, 1500);
     } catch (err) {
+      const apiMessage =
+        err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setError(getOtpErrorMessage(apiMessage, apiMessage));
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  async function onResendCode() {
+    try {
+      setIsResending(true);
+      setError(null);
+      setSuccessMessage(null);
+      await requestPasswordResetOtp(emailFromUrl);
+      setShowResendMessage(true);
+      setResendMessageCycle((prev) => prev + 1);
+    } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'An unexpected error occurred. Please try again.',
+          : 'Could not resend verification code.',
       );
     } finally {
-      setIsProcessing(false);
+      setIsResending(false);
     }
   }
 
@@ -121,6 +151,17 @@ export function ResetPasswordConfirmPage() {
                 <Check className="h-4 w-4 text-green-500" />
               </AlertIcon>
               <AlertTitle>{successMessage}</AlertTitle>
+            </Alert>
+          )}
+
+          {showResendMessage && (
+            <Alert>
+              <AlertIcon>
+                <Check className="h-4 w-4 text-green-500" />
+              </AlertIcon>
+              <AlertTitle>
+                Verification code resent. Please check your inbox.
+              </AlertTitle>
             </Alert>
           )}
 
@@ -230,6 +271,20 @@ export function ResetPasswordConfirmPage() {
                 'Reset password'
               )}
             </Button>
+
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">
+                Didn&apos;t receive a code?{' '}
+              </span>
+              <button
+                type="button"
+                className="font-semibold text-primary hover:underline disabled:opacity-60"
+                disabled={isResending || isProcessing}
+                onClick={() => void onResendCode()}
+              >
+                {isResending ? 'Resending…' : 'Resend code'}
+              </button>
+            </div>
           </div>
 
           <div className="text-center text-sm space-y-2">

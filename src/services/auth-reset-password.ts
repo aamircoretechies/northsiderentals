@@ -1,5 +1,8 @@
 import { apiJson } from '@/utils/api-client';
-import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
+import {
+  getFriendlyErrorMessage,
+  getOtpErrorMessage,
+} from '@/utils/api-error-handler';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ||
@@ -12,10 +15,10 @@ function assertOk(json: Record<string, unknown>): void {
     json.status !== '1'
   ) {
     throw new Error(
-      getFriendlyErrorMessage({
+      getOtpErrorMessage(json.message, getFriendlyErrorMessage({
         message: json.message,
         fallback: 'Request failed.',
-      }),
+      })),
     );
   }
 }
