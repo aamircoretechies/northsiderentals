@@ -28,6 +28,26 @@ export interface UploadImagesForm {
   docs: UploadDocumentItem[];
 }
 
+/** True when the row has a saved file or a staged file ready to commit on Save. */
+export function isUploadDocumentSatisfied(doc: UploadDocumentItem): boolean {
+  return doc.uploaded || Boolean(doc.pendingStore?.url);
+}
+
+/** Save is allowed only when every required document has a file and none are uploading. */
+export function canSaveUploadImagesStep(
+  docs: UploadDocumentItem[],
+  options?: { loading?: boolean },
+): boolean {
+  if (options?.loading) return false;
+  if (docs.length === 0) return false;
+  if (docs.some((d) => d.isUploading)) return false;
+  return docs.every(isUploadDocumentSatisfied);
+}
+
+export function countMissingUploadDocuments(docs: UploadDocumentItem[]): number {
+  return docs.filter((d) => !isUploadDocumentSatisfied(d)).length;
+}
+
 export function UploadImagesCard({
   value,
   onUpload,

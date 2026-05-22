@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatMoneyAmount } from '@/utils/format-money';
 
 export interface RentalFeeSummaryBottomSheetProps {
   days: number;
@@ -6,6 +7,7 @@ export interface RentalFeeSummaryBottomSheetProps {
   totalExtras: number;
   totalCost: number;
   gstAmount: number;
+  currencySymbol?: string;
 }
 
 export function RentalFeeSummaryBottomSheet({
@@ -14,12 +16,13 @@ export function RentalFeeSummaryBottomSheet({
   totalExtras,
   totalCost,
   gstAmount,
+  currencySymbol = '$',
 }: RentalFeeSummaryBottomSheetProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const sym = currencySymbol || '$';
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-[20px] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pt-3 px-5 pb-2 transition-all duration-300 ease-in-out">
-      {/* Top drag handle indicator - Clickable for toggle */}
       <div
         className="w-full pt-1 pb-5 cursor-pointer active:opacity-70 transition-opacity"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -37,17 +40,17 @@ export function RentalFeeSummaryBottomSheet({
         <div className="flex flex-col gap-0 mb-0">
           <div className="flex justify-between items-center">
             <span className="text-black text-[13px]">
-              Daily Rate ({days} days @ ${dailyRate.toFixed(2)} per day)
+              Daily Rate ({days} days @ {formatMoneyAmount(dailyRate, sym)} per day)
             </span>
             <span className="font-extrabold text-black text-[13px]">
-              $ {(days * dailyRate).toFixed(2)}
+              {formatMoneyAmount(days * dailyRate, sym)}
             </span>
           </div>
 
           <div className="flex justify-between items-center">
             <span className="text-black text-[13px]">Total Extras</span>
             <span className="font-extrabold text-black text-[13px]">
-              $ {totalExtras.toFixed(2)}
+              {formatMoneyAmount(totalExtras, sym)}
             </span>
           </div>
         </div>
@@ -56,16 +59,15 @@ export function RentalFeeSummaryBottomSheet({
       <div className="flex flex-col gap-3 mb-4">
         <div className="flex justify-between items-center font-bold text-[#004a9f] text-[16px] mt-1">
           <span>Total Cost</span>
-          <span>$ {totalCost.toFixed(2)}</span>
+          <span>{formatMoneyAmount(totalCost, sym)}</span>
         </div>
 
         <div className="flex justify-end mt-[-8px]">
           <span className="text-[#8692a6] text-[13px]">
-            (Inc. GST: ${gstAmount.toFixed(2)})
+            (Inc. GST: {formatMoneyAmount(gstAmount, sym)})
           </span>
         </div>
       </div>
-
     </div>
   );
 }

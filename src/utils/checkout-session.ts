@@ -16,6 +16,7 @@ import {
 
 export interface PaymentReturnUrlOptions {
   convertQuote?: boolean;
+  updatePay?: boolean;
 }
 
 /** Persist checkout context across Windcave → backend complete → app confirmation redirects. */
@@ -31,6 +32,10 @@ export interface CheckoutPendingState {
   paymentUrl?: string;
   /** Quote → booking: convert after Windcave return */
   convertQuote?: boolean;
+  /** Modify booking & pay — do not auto-complete on stale paid status from polling */
+  updatePay?: boolean;
+  /** Amount due from last update-booking (authoritative for /payments/create). */
+  balanceDue?: number;
   reservation_ref?: string;
 }
 
@@ -89,6 +94,8 @@ export function saveCheckoutPaymentSession(options: {
   searchParams?: Record<string, unknown>;
   locations?: unknown[];
   convertQuote?: boolean;
+  updatePay?: boolean;
+  balanceDue?: number;
 }): CheckoutPendingState {
   const booking =
     options.booking ??
@@ -108,6 +115,11 @@ export function saveCheckoutPaymentSession(options: {
     paymentUrl,
     reservation_ref: options.reservationRef,
     convertQuote: options.convertQuote,
+    updatePay: options.updatePay,
+    balanceDue:
+      options.balanceDue != null && Number.isFinite(options.balanceDue)
+        ? options.balanceDue
+        : undefined,
   };
   saveCheckoutPendingState(state);
   return state;
@@ -165,6 +177,13 @@ export function buildQuoteConvertConfirmationUrl(): string {
   const base = buildCheckoutConfirmationUrl();
   const sep = base.includes('?') ? '&' : '?';
   return `${base}${sep}convert_quote=1`;
+}
+
+/** Payment success after modify-and-pay (updated totals may need settlement). */
+export function buildUpdatePayConfirmationUrl(): string {
+  const base = buildCheckoutConfirmationUrl();
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}mode=update-pay`;
 }
 
 /** Cancel return — Windcave redirects here after user cancels on hosted page. */

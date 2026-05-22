@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { formatMoneyAmount } from '@/utils/format-money';
 
 export interface RentalFeeSummaryProps {
   days: number;
@@ -20,7 +21,7 @@ export function RentalFeeSummary({
 }: RentalFeeSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const sym = currencySymbol || '';
+  const sym = currencySymbol || '$';
   const baseTotal = days * dailyRate;
   const totalCost = baseTotal + totalExtras;
 
@@ -43,20 +44,18 @@ export function RentalFeeSummary({
 
         <div className="flex justify-between items-center mb-2 gap-3">
           <span className="text-black font-medium text-[14px] leading-snug">
-            Daily rate ({days} {days === 1 ? 'day' : 'days'} @ {sym}
-            {dailyRate.toFixed(2)} / day)
+            Daily rate ({days} {days === 1 ? 'day' : 'days'} @{' '}
+            {formatMoneyAmount(dailyRate, sym)} / day)
           </span>
           <span className="text-black font-extrabold text-[15px] shrink-0">
-            {sym}
-            {(days * dailyRate).toFixed(2)}
+            {formatMoneyAmount(days * dailyRate, sym)}
           </span>
         </div>
 
         <div className="flex justify-between items-center mb-3">
           <span className="text-black font-medium text-[14px]">Total extras</span>
           <span className="text-black font-extrabold text-[15px]">
-            {sym}
-            {totalExtras.toFixed(2)}
+            {formatMoneyAmount(totalExtras, sym)}
           </span>
         </div>
       </div>
@@ -65,12 +64,10 @@ export function RentalFeeSummary({
         <span className="text-[#0061e0] font-medium text-[15px]">Total</span>
         <div className="flex flex-col items-end">
           <span className="text-[#0061e0] font-extrabold text-[18px] leading-none mb-1">
-            {sym}
-            {totalCost.toFixed(2)}
+            {formatMoneyAmount(totalCost, sym)}
           </span>
           <span className="text-[#8692a6] text-[12px] font-medium">
-            (GST included: {sym}
-            {gstAmount.toFixed(2)})
+            (GST included: {formatMoneyAmount(gstAmount, sym)})
           </span>
         </div>
       </div>

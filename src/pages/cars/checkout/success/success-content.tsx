@@ -17,6 +17,7 @@ import {
   resolveCheckoutReservationRef,
 } from '@/utils/checkout-session';
 import { inferIsQuote } from '@/utils/booking-status';
+import { getBookingPaymentSnapshot } from '@/utils/booking-payment-status';
 import { saveCheckoutCardBrand, formatCardBrand as formatCardBrandLabel } from '@/utils/card-brand';
 import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
 import {
@@ -112,6 +113,9 @@ export function CarsCheckoutSuccessContent() {
 
   const reservationContextMode = loadReservationContext()?.mode;
   const checkoutPending = loadCheckoutPendingState();
+  const isUpdatePayFlow =
+    searchParams.get('mode') === 'update-pay' ||
+    Boolean(checkoutPending?.updatePay);
   const isNewBookingCheckout =
     Boolean(checkoutPending) && checkoutPending?.convertQuote !== true;
   const isConvertQuoteFlow =
@@ -132,11 +136,18 @@ export function CarsCheckoutSuccessContent() {
     });
   }, [resolvedBooking, isPaymentSuccess, isConvertQuoteFlow]);
 
+  const paymentSnapshot = useMemo(
+    () => getBookingPaymentSnapshot(resolvedBooking as Record<string, unknown>),
+    [resolvedBooking],
+  );
+
   const successTitle = isConvertQuoteFlow
     ? quoteConvertDone || (isPaymentSuccess && !convertingQuote)
       ? 'Booking request submitted'
       : 'Convert quote to booking'
-    : isPaymentSuccess
+    : isUpdatePayFlow && isPaymentSuccess
+      ? 'Booking updated'
+      : isPaymentSuccess
       ? 'Booking confirmed'
       : isQuoteOnly
         ? 'Quotation submitted'
@@ -150,7 +161,11 @@ export function CarsCheckoutSuccessContent() {
   const confirmationMessage =
     successTitle === 'Quotation submitted'
       ? 'A copy of your quote will be sent to your email. Please save your reservation number for reference.'
-      : bookingNotConfirmedNotice;
+      : isUpdatePayFlow && isPaymentSuccess
+        ? paymentSnapshot.balanceDue > 0.005
+          ? `${bookingNotConfirmedNotice} Your updated balance has been submitted for payment.`
+          : `${bookingNotConfirmedNotice} Your booking changes have been saved.`
+        : bookingNotConfirmedNotice;
 
   const lookupRef = useMemo(
     () =>

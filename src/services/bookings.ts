@@ -2,6 +2,11 @@ import { getAuth } from '@/auth/lib/helpers';
 import { createApiUrl } from '@/lib/api-url';
 import { getFriendlyErrorMessage } from '@/utils/api-error-handler';
 import { sanitizeApiText } from '@/utils/sanitize-api-text';
+import {
+  formatBookingDisplayText,
+  formatMoneyAmount,
+  resolveCurrencySymbol,
+} from '@/utils/format-money';
 import { RCM_BOOKING_TYPE_BOOKING } from '@/lib/rcm-booking';
 import {
   formatBookingStatusLabel,
@@ -9,6 +14,7 @@ import {
   inferIsQuote,
 } from '@/utils/booking-status';
 import { extractReservationNoForDisplay } from '@/utils/reservation-no';
+import { getBookingPaymentSnapshot } from '@/utils/booking-payment-status';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const API_PUBLIC_BASE_URL = (import.meta.env.VITE_BASE_URL as string | undefined) || '';
@@ -23,8 +29,13 @@ const WORKFLOW_TTL_MS = 30_000;
 
 type CacheEntry<T> = { ts: number; data: T };
 
+type BookingDetailCacheEntry = CacheEntry<BookingByReferenceResponse> & {
+  /** Ignore stale GET overwrites until this timestamp (after update-booking seed). */
+  protectUntil?: number;
+};
+
 const bookingsListCache = new Map<string, CacheEntry<BookingsListResponse>>();
-const bookingDetailCache = new Map<string, CacheEntry<BookingByReferenceResponse>>();
+const bookingDetailCache = new Map<string, BookingDetailCacheEntry>();
 const workflowCache = new Map<string, CacheEntry<WorkflowChecklistResponse>>();
 
 const inflightRequests = new Map<string, Promise<unknown>>();
@@ -66,6 +77,12 @@ export function invalidateBookingsCache(reference?: string): void {
   } else {
     bookingDetailCache.clear();
   }
+}
+
+/** Refresh bookings list / workflow without clearing detail cache (e.g. after update-booking seed). */
+export function invalidateBookingsListCache(): void {
+  bookingsListCache.clear();
+  workflowCache.clear();
 }
 
 export interface BookingsListParams {
@@ -489,9 +506,17 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     [dropoffDate, formatTimeWithAmPm(dropoffTime)].filter(Boolean).join(' ').trim() || '—';
 
   const pricing = (b.pricing as Record<string, unknown>) || {};
-  const currency = (pricing.currency as string) || 'AUD';
+  const currencySym = resolveCurrencySymbol(
+    pricing.currency ?? b.currency,
+    pricing.currency_symbol ??
+      pricing.currencysymbol ??
+      b.currencysymbol ??
+      b.currency_symbol,
+  );
   const total =
     b.totalcost != null ? Number(b.totalcost) : Number(pricing.total) || 0;
+  const reservationTypeRaw =
+    b.reservation_type != null ? formatBookingDisplayText(b.reservation_type) : '';
 
   const img =
     (b.car_image as string) ||
@@ -526,12 +551,12 @@ export function mapApiBookingToCardProps(b: Record<string, unknown>) {
     statusLabel: formatBookingStatusLabel(
       rawStatus,
       isQuote,
-      b.reservation_type != null ? String(b.reservation_type) : undefined,
+      reservationTypeRaw || undefined,
     ),
-    paymentStatus: b.payment_status != null ? String(b.payment_status) : '',
-    reservationType:
-      b.reservation_type != null ? sanitizeApiText(b.reservation_type) : '',
-    totalDisplay: `${currency} ${total.toFixed(2)}`,
+    paymentStatus:
+      b.payment_status != null ? formatBookingDisplayText(b.payment_status) : '',
+    reservationType: reservationTypeRaw,
+    totalDisplay: formatMoneyAmount(total, currencySym),
     isQuote,
     canConvertToBooking: inferCanConvertToBooking({
       can_convert_to_booking: b.can_convert_to_booking,
@@ -549,15 +574,22 @@ export interface BookingByReferenceResponse {
   data?: Record<string, unknown>;
 }
 
+export type FetchBookingByReferenceOptions = {
+  /** Bypass TTL/protectUntil — use before modify-and-pay `/payments/create`. */
+  force?: boolean;
+};
+
 export async function fetchBookingByReference(
   reference: string,
+  options?: FetchBookingByReferenceOptions,
 ): Promise<BookingByReferenceResponse> {
   const ref = reference.trim();
   if (!ref) {
     throw new Error('Missing booking reference');
   }
+  const force = Boolean(options?.force);
   const cacheHit = bookingDetailCache.get(ref);
-  if (cacheHit && isFresh(cacheHit.ts, BOOKING_DETAIL_TTL_MS)) {
+  if (!force && cacheHit && isFresh(cacheHit.ts, BOOKING_DETAIL_TTL_MS)) {
     return cacheHit.data;
   }
   const inflightKey = `bookings:detail:${ref}`;
@@ -590,6 +622,14 @@ export async function fetchBookingByReference(
     }
 
     const json = (await response.json()) as BookingByReferenceResponse;
+    const existing = bookingDetailCache.get(ref);
+    if (
+      !force &&
+      existing?.protectUntil &&
+      Date.now() < existing.protectUntil
+    ) {
+      return existing.data;
+    }
     bookingDetailCache.set(ref, { ts: Date.now(), data: json });
     return json;
   })();
@@ -937,6 +977,92 @@ export async function updateBooking(
   return json as { success?: boolean; status?: number; message?: string; data?: unknown };
 }
 
+/** `data.booking` from POST /bookings/update-booking (canonical shape for detail + payment). */
+export function extractBookingRecordFromUpdateResponse(
+  data: unknown,
+): Record<string, unknown> | null {
+  if (!data || typeof data !== 'object') return null;
+  const booking = (data as Record<string, unknown>).booking;
+  if (booking && typeof booking === 'object' && !Array.isArray(booking)) {
+    return booking as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** Workflow / RCM arrays for express check-in after update (`rcm_booking_info` or `update_result`). */
+export function extractWorkflowFromUpdateResponse(
+  data: unknown,
+): Record<string, unknown> | null {
+  const booking = extractBookingRecordFromUpdateResponse(data);
+  const rcm = booking?.rcm_booking_info;
+  if (rcm && typeof rcm === 'object' && !Array.isArray(rcm)) {
+    return rcm as Record<string, unknown>;
+  }
+  if (!data || typeof data !== 'object') return null;
+  const updateResult = (data as Record<string, unknown>).update_result;
+  if (updateResult && typeof updateResult === 'object' && !Array.isArray(updateResult)) {
+    return updateResult as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** Balance due from POST /bookings/update-booking `data` (booking + workflow rows). */
+export function extractBalanceDueFromUpdateResponse(data: unknown): number {
+  const booking = extractBookingRecordFromUpdateResponse(data);
+  if (booking) {
+    const snap = getBookingPaymentSnapshot(booking);
+    if (snap.balanceDue > 0.005) return snap.balanceDue;
+  }
+  if (!data || typeof data !== 'object') return 0;
+  const root = data as Record<string, unknown>;
+  for (const key of ['balancedue', 'balance_due', 'amount_due']) {
+    const n = Number(root[key]);
+    if (Number.isFinite(n) && n > 0.005) return n;
+  }
+  const workflow = extractWorkflowFromUpdateResponse(data);
+  if (workflow) {
+    const snap = getBookingPaymentSnapshot({ rcm_booking_info: workflow });
+    if (snap.balanceDue > 0.005) return snap.balanceDue;
+  }
+  return 0;
+}
+
+/** Seed detail cache so modify-and-pay uses fresh balancedue/totalcost from the update response. */
+export function seedBookingDetailCacheFromUpdate(
+  reference: string,
+  updateData: unknown,
+): Record<string, unknown> | null {
+  let booking = extractBookingRecordFromUpdateResponse(updateData);
+  const ref = reference.trim();
+  if (!booking || !ref) return null;
+  const balanceDue = extractBalanceDueFromUpdateResponse(updateData);
+  if (balanceDue > 0.005) {
+    booking = { ...booking, balancedue: balanceDue };
+    const rcm = booking.rcm_booking_info;
+    if (rcm && typeof rcm === 'object' && !Array.isArray(rcm)) {
+      const rcmObj = rcm as Record<string, unknown>;
+      const info = rcmObj.bookinginfo;
+      if (Array.isArray(info) && info[0] && typeof info[0] === 'object') {
+        rcmObj.bookinginfo = [
+          { ...(info[0] as Record<string, unknown>), balancedue: balanceDue },
+          ...info.slice(1),
+        ];
+      }
+    }
+  }
+  const cached: BookingByReferenceResponse = {
+    status: 1,
+    message: 'Booking updated successfully',
+    data: booking,
+  };
+  bookingDetailCache.set(ref, {
+    ts: Date.now(),
+    data: cached,
+    protectUntil: Date.now() + 120_000,
+  });
+  return booking;
+}
+
 export async function editBookingBasics(
   payload: EditBookingBasicsPayload,
 ): Promise<{
@@ -1141,7 +1267,8 @@ export interface ConvertQuoteToBookingPayload {
    * Windcave redirect / complete payload — required when converting after card capture.
    * Set `VITE_QUOTE_CONVERT_ENDPOINT` to `quotations/convert` if the API uses that route.
    */
-  windcave_result?: Record<string, unknown>;
+  /** API expects a JSON string; callers may pass an object to be stringified. */
+  windcave_result?: Record<string, unknown> | string;
   /** @deprecated Prefer `windcave_result` after POST /payments/create */
   payment?: ConvertQuotePayment;
 }
@@ -1933,7 +2060,10 @@ export function mapBookingDetailToView(
   const vd = (data.vehicle_details as Record<string, unknown>) || {};
   const pricing = (data.pricing as Record<string, unknown>) || {};
 
-  const sym = String(bookingInfo?.currencysymbol ?? '$');
+  const sym = resolveCurrencySymbol(
+    pricing.currency ?? bookingInfo?.currencyname ?? bookingInfo?.currency,
+    bookingInfo?.currencysymbol ?? bookingInfo?.currency_symbol,
+  );
   const currency = String(pricing.currency ?? bookingInfo?.currencyname ?? 'AUD');
 
   const pickupWhen = [dates.pickup_date, formatTimeWithAmPm(dates.pickup_time)]
@@ -2056,6 +2186,7 @@ export function mapBookingDetailToView(
     booking_status: data.booking_status,
   });
   const rawBookingStatus = sanitizeApiText(String(data.booking_status ?? '—'));
+  const reservationTypeLabel = formatBookingDisplayText(data.reservation_type ?? '');
 
   return {
     bookingId: String(data.booking_id ?? ''),
@@ -2066,13 +2197,13 @@ export function mapBookingDetailToView(
     bookingStatus: formatBookingStatusLabel(
       rawBookingStatus,
       isQuote,
-      String(data.reservation_type ?? ''),
+      reservationTypeLabel || undefined,
     ),
     paymentStatus:
       data.payment_status != null && String(data.payment_status).length
-        ? sanitizeApiText(String(data.payment_status))
+        ? formatBookingDisplayText(data.payment_status)
         : null,
-    reservationType: sanitizeApiText(String(data.reservation_type ?? '')),
+    reservationType: reservationTypeLabel,
     isQuote,
     canConvertToBooking: inferCanConvertToBooking({
       can_convert_to_booking: data.can_convert_to_booking,

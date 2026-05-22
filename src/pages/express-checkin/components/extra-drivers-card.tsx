@@ -1,3 +1,11 @@
+import { cn } from '@/lib/utils';
+import type { FieldErrors } from '@/utils/inline-form-validation';
+
+function InlineFieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-[12px] text-destructive mt-0.5">{message}</p>;
+}
+
 export interface ExtraDriverItem {
   id: string;
   customerid: number;
@@ -17,21 +25,35 @@ export interface ExtraDriversForm {
   removedCustomerIds: number[];
 }
 
+const inputClass =
+  'w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]';
+
 export function ExtraDriversCard({
   value,
   onChange,
+  onUpdateDriver,
+  fieldErrors = {},
   maxDrivers = 5,
   onRemoveDriver,
 }: {
   value: ExtraDriversForm;
   onChange: (next: ExtraDriversForm) => void;
+  onUpdateDriver?: (id: string, patch: Partial<ExtraDriverItem>) => void;
+  fieldErrors?: FieldErrors;
   maxDrivers?: number;
   onRemoveDriver?: (driver: ExtraDriverItem) => Promise<void>;
 }) {
   const drivers = value.drivers ?? [];
   const removedCustomerIds = value.removedCustomerIds ?? [];
 
+  const err = (driverId: string, field: keyof ExtraDriverItem) =>
+    fieldErrors[`${driverId}-${field}`];
+
   const update = (id: string, patch: Partial<ExtraDriverItem>) => {
+    if (onUpdateDriver) {
+      onUpdateDriver(id, patch);
+      return;
+    }
     onChange({
       drivers: drivers.map((d) => (d.id === id ? { ...d, ...patch } : d)),
       removedCustomerIds,
@@ -45,7 +67,6 @@ export function ExtraDriversCard({
       await onRemoveDriver(target);
     }
     const nextRemoved = [...removedCustomerIds];
-    // If removal is persisted immediately, don't queue a second delete for Save.
     const shouldQueueDelete = target.customerid > 0 && !onRemoveDriver;
     if (shouldQueueDelete && !nextRemoved.includes(target.customerid)) {
       nextRemoved.push(target.customerid);
@@ -97,69 +118,124 @@ export function ExtraDriversCard({
           </div>
           <div className="grid gap-2">
             <div className="grid grid-cols-2 gap-2">
-              <input
-                value={d.firstname ?? ''}
-                onChange={(e) => update(d.id, { firstname: e.target.value })}
-                placeholder="First name"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
-              <input
-                value={d.lastname ?? ''}
-                onChange={(e) => update(d.id, { lastname: e.target.value })}
-                placeholder="Last name"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
+              <div>
+                <input
+                  value={d.firstname ?? ''}
+                  onChange={(e) => update(d.id, { firstname: e.target.value })}
+                  placeholder="First name"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'firstname') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'firstname')} />
+              </div>
+              <div>
+                <input
+                  value={d.lastname ?? ''}
+                  onChange={(e) => update(d.id, { lastname: e.target.value })}
+                  placeholder="Last name"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'lastname') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'lastname')} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                value={d.dateofbirth ?? ''}
-                onChange={(e) => update(d.id, { dateofbirth: e.target.value })}
-                onKeyDown={(e) => e.preventDefault()}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px] cursor-pointer"
-                aria-label="Extra driver date of birth"
-              />
-              <input
-                value={d.licenseno ?? ''}
-                onChange={(e) => update(d.id, { licenseno: e.target.value })}
-                placeholder="License no."
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
+              <div>
+                <input
+                  type="date"
+                  value={d.dateofbirth ?? ''}
+                  onChange={(e) => update(d.id, { dateofbirth: e.target.value })}
+                  onKeyDown={(e) => e.preventDefault()}
+                  onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                  className={cn(
+                    inputClass,
+                    'cursor-pointer',
+                    err(d.id, 'dateofbirth') && 'ring-1 ring-destructive',
+                  )}
+                  aria-label="Extra driver date of birth"
+                />
+                <InlineFieldError message={err(d.id, 'dateofbirth')} />
+              </div>
+              <div>
+                <input
+                  value={d.licenseno ?? ''}
+                  onChange={(e) => update(d.id, { licenseno: e.target.value })}
+                  placeholder="License no."
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'licenseno') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'licenseno')} />
+              </div>
             </div>
-            <input
-              value={d.email ?? ''}
-              onChange={(e) => update(d.id, { email: e.target.value })}
-              placeholder="Email"
-              className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-            />
-            <div className="grid grid-cols-2 gap-2">
+            <div>
               <input
-                value={d.state ?? ''}
-                onChange={(e) => update(d.id, { state: e.target.value })}
-                placeholder="State"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
+                value={d.email ?? ''}
+                onChange={(e) => update(d.id, { email: e.target.value })}
+                placeholder="Email"
+                className={cn(
+                  inputClass,
+                  err(d.id, 'email') && 'ring-1 ring-destructive',
+                )}
               />
-              <input
-                value={d.city ?? ''}
-                onChange={(e) => update(d.id, { city: e.target.value })}
-                placeholder="City"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
+              <InlineFieldError message={err(d.id, 'email')} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <input
-                value={d.postcode ?? ''}
-                onChange={(e) => update(d.id, { postcode: e.target.value })}
-                placeholder="Postcode"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
-              <input
-                value={d.address ?? ''}
-                onChange={(e) => update(d.id, { address: e.target.value })}
-                placeholder="Address"
-                className="w-full bg-white border border-[#e2e8f0] rounded-[8px] px-3 py-2 text-[14px]"
-              />
+              <div>
+                <input
+                  value={d.state ?? ''}
+                  onChange={(e) => update(d.id, { state: e.target.value })}
+                  placeholder="State"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'state') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'state')} />
+              </div>
+              <div>
+                <input
+                  value={d.city ?? ''}
+                  onChange={(e) => update(d.id, { city: e.target.value })}
+                  placeholder="City"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'city') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'city')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <input
+                  value={d.postcode ?? ''}
+                  onChange={(e) => update(d.id, { postcode: e.target.value })}
+                  placeholder="Postcode"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'postcode') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'postcode')} />
+              </div>
+              <div>
+                <input
+                  value={d.address ?? ''}
+                  onChange={(e) => update(d.id, { address: e.target.value })}
+                  placeholder="Address"
+                  className={cn(
+                    inputClass,
+                    err(d.id, 'address') && 'ring-1 ring-destructive',
+                  )}
+                />
+                <InlineFieldError message={err(d.id, 'address')} />
+              </div>
             </div>
           </div>
         </div>

@@ -90,6 +90,9 @@ export function BookingCard({
   const showConvertCta =
     !quoteExpired && isUpcoming && (canConvertToBooking ?? isQuote);
   const showModifyAndPay = !quoteExpired && isUpcoming && !showConvertCta;
+  const showReservationTypePill =
+    Boolean((reservationType ?? '').trim()) &&
+    (reservationType ?? '').trim().toLowerCase() !== statusLabel.trim().toLowerCase();
   const prefetchBooking = () => {
     const ref = refForNav;
     if (!ref) return;
@@ -152,7 +155,7 @@ export function BookingCard({
                 Quote
               </span>
             ) : null}
-            {reservationType ? (
+            {showReservationTypePill ? (
               <span className="rounded-full bg-muted text-muted-foreground px-2.5 py-0.5">
                 {reservationType}
               </span>

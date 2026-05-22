@@ -10,11 +10,14 @@ import {
 } from '@/services/booking-payload';
 import { carsService } from '@/services/cars';
 import { fetchBookingByReference } from '@/services/bookings';
+
+const UPDATE_PAY_SETTLE_MS = 3000;
 import {
   buildCheckoutConfirmationUrl,
   buildCheckoutPaymentCancelUrl,
   buildCheckoutPaymentFailureUrl,
   buildQuoteConvertConfirmationUrl,
+  buildUpdatePayConfirmationUrl,
   loadCheckoutPendingState,
   normalizeHostedPaymentUrlForRcm,
   paymentUrlNeedsReservationRef,
@@ -26,19 +29,31 @@ import { persistPaymentCardDetailsForRcm } from '@/utils/persist-payment-card';
 import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 import { parsePaymentReturnParams, paymentReturnApiReference } from '@/utils/payment-return';
 import { isShortReservationNo, resolveReservationRef } from '@/utils/reservation-context';
+import {
+  getBookingPaymentSnapshot,
+  shouldTreatBookingAsFullyPaid,
+} from '@/utils/booking-payment-status';
 
-function buildConfirmationSearch(search: string, convertQuote: boolean): string {
+function buildConfirmationSearch(
+  search: string,
+  options: { convertQuote?: boolean; updatePay?: boolean },
+): string {
   const raw = search.startsWith('?') ? search.slice(1) : search;
   const params = new URLSearchParams(raw);
   if (!params.get('status') && !raw) {
     params.set('status', 'success');
   }
-  if (convertQuote && params.get('status') === 'success') {
+  if (options.convertQuote && params.get('status') === 'success') {
     params.set('convert_quote', '1');
+  }
+  if (options.updatePay && params.get('status') === 'success') {
+    params.set('mode', 'update-pay');
   }
   const qs = params.toString();
   if (qs) return `?${qs}`;
-  return convertQuote ? '?status=success&convert_quote=1' : '?status=success';
+  if (options.convertQuote) return '?status=success&convert_quote=1';
+  if (options.updatePay) return '?status=success&mode=update-pay';
+  return '?status=success';
 }
 
 export function CarsCheckoutPaymentContent() {
@@ -53,10 +68,15 @@ export function CarsCheckoutPaymentContent() {
     paymentUrl: statePaymentUrl,
   } = (location.state || {}) as CheckoutPendingState & {
     paymentUrl?: string;
+    updatePay?: boolean;
   };
 
   const pendingFromStorage = loadCheckoutPendingState();
   const convertQuote = Boolean(pendingFromStorage?.convertQuote);
+  const updatePay = Boolean(
+    (location.state as { updatePay?: boolean } | null)?.updatePay ??
+      pendingFromStorage?.updatePay,
+  );
 
   useEffect(() => {
     if (!convertQuote) clearQuoteConvertPending();
@@ -143,9 +163,9 @@ export function CarsCheckoutPaymentContent() {
         });
       }
 
-      goToConfirmation(buildConfirmationSearch(search, convertQuote));
+      goToConfirmation(buildConfirmationSearch(search, { convertQuote, updatePay }));
     },
-    [goToConfirmation, stopPolling, convertQuote, reservationRef],
+    [goToConfirmation, stopPolling, convertQuote, updatePay, reservationRef],
   );
 
   const handleCancelPayment = useCallback(() => {
@@ -174,21 +194,55 @@ export function CarsCheckoutPaymentContent() {
 
     let cancelled = false;
     setRefreshingSession(true);
-    const returnOptions = { convertQuote };
+    const returnOptions = { convertQuote, updatePay };
     const successUrl = convertQuote
       ? buildQuoteConvertConfirmationUrl()
-      : buildCheckoutConfirmationUrl();
+      : updatePay
+        ? buildUpdatePayConfirmationUrl()
+        : buildCheckoutConfirmationUrl();
+    const resolveSessionAmount = async (): Promise<number> => {
+      let amount =
+        updatePay &&
+        pendingFromStorage?.balanceDue != null &&
+        pendingFromStorage.balanceDue > 0.005
+          ? pendingFromStorage.balanceDue
+          : getBookingPaymentSnapshot(
+              (mergedBooking ?? pendingFromStorage?.booking) as
+                | Record<string, unknown>
+                | undefined,
+            ).balanceDue;
 
-    void carsService
-      .createPaymentSession({
-        reservationref: reservationRef,
-        reservation_ref: reservationRef,
-        success_url: successUrl,
-        cancel_url: buildCheckoutPaymentCancelUrl(returnOptions),
-        failure_url: buildCheckoutPaymentFailureUrl(returnOptions),
+      if (!updatePay || amount > 0.005) return amount;
+
+      await new Promise((resolve) => window.setTimeout(resolve, UPDATE_PAY_SETTLE_MS));
+      try {
+        const fresh = await fetchBookingByReference(reservationRef, { force: true });
+        const snap = getBookingPaymentSnapshot(
+          fresh?.data as Record<string, unknown> | undefined,
+        );
+        if (snap.balanceDue > 0.005) amount = snap.balanceDue;
+      } catch {
+        /* keep stored amount */
+      }
+      return amount;
+    };
+
+    void resolveSessionAmount()
+      .then((sessionAmount) => {
+        if (cancelled) return;
+        return carsService.createPaymentSession({
+          reservationref: reservationRef,
+          reservation_ref: reservationRef,
+          success_url: successUrl,
+          cancel_url: buildCheckoutPaymentCancelUrl(returnOptions),
+          failure_url: buildCheckoutPaymentFailureUrl(returnOptions),
+          update_pay: updatePay,
+          amount: sessionAmount > 0.005 ? sessionAmount : undefined,
+          balancedue: sessionAmount > 0.005 ? sessionAmount : undefined,
+        });
       })
       .then((session) => {
-        if (cancelled) return;
+        if (cancelled || !session) return;
         const url = String(
           (session?.data as Record<string, unknown> | undefined)?.payment_url ?? '',
         ).trim();
@@ -207,6 +261,11 @@ export function CarsCheckoutPaymentContent() {
             paymentUrl: normalizedUrl,
             reservation_ref: reservationRef,
             convertQuote,
+            updatePay,
+            balanceDue:
+              pendingFromStorage?.balanceDue && pendingFromStorage.balanceDue > 0.005
+                ? pendingFromStorage.balanceDue
+                : undefined,
           });
         } else {
           setActivePaymentUrl(storedPaymentUrl);
@@ -232,6 +291,7 @@ export function CarsCheckoutPaymentContent() {
     searchParams,
     locations,
     pendingFromStorage?.booking,
+    updatePay,
   ]);
 
   useEffect(() => {
@@ -245,6 +305,7 @@ export function CarsCheckoutPaymentContent() {
         paymentUrl,
         reservation_ref: reservationRef || pendingFromStorage?.reservation_ref,
         convertQuote,
+        updatePay,
       });
     }
   }, [
@@ -256,36 +317,33 @@ export function CarsCheckoutPaymentContent() {
     reservationRef,
     searchParams,
     convertQuote,
+    updatePay,
     pendingFromStorage?.reservation_ref,
   ]);
 
-  /** Open Windcave in an in-app modal once the session URL is ready. */
+  /** Open Windcave in an in-app modal once the session URL is ready (not auto for modify-and-pay). */
   useEffect(() => {
     if (!normalizedPaymentUrl || refreshingSession || autoOpenedModalRef.current) {
       return;
     }
+    if (updatePay) return;
     autoOpenedModalRef.current = true;
     setPaymentModalOpen(true);
-  }, [normalizedPaymentUrl, refreshingSession]);
+  }, [normalizedPaymentUrl, refreshingSession, updatePay]);
 
   /** Poll booking payment status while the modal is open (iframe redirect fallback). */
   useEffect(() => {
     if (!reservationRef || paymentDoneRef.current || !paymentModalOpen) return;
+    // Modify & pay: stale "paid" from before the edit must not skip Windcave.
+    if (updatePay) return;
 
     const poll = async () => {
       if (paymentDoneRef.current) return;
       try {
         const res = await fetchBookingByReference(reservationRef);
         const data = res?.data as Record<string, unknown> | undefined;
-        const status = String(data?.payment_status ?? '').toLowerCase();
-        const paid =
-          status.includes('paid') ||
-          status.includes('success') ||
-          status.includes('complete') ||
-          status.includes('authorised') ||
-          status.includes('authorized') ||
-          data?.payment_id != null;
-        if (paid) {
+        const snap = getBookingPaymentSnapshot(data);
+        if (shouldTreatBookingAsFullyPaid(snap)) {
           completePayment('?status=success');
         }
       } catch {
@@ -298,7 +356,7 @@ export function CarsCheckoutPaymentContent() {
     return () => {
       stopPolling();
     };
-  }, [reservationRef, completePayment, stopPolling, paymentModalOpen]);
+  }, [reservationRef, completePayment, stopPolling, paymentModalOpen, updatePay]);
 
   if (refreshingSession) {
     return (
@@ -314,11 +372,12 @@ export function CarsCheckoutPaymentContent() {
       <div className="flex flex-col items-center justify-center min-h-[50vh] max-w-md mx-auto p-8 text-center gap-4">
         <PaymentCardDisclaimer />
         <p className="text-muted-foreground text-[15px] leading-relaxed">
-          No payment session found. If you have already paid, you can view your booking
-          confirmation.
+          {updatePay
+            ? 'Payment could not be started for your updated booking. Go back, save again, or contact us with your reservation number.'
+            : 'No payment session is available right now. Try again or contact us for help.'}
         </p>
-        <Button className="rounded-full" onClick={() => goToConfirmation()}>
-          View booking confirmation
+        <Button className="rounded-full" onClick={() => navigate(-1)}>
+          Go back
         </Button>
       </div>
     );
@@ -333,7 +392,9 @@ export function CarsCheckoutPaymentContent() {
             <p className="text-slate-700 font-medium max-w-md text-[15px] leading-relaxed">
               {convertQuote
                 ? 'Add your card in the secure form below to convert this quote into a booking request. You stay on this page the whole time.'
-                : 'Enter your card details in the secure form below to complete your booking request. You stay on this page the whole time.'}
+                : updatePay
+                  ? 'Pay any updated balance in the secure form below. Completing this step confirms payment for your booking changes.'
+                  : 'Enter your card details in the secure form below to complete your booking request. You stay on this page the whole time.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">

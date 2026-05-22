@@ -26,6 +26,7 @@ import {
   isBookingHired,
   isBookingReturned,
 } from '@/utils/booking-detail-flags';
+import { formatMoneyAmount } from '@/utils/format-money';
 import { clearCheckoutPendingState } from '@/utils/checkout-session';
 import { clearQuoteConvertPending } from '@/utils/quote-convert-pending';
 import { saveReservationContext } from '@/utils/reservation-context';
@@ -47,10 +48,6 @@ function statusStyle(label: string): { dot: string; text: string } {
     return { dot: 'bg-[#00a651]', text: 'text-[#00a651]' };
   }
   return { dot: 'bg-amber-500', text: 'text-amber-600' };
-}
-
-function formatMoney(sym: string, n: number) {
-  return `${sym}${n.toFixed(2)}`;
 }
 
 function BookingReceiptButton({
@@ -182,7 +179,7 @@ function RentalFeeSummaryBlock({
                 ) : null}
               </span>
               <span className={`${textSize} font-bold text-black shrink-0`}>
-                {formatMoney(sym, line.amount)}
+                {formatMoneyAmount(line.amount, sym)}
               </span>
             </div>
           ))
@@ -201,14 +198,14 @@ function RentalFeeSummaryBlock({
           <span
             className={`${compact ? 'text-[15px]' : 'text-[16px]'} font-bold text-[#004a9f]`}
           >
-            {formatMoney(sym, view.totalCost)}
+            {formatMoneyAmount(view.totalCost, sym)}
           </span>
         </div>
         {view.balanceDue !== view.totalCost ? (
           <div className="flex justify-between items-center">
             <span className={`${textSize} text-[#6b7280]`}>Balance due</span>
             <span className={`${textSize} font-semibold text-black`}>
-              {formatMoney(sym, view.balanceDue)}
+              {formatMoneyAmount(view.balanceDue, sym)}
             </span>
           </div>
         ) : null}
@@ -216,8 +213,8 @@ function RentalFeeSummaryBlock({
           <div className="flex justify-end">
             <span className="text-[13px] text-[#6b7280]">
               {view.gstInclusive
-                ? `(Inc. GST: ${formatMoney(sym, view.gstAmount)})`
-                : `(GST: ${formatMoney(sym, view.gstAmount)})`}
+                ? `(Inc. GST: ${formatMoneyAmount(view.gstAmount, sym)})`
+                : `(GST: ${formatMoneyAmount(view.gstAmount, sym)})`}
             </span>
           </div>
         ) : null}
@@ -298,7 +295,7 @@ function PricingRowsSection({
               ) : null}
             </span>
             <span className="font-bold text-black text-[15px] shrink-0">
-              {formatMoney(sym, row.amount)}
+              {formatMoneyAmount(row.amount, sym)}
             </span>
           </div>
         ))
@@ -726,11 +723,15 @@ export function BookingDetailContent() {
                     <p className="text-[#6b7280] text-[13px] mt-1">
                       Booked on: {view.bookedOnLabel}
                     </p>
-                    {view.reservationType ? (
+                    {view.reservationType &&
+                    view.reservationType.trim().toLowerCase() !==
+                      view.bookingStatus.trim().toLowerCase() ? (
                       <p className="text-[#6b7280] text-[13px]">
                         {view.reservationType}
                         {view.isQuote ? ' · Quote' : ''}
                       </p>
+                    ) : view.isQuote ? (
+                      <p className="text-[#6b7280] text-[13px]">Quote</p>
                     ) : null}
                     {view.paymentStatus ? (
                       <p className="text-[13px] font-medium text-foreground mt-1">

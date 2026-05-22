@@ -11,7 +11,12 @@ import { RentalFeeSummary } from '@/pages/cars/checkout/options/components/renta
 import { CustomerDetailsCard, type CustomerDetailsForm } from './components/customer-details-card';
 import { BookingDetailsCard, type BookingDetailsForm } from './components/booking-details-card';
 import { ExtraDriversCard, type ExtraDriversForm } from './components/extra-drivers-card';
-import { UploadImagesCard, type UploadImagesForm } from './components/upload-images-card';
+import {
+  UploadImagesCard,
+  canSaveUploadImagesStep,
+  countMissingUploadDocuments,
+  type UploadImagesForm,
+} from './components/upload-images-card';
 import { Button } from '@/components/ui/button';
 import { PaymentCardDisclaimer } from '@/components/payments/payment-card-disclaimer';
 import { WindcavePaymentModal } from '@/components/payments/windcave-payment-modal';
@@ -34,17 +39,26 @@ import {
   getCachedBookingByReference,
   getCachedWorkflowChecklist,
   invalidateBookingsCache,
+  invalidateBookingsListCache,
   listRcmDocuments,
   mapBookingDetailToView,
   pickRcmLicenseExpires,
   pickRcmLicenseIssued,
   storeRcmDocument,
   updateBooking,
+  seedBookingDetailCacheFromUpdate,
+  extractBalanceDueFromUpdateResponse,
+  extractWorkflowFromUpdateResponse,
   uploadRcmDocumentFile,
   type WorkflowChecklistStep,
 } from '@/services/bookings';
 import { getFriendlyError } from '@/utils/api-error-handler';
 import { type FieldErrors, hasFieldErrors } from '@/utils/inline-form-validation';
+import { resolveCurrencySymbol } from '@/utils/format-money';
+import { getBookingPaymentSnapshot } from '@/utils/booking-payment-status';
+
+/** RCM may need a moment after update-booking before balance is visible for /payments/create. */
+const UPDATE_PAY_SETTLE_MS = 3000;
 import {
   RCM_BOOKING_TYPE_BOOKING,
   resolveReferralId,
@@ -61,6 +75,7 @@ import {
   buildCheckoutPaymentFailureUrl,
   normalizeHostedPaymentUrlForRcm,
   buildQuoteConvertConfirmationUrl,
+  buildUpdatePayConfirmationUrl,
   saveCheckoutPaymentSession,
 } from '@/utils/checkout-session';
 import {
@@ -334,33 +349,85 @@ function friendlyBookingErrorMessage(error: unknown, fallback: string): string {
   return raw;
 }
 
-function validateExtraDriverInput(
-  d: ExtraDriversForm['drivers'][number],
-  index: number,
-): string | null {
-  const label = `Driver ${index + 1}`;
-  const first = d.firstname.trim();
-  const last = d.lastname.trim();
-  const dob = d.dateofbirth.trim();
-  const lic = d.licenseno.trim();
-  const email = d.email.trim();
-  const state = d.state.trim();
-  const city = d.city.trim();
-  const postcode = d.postcode.trim();
-  const address = d.address.trim();
+function extraDriverFieldKey(
+  driverId: string,
+  field: keyof ExtraDriversForm['drivers'][number],
+): string {
+  return `${driverId}-${field}`;
+}
 
-  if (!first || !last) return `${label}: first name and last name are required.`;
-  if (!NAME_PATTERN.test(first) || !NAME_PATTERN.test(last)) {
-    return `${label}: name contains invalid characters.`;
+function isExtraDriverRowEmpty(d: ExtraDriversForm['drivers'][number]): boolean {
+  return !(
+    d.firstname.trim() ||
+    d.lastname.trim() ||
+    d.dateofbirth.trim() ||
+    d.licenseno.trim() ||
+    d.email.trim() ||
+    d.state.trim() ||
+    d.city.trim() ||
+    d.postcode.trim() ||
+    d.address.trim()
+  );
+}
+
+function validateExtraDriverFormFields(
+  drivers: ExtraDriversForm['drivers'],
+): FieldErrors {
+  const errors: FieldErrors = {};
+  for (let i = 0; i < drivers.length; i += 1) {
+    const d = drivers[i];
+    const first = d.firstname.trim();
+    const last = d.lastname.trim();
+    const dob = d.dateofbirth.trim();
+    const lic = d.licenseno.trim();
+    const email = d.email.trim();
+    const state = d.state.trim();
+    const city = d.city.trim();
+    const postcode = d.postcode.trim();
+    const address = d.address.trim();
+
+    if (!first) errors[extraDriverFieldKey(d.id, 'firstname')] = 'First name is required.';
+    else if (!NAME_PATTERN.test(first)) {
+      errors[extraDriverFieldKey(d.id, 'firstname')] =
+        'Name can only contain letters, spaces, hyphens, and apostrophes.';
+    }
+    if (!last) errors[extraDriverFieldKey(d.id, 'lastname')] = 'Last name is required.';
+    else if (!NAME_PATTERN.test(last)) {
+      errors[extraDriverFieldKey(d.id, 'lastname')] =
+        'Name can only contain letters, spaces, hyphens, and apostrophes.';
+    }
+    if (!dob) errors[extraDriverFieldKey(d.id, 'dateofbirth')] = 'Date of birth is required.';
+    if (!lic) errors[extraDriverFieldKey(d.id, 'licenseno')] = 'Licence number is required.';
+    if (!email) errors[extraDriverFieldKey(d.id, 'email')] = 'Email is required.';
+    else if (!isValidEmail(email)) {
+      errors[extraDriverFieldKey(d.id, 'email')] = 'Please enter a valid email address.';
+    }
+    if (state && !LOCATION_ALLOWED_PATTERN.test(state)) {
+      errors[extraDriverFieldKey(d.id, 'state')] = 'State contains invalid characters.';
+    }
+    if (city && !LOCATION_ALLOWED_PATTERN.test(city)) {
+      errors[extraDriverFieldKey(d.id, 'city')] = 'City contains invalid characters.';
+    }
+    if (postcode && !POSTCODE_PATTERN.test(postcode)) {
+      errors[extraDriverFieldKey(d.id, 'postcode')] = 'Please enter a valid post code.';
+    }
+    if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) {
+      errors[extraDriverFieldKey(d.id, 'address')] = 'Address contains invalid characters.';
+    }
   }
-  if (!dob) return `${label}: date of birth is required.`;
-  if (!lic) return `${label}: licence number is required.`;
-  if (!email || !isValidEmail(email)) return `${label}: please enter a valid email address.`;
-  if (state && !LOCATION_ALLOWED_PATTERN.test(state)) return `${label}: state contains invalid characters.`;
-  if (city && !LOCATION_ALLOWED_PATTERN.test(city)) return `${label}: city contains invalid characters.`;
-  if (postcode && !POSTCODE_PATTERN.test(postcode)) return `${label}: please enter a valid post code.`;
-  if (address && !ADDRESS_ALLOWED_PATTERN.test(address)) return `${label}: address contains invalid characters.`;
-  return null;
+  return errors;
+}
+
+function clearExtraDriverFieldErrorsOnPatch(
+  prev: FieldErrors,
+  driverId: string,
+  patch: Partial<ExtraDriversForm['drivers'][number]>,
+): FieldErrors {
+  const next = { ...prev };
+  for (const key of Object.keys(patch)) {
+    delete next[extraDriverFieldKey(driverId, key as keyof ExtraDriversForm['drivers'][number])];
+  }
+  return next;
 }
 
 function workflowOptionalExtraId(f: Record<string, unknown>, i: number): string {
@@ -626,6 +693,9 @@ export function ExpressCheckinContent() {
   const [bookingLockedReason, setBookingLockedReason] = useState<string | null>(null);
   const [bookingSaveError, setBookingSaveError] = useState<string | null>(null);
   const [showUpdateSuccessDialog, setShowUpdateSuccessDialog] = useState(false);
+  /** Fresh `data.booking` from last update-booking — avoids stale GET overwriting balancedue. */
+  const pendingPaymentBookingRef = useRef<Record<string, unknown> | null>(null);
+  const pendingPaymentBalanceRef = useRef<number | null>(null);
   const { rcmProfile } = useDashboardData();
 
   useEffect(() => {
@@ -1127,6 +1197,30 @@ export function ExpressCheckinContent() {
     return { drivers, removedCustomerIds: [] };
   }, [extraDrivers]);
   const [driversForm, setDriversForm] = useState<ExtraDriversForm>(initialDriversForm);
+  const [extraDriverFieldErrors, setExtraDriverFieldErrors] = useState<FieldErrors>({});
+
+  const patchDriversForm = useCallback(
+    (next: ExtraDriversForm) => {
+      setDriversForm(next);
+      setExtraDriverFieldErrors({});
+    },
+    [],
+  );
+
+  const updateExtraDriver = useCallback(
+    (driverId: string, patch: Partial<ExtraDriversForm['drivers'][number]>) => {
+      setDriversForm((prev) => ({
+        ...prev,
+        drivers: prev.drivers.map((d) =>
+          d.id === driverId ? { ...d, ...patch } : d,
+        ),
+      }));
+      setExtraDriverFieldErrors((prev) =>
+        clearExtraDriverFieldErrorsOnPatch(prev, driverId, patch),
+      );
+    },
+    [],
+  );
 
   const initialUploadForm = useMemo<UploadImagesForm>(() => {
     return { docs: mapUploadDocuments(documentLinkData) };
@@ -1171,6 +1265,16 @@ export function ExpressCheckinContent() {
     const rows = Array.isArray(latest?.data) ? latest.data : [];
     hydrateUploadDocsFromApi(rows);
   }, [bookingInfo?.reservationref, reservationRef]);
+
+  const uploadImagesSaveReady = useMemo(
+    () => canSaveUploadImagesStep(uploadForm.docs, { loading: loadingDocuments }),
+    [uploadForm.docs, loadingDocuments],
+  );
+
+  const missingUploadCount = useMemo(
+    () => countMissingUploadDocuments(uploadForm.docs),
+    [uploadForm.docs],
+  );
 
   const initialFormsRef = useRef({
     customer: initialCustomerForm,
@@ -1596,7 +1700,7 @@ export function ExpressCheckinContent() {
           mode: 'convert-quote',
         });
       } else if (isUpdateMode && !isConvertQuoteMode) {
-        await updateBooking({
+        const updateRes = await updateBooking({
           reservation_ref: reservationRefValue,
           bookingtype: effectiveBookingType,
           pickuplocationid: legacyEditFields.pickuplocationid,
@@ -1631,17 +1735,31 @@ export function ExpressCheckinContent() {
           agentcollectedrecalcmode: firstText(bookingInfo?.agentcollectedrecalcmode),
           optionalfees,
         });
+        if (isUpdatePayMode && updateRes?.data) {
+          const seeded = seedBookingDetailCacheFromUpdate(
+            reservationRefValue,
+            updateRes.data,
+          );
+          pendingPaymentBookingRef.current = seeded;
+          const balanceFromUpdate = extractBalanceDueFromUpdateResponse(updateRes.data);
+          pendingPaymentBalanceRef.current =
+            balanceFromUpdate > 0.005 ? balanceFromUpdate : null;
+          const workflowFromUpdate = extractWorkflowFromUpdateResponse(updateRes.data);
+          if (workflowFromUpdate) {
+            setWorkflow(workflowFromUpdate);
+          }
+        }
       } else {
         await editBookingBasics(editPayload);
       }
       if (!isConvertQuoteMode) {
-        invalidateBookingsCache(rcmReservationRef);
+        invalidateBookingsListCache();
       }
       if (isConvertQuoteMode) {
         toast.success('Details saved — opening secure payment…');
         await startSecurePaymentStep();
       } else if (isUpdatePayMode) {
-        toast.success('Booking details saved');
+        toast.success('Booking saved — preparing payment (a few seconds)…');
         await startSecurePaymentStep();
       } else if (isModifyBookingMode) {
         setShowUpdateSuccessDialog(true);
@@ -1680,34 +1798,34 @@ export function ExpressCheckinContent() {
         customerSnapshot?.address,
       );
 
-      const driversToSave = driversForm.drivers.filter(
-        (d) =>
-          d.firstname.trim() ||
-          d.lastname.trim() ||
-          d.dateofbirth.trim() ||
-          d.licenseno.trim() ||
-          d.email.trim() ||
-          d.state.trim() ||
-          d.city.trim() ||
-          d.postcode.trim() ||
-          d.address.trim(),
-      );
-      if (driversToSave.length > MAX_EXTRA_DRIVERS) {
-        toast.error(`You can add up to ${MAX_EXTRA_DRIVERS} additional drivers only.`);
-        return;
-      }
       const hasRemovalChanges = driversForm.removedCustomerIds.length > 0;
-      if (driversToSave.length === 0 && !hasRemovalChanges) {
+      const driverRows = driversForm.drivers;
+
+      if (driverRows.length === 0 && !hasRemovalChanges) {
+        setExtraDriverFieldErrors({});
         markSaved('drivers');
         return;
       }
-      for (let i = 0; i < driversToSave.length; i += 1) {
-        const err = validateExtraDriverInput(driversToSave[i], i);
-        if (err) {
-          toast.error(err);
-          return;
-        }
+
+      if (driverRows.length > MAX_EXTRA_DRIVERS) {
+        toast.error(`You can add up to ${MAX_EXTRA_DRIVERS} additional drivers only.`);
+        return;
       }
+
+      const fieldErrs = validateExtraDriverFormFields(driverRows);
+      if (hasFieldErrors(fieldErrs)) {
+        setExtraDriverFieldErrors(fieldErrs);
+        const emptyCount = driverRows.filter(isExtraDriverRowEmpty).length;
+        if (emptyCount > 0 && emptyCount === driverRows.length) {
+          toast.error('Please complete each driver section or remove empty drivers.');
+        } else {
+          toast.error('Please fix the highlighted driver fields.');
+        }
+        return;
+      }
+      setExtraDriverFieldErrors({});
+
+      const driversToSave = driverRows.filter((d) => !isExtraDriverRowEmpty(d));
       const seenDriverEmails = new Map<string, number>();
       for (let i = 0; i < driversToSave.length; i += 1) {
         const email = driversToSave[i].email.trim().toLowerCase();
@@ -1898,6 +2016,10 @@ export function ExpressCheckinContent() {
       toast.error('Missing reservation reference');
       return;
     }
+    if (!canSaveUploadImagesStep(uploadForm.docs)) {
+      toast.error('Please upload all required documents before saving.');
+      return;
+    }
     const pending = uploadForm.docs.filter((d) => d.pendingStore?.url);
     if (pending.length === 0) {
       markSaved('images');
@@ -2009,16 +2131,70 @@ export function ExpressCheckinContent() {
 
     try {
       setLaunchingPayment(true);
-      const returnOptions = { convertQuote: isConvertQuoteMode };
+
+      let bookingForPayment =
+        pendingPaymentBookingRef.current ??
+        (getCachedBookingByReference(reservationRefValue)?.data as
+          | Record<string, unknown>
+          | undefined);
+      let amountDue = pendingPaymentBalanceRef.current ?? 0;
+
+      if (isUpdatePayMode) {
+        await new Promise((resolve) => window.setTimeout(resolve, UPDATE_PAY_SETTLE_MS));
+        try {
+          const fresh = await fetchBookingByReference(reservationRefValue, {
+            force: true,
+          });
+          const freshBooking = fresh?.data;
+          if (freshBooking && typeof freshBooking === 'object') {
+            bookingForPayment = freshBooking as Record<string, unknown>;
+            pendingPaymentBookingRef.current = bookingForPayment;
+            const freshSnap = getBookingPaymentSnapshot(bookingForPayment);
+            if (freshSnap.balanceDue > 0.005) {
+              amountDue = freshSnap.balanceDue;
+              pendingPaymentBalanceRef.current = amountDue;
+            }
+          }
+        } catch {
+          /* use update response / cached balance */
+        }
+      }
+
+      const paySnap = getBookingPaymentSnapshot(bookingForPayment);
+      if (amountDue <= 0.005) amountDue = paySnap.balanceDue;
+      if (isUpdatePayMode && amountDue <= 0.005 && bookingInfo) {
+        const row = bookingInfo as Record<string, unknown>;
+        const fallback = Math.max(
+          Number(row.balancedue ?? 0),
+          Number(row.totalcost ?? 0),
+        );
+        if (Number.isFinite(fallback) && fallback > 0.005) amountDue = fallback;
+      }
+
+      if (isUpdatePayMode && amountDue <= 0.005) {
+        throw new Error(
+          'Updated balance is not ready yet. Wait a few seconds and tap Pay updated balance again.',
+        );
+      }
+
+      const returnOptions = {
+        convertQuote: isConvertQuoteMode,
+        updatePay: isUpdatePayMode,
+      };
       const successUrl = isConvertQuoteMode
         ? buildQuoteConvertConfirmationUrl()
-        : buildCheckoutConfirmationUrl();
+        : isUpdatePayMode
+          ? buildUpdatePayConfirmationUrl()
+          : buildCheckoutConfirmationUrl();
       const session = await carsService.createPaymentSession({
         reservationref: reservationRefValue,
         reservation_ref: reservationRefValue,
         success_url: successUrl,
         cancel_url: buildCheckoutPaymentCancelUrl(returnOptions),
         failure_url: buildCheckoutPaymentFailureUrl(returnOptions),
+        update_pay: isUpdatePayMode,
+        amount: amountDue,
+        balancedue: amountDue,
       });
       const rawUrl = String(
         (session?.data as Record<string, unknown> | undefined)?.payment_url ?? '',
@@ -2039,13 +2215,18 @@ export function ExpressCheckinContent() {
       const paymentState = saveCheckoutPaymentSession({
         reservationRef: reservationRefValue,
         paymentUrl: url,
+        booking: bookingForPayment,
         formData: customerForm as unknown as Record<string, unknown>,
         convertQuote: isConvertQuoteMode,
+        updatePay: isUpdatePayMode,
+        balanceDue: amountDue > 0.005 ? amountDue : paySnap.balanceDue,
       });
       markSaved('creditcard');
 
-      if (isConvertQuoteMode) {
-        navigate('/cars/checkout/payment', { state: paymentState });
+      if (isConvertQuoteMode || isUpdatePayMode) {
+        navigate('/cars/checkout/payment', {
+          state: { ...paymentState, paymentUrl: url, updatePay: isUpdatePayMode },
+        });
         return;
       }
 
@@ -2266,12 +2447,18 @@ export function ExpressCheckinContent() {
     const computedExtras = Math.max(0, totalCost - days * dailyRate);
     const totalExtras = Number.isFinite(computedExtras) ? computedExtras : 0;
 
+    const currencySymbol = resolveCurrencySymbol(
+      bookingInfo?.currencyname ?? bookingInfo?.currency,
+      bookingInfo?.currencysymbol ?? bookingInfo?.currency_symbol,
+    );
+
     return {
       days,
       dailyRate,
       totalExtras,
       totalCost,
       gstAmount: Number.isFinite(gstAmount) && gstAmount >= 0 ? gstAmount : 0,
+      currencySymbol,
     };
   }, [bookingInfo]);
 
@@ -2355,6 +2542,7 @@ export function ExpressCheckinContent() {
               dailyRate={rentalFeeSummary.dailyRate}
               totalExtras={rentalFeeSummary.totalExtras}
               gstAmount={rentalFeeSummary.gstAmount}
+              currencySymbol={rentalFeeSummary.currencySymbol}
             />
           </div>
         </div>
@@ -2477,9 +2665,11 @@ export function ExpressCheckinContent() {
                       ? 'Saving…'
                       : isConvertQuoteMode
                         ? 'Save & continue to payment'
-                        : isUpdateMode
-                          ? 'Save Changes'
-                          : 'Save'}
+                        : isUpdatePayMode
+                          ? 'Save & continue to payment'
+                          : isUpdateMode
+                            ? 'Save Changes'
+                            : 'Save'}
                   </Button>
                   {!isUpdateMode ? (
                     <Button variant="outline" onClick={() => setBookingForm(initialBookingForm)}>
@@ -2499,7 +2689,9 @@ export function ExpressCheckinContent() {
             >
               <ExtraDriversCard
                 value={driversForm}
-                onChange={setDriversForm}
+                onChange={patchDriversForm}
+                onUpdateDriver={updateExtraDriver}
+                fieldErrors={extraDriverFieldErrors}
                 maxDrivers={MAX_EXTRA_DRIVERS}
                 onRemoveDriver={removeExtraDriverNow}
               />
@@ -2512,7 +2704,13 @@ export function ExpressCheckinContent() {
                 >
                   {savingStep === 'drivers' ? 'Saving…' : 'Save & Continue'}
                 </Button>
-                <Button variant="outline" onClick={() => setDriversForm(initialDriversForm)}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDriversForm(initialDriversForm);
+                    setExtraDriverFieldErrors({});
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
@@ -2533,12 +2731,24 @@ export function ExpressCheckinContent() {
                 onUpload={(id, file) => void stageDocumentFile(id, file)}
                 onDelete={(id) => void deleteOneDocument(id)}
               />
+              {!loadingDocuments && uploadForm.docs.length > 0 && !uploadImagesSaveReady ? (
+                <p className="text-[13px] text-amber-700 mt-2">
+                  {missingUploadCount === 1
+                    ? 'Upload the remaining required document to enable Save.'
+                    : `Upload all ${missingUploadCount} remaining required documents to enable Save.`}
+                </p>
+              ) : null}
               <div className="flex gap-2 mt-4">
                 <Button
                   type="button"
                   onClick={() => void saveUploadImagesStep()}
-                  disabled={savingStep === 'images' || Boolean(effectiveBookingLockedReason)}
-                  className="bg-[#ffc107] text-black"
+                  disabled={
+                    savingStep === 'images' ||
+                    Boolean(effectiveBookingLockedReason) ||
+                    loadingDocuments ||
+                    !uploadImagesSaveReady
+                  }
+                  className="bg-[#ffc107] text-black disabled:opacity-50"
                 >
                   {savingStep === 'images' ? 'Saving…' : 'Save'}
                 </Button>
@@ -2559,7 +2769,9 @@ export function ExpressCheckinContent() {
               <p className="text-[14px] text-[#4b5563]">
                 {isConvertQuoteMode
                   ? 'Save your booking details above first, then add your card in the secure form below to convert this quote into a booking request.'
-                  : 'Card details are collected securely in a form on this page — you will not leave this screen.'}
+                  : isUpdatePayMode
+                    ? 'Save your changes above first, then pay any updated balance in the secure form below. Your previous payment does not cover price changes from this update.'
+                    : 'Card details are collected securely in a form on this page — you will not leave this screen.'}
               </p>
               <div className="flex gap-2 mt-4">
                 <Button
@@ -2572,7 +2784,9 @@ export function ExpressCheckinContent() {
                     ? 'Opening secure form…'
                     : isConvertQuoteMode
                       ? 'Add card & submit booking request'
-                      : 'Pay securely with Windcave'}
+                      : isUpdatePayMode
+                        ? 'Pay updated balance'
+                        : 'Pay securely with Windcave'}
                 </Button>
               </div>
             </CollapsibleCard>
@@ -2590,6 +2804,7 @@ export function ExpressCheckinContent() {
           totalExtras={rentalFeeSummary.totalExtras}
           totalCost={rentalFeeSummary.totalCost}
           gstAmount={rentalFeeSummary.gstAmount}
+          currencySymbol={rentalFeeSummary.currencySymbol}
         />
       </div>
       {/* ) : null} */}

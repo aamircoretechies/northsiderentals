@@ -53,6 +53,11 @@ export interface CreatePaymentSessionRequest {
   success_url?: string;
   cancel_url?: string;
   failure_url?: string;
+  /** Modify booking & pay — request session for remaining balance after edit */
+  update_pay?: boolean;
+  /** Amount to charge (from update-booking `balancedue`). */
+  amount?: number;
+  balancedue?: number;
 }
 
 /** Car search text fields: return plain text from API (see docs/BACKEND.md). Client strips HTML if present. */
@@ -152,6 +157,21 @@ export const carsService = {
     if (appOrigin) {
       body.frontend_origin = appOrigin;
       body.app_origin = appOrigin;
+    }
+    if (params.update_pay) {
+      body.update_pay = '1';
+      body.modify_pay = '1';
+    }
+    const payAmount =
+      params.balancedue != null && Number.isFinite(Number(params.balancedue))
+        ? Number(params.balancedue)
+        : params.amount != null && Number.isFinite(Number(params.amount))
+          ? Number(params.amount)
+          : null;
+    if (payAmount != null && payAmount > 0) {
+      body.amount = String(payAmount);
+      body.balancedue = String(payAmount);
+      body.balance_due = String(payAmount);
     }
 
     const json = await apiJson<Record<string, unknown>>(`${getApiBaseUrl()}/payments/create`, {
