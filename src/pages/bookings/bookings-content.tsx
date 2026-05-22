@@ -28,6 +28,7 @@ import {
   refetchBookingsList,
 } from '@/utils/refresh-bookings-list';
 import { bookingUiStatus } from '@/utils/booking-ui-status';
+import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
 
@@ -131,12 +132,14 @@ export function BookingsContent() {
     [data],
   );
 
+  const isGlobalSearch = Boolean(searchInput.trim());
+
   const filtered = useMemo(() => {
     const now = new Date();
     const statusScoped = items.filter((b) => bookingUiStatus(b, now) === statusFilter);
     const q = normalizeSearchText(searchInput);
     if (!q) return statusScoped;
-    // Search should work with car names even when status tabs differ.
+    // Global search across all status tabs (no active/upcoming/completed filter).
     return items.filter((b) => {
       const haystack = normalizeSearchText(
         [
@@ -252,7 +255,7 @@ export function BookingsContent() {
               <Input
                 id="bookings-search"
                 value={searchInput}
-                placeholder="Filter your list by confirmation #, car, or status…"
+                placeholder="Search all bookings by confirmation #, car, or status…"
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="ps-9 pe-10 w-full"
               />
@@ -268,7 +271,12 @@ export function BookingsContent() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                'flex items-center gap-2',
+                isGlobalSearch && 'opacity-60',
+              )}
+            >
               {[
                 { id: 'active', label: 'Active' },
                 { id: 'upcoming', label: 'Upcoming' },
@@ -277,11 +285,14 @@ export function BookingsContent() {
                 <Button
                   key={tab.id}
                   type="button"
-                  variant={statusFilter === tab.id ? 'primary' : 'outline'}
-                  className="h-9 px-3"
-                  onClick={() =>
-                    setStatusFilter(tab.id as 'active' | 'upcoming' | 'completed')
+                  variant={
+                    !isGlobalSearch && statusFilter === tab.id ? 'primary' : 'outline'
                   }
+                  className="h-9 px-3"
+                  onClick={() => {
+                    setStatusFilter(tab.id as 'active' | 'upcoming' | 'completed');
+                    if (isGlobalSearch) setSearchInput('');
+                  }}
                 >
                   {tab.label}
                 </Button>
@@ -307,12 +318,9 @@ export function BookingsContent() {
           <div className="flex flex-wrap items-center gap-5 justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">
               {!listAreaLoading
-                ? `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`
-                : null}
-              {!listAreaLoading &&
-                searchInput.trim() &&
-                items.length !== filtered.length
-                ? ` (filtered from ${items.length})`
+                ? isGlobalSearch
+                  ? `${filtered.length} booking${filtered.length === 1 ? '' : 's'} found (all statuses)`
+                  : `${filtered.length} booking${filtered.length === 1 ? '' : 's'} shown`
                 : null}
             </h3>
           </div>
@@ -333,10 +341,13 @@ export function BookingsContent() {
 
           {!listAreaLoading && !error && !filtered.length ? (
             <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-14 text-center text-muted-foreground">
-              <p className="font-medium text-foreground">No bookings in your list</p>
+              <p className="font-medium text-foreground">
+                {isGlobalSearch ? 'No matching bookings' : 'No bookings in your list'}
+              </p>
               <p className="text-sm mt-2 max-w-md mx-auto">
-                Try another status tab or adjust your search. New bookings may take a moment
-                to appear here.
+                {isGlobalSearch
+                  ? 'Try a different confirmation number, car name, or clear search to browse by status.'
+                  : 'Try another status tab or adjust your search. New bookings may take a moment to appear here.'}
               </p>
             </div>
           ) : null}
