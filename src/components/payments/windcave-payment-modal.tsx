@@ -71,16 +71,16 @@ export function WindcavePaymentModal({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-2xl w-[calc(100%-1.5rem)] p-0 gap-0 overflow-hidden rounded-2xl"
+        className="max-w-2xl w-[calc(100%-1.5rem)] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-white flex-shrink-0">
           <DialogTitle className="text-base font-bold text-foreground">
             Secure card verification
           </DialogTitle>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-muted transition-colors"
+            className="p-2 rounded-full hover:bg-muted transition-colors cursor-pointer"
             aria-label="Close payment"
           >
             <X className="size-5" />
@@ -91,7 +91,7 @@ export function WindcavePaymentModal({
           booking is confirmed.
         </DialogDescription>
 
-        <div className="p-4 space-y-3 bg-[#f8fafc]">
+        <div className="p-4 space-y-3 bg-[#f8fafc] flex-1 overflow-y-auto min-h-0">
           <PaymentCardDisclaimer />
 
           {iframeBlocked ? (
@@ -105,7 +105,7 @@ export function WindcavePaymentModal({
               </Button>
             </div>
           ) : (
-            <div className="relative w-full rounded-xl overflow-hidden border border-border bg-white min-h-[420px]">
+            <div className="relative w-full rounded-xl overflow-hidden border border-border bg-white min-h-[350px] sm:min-h-[420px]">
               {loading ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
                   <Loader2 className="size-8 text-[#0061e0] animate-spin" />
@@ -116,7 +116,7 @@ export function WindcavePaymentModal({
                   ref={iframeRef}
                   title="Windcave secure payment"
                   src={normalizePaymentReturnToAppOrigin(paymentUrl)}
-                  className="w-full h-[min(70vh,520px)] border-0"
+                  className="w-full h-[380px] sm:h-[460px] md:h-[520px] border-0"
                   onLoad={handleIframeLoad}
                   onError={() => setIframeBlocked(true)}
                   allow="payment *"
@@ -126,7 +126,7 @@ export function WindcavePaymentModal({
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
               Cancel
             </Button>
