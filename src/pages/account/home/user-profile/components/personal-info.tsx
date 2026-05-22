@@ -94,15 +94,15 @@ const PersonalInfo = () => {
                       onRemoveRemote={
                         profile.avatarUrl
                           ? async () => {
-                              try {
-                                await deleteProfilePicture();
-                                toast.success('Photo removed');
-                              } catch (e) {
-                                toast.error(
-                                  getFriendlyError(e, 'Could not remove photo'),
-                                );
-                              }
+                            try {
+                              await deleteProfilePicture();
+                              toast.success('Photo removed');
+                            } catch (e) {
+                              toast.error(
+                                getFriendlyError(e, 'Could not remove photo'),
+                              );
                             }
+                          }
                           : undefined
                       }
                       busy={profileBusy}
@@ -118,7 +118,7 @@ const PersonalInfo = () => {
                       />
                     </div>
                   )}
-                  <span className="text-sm font-normal text-muted-foreground">150x150px JPEG, PNG Image</span>
+                  <span className="text-sm font-normal text-muted-foreground">Only JPEG, PNG Image</span>
                 </div>
               </TableCell>
             </TableRow>

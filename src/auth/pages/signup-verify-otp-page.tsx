@@ -154,6 +154,10 @@ export function SignupVerifyOtpPage() {
                     autoComplete="one-time-code"
                     inputMode="numeric"
                     {...field}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      field.onChange(val);
+                    }}
                   />
                 </FormControl>
                 <FormMessage />

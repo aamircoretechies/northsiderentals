@@ -17,12 +17,13 @@ function assertOk(json: Record<string, unknown>): void {
     json.status !== 1 &&
     json.status !== '1'
   ) {
-    throw new Error(
-      getFriendlyErrorMessage({
-        message: json.message,
-        fallback: 'Could not update password.',
-      }),
-    );
+    const friendly = getFriendlyErrorMessage({
+      message: json.message,
+      fallback: 'Could not update password.',
+    });
+    const error = new Error(friendly);
+    (error as any).rawMessage = typeof json.message === 'string' ? json.message : friendly;
+    throw error;
   }
 }
 

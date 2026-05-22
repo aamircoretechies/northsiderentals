@@ -103,8 +103,12 @@ export function ChangePasswordModal({ children }: { children: React.ReactNode })
       toast.success('Password updated');
       reset();
       setOpen(false);
-    } catch (e) {
-      toast.error(getFriendlyError(e, 'Could not update password'));
+    } catch (e: any) {
+      const message =
+        e?.rawMessage ||
+        (e?.name === 'ApiClientError' ? e.message : null) ||
+        getFriendlyError(e, 'Could not update password');
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

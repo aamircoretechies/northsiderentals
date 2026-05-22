@@ -13,7 +13,7 @@ export function Header() {
   const [headerStickyOn, setHeaderStickyOn] = useState(false);
 
   useEffect(() => {
-    const isSticky = scrollPosition > settings.layouts.demo2.headerStickyOffset;
+    const isSticky = scrollPosition > settings.layouts.demo9.headerStickyOffset;
     setHeaderStickyOn(isSticky);
   }, [scrollPosition, settings]);
 

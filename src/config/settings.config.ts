@@ -10,19 +10,19 @@ export const APP_SETTINGS: Settings = {
     },
     demo2: {
       headerSticky: true,
-      headerStickyOffset: 200,
+      headerStickyOffset: 40,
     },
     demo5: {
       headerSticky: true,
-      headerStickyOffset: 200,
+      headerStickyOffset: 40,
     },
     demo7: {
       headerSticky: true,
-      headerStickyOffset: 200,
+      headerStickyOffset: 40,
     },
     demo9: {
       headerSticky: true,
-      headerStickyOffset: 200,
+      headerStickyOffset: 40,
     },
   },
 };

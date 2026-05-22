@@ -19,6 +19,8 @@ function profileImageAbsoluteUrl(raw: string): string {
   if (t.startsWith('data:') || t.startsWith('blob:')) return t;
   if (t.startsWith('//')) return `https:${t}`;
   if (t.startsWith('http://') || t.startsWith('https://')) return t;
+  // Local public assets (e.g. /media/avatars/blank.png) — serve as-is.
+  if (t.startsWith('/')) return t;
   return resolveRcmPublicUrl(t);
 }
 

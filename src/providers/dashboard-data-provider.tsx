@@ -41,7 +41,7 @@ export type MergedProfile = {
   phone: string;
   localAddress: string;
   postalAddress: string;
-  avatarUrl: string | null;
+  avatarUrl: string;
 };
 
 function appendCacheBuster(url: string, version: number | null): string {
@@ -84,7 +84,7 @@ function mergeProfile(
     ? avatarOverrideUrl
     : rawPic
       ? appendCacheBuster(resolveRcmPublicUrl(rawPic), avatarVersion)
-      : null;
+      : '/media/avatars/blank.png';
 
   const addr = rcm?.address;
 

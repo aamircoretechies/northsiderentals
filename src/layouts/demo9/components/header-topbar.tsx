@@ -34,7 +34,7 @@ export function HeaderTopbar() {
                 onClick={() => navigate('/help')}
 
               >
-                <Siren className="size-[22px]!" />
+                <Siren className="size-[22px]!" style={{ display: "inline" }} />
               </Button>
 
               <NotificationsSheet

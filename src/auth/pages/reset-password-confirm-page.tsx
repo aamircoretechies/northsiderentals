@@ -137,6 +137,10 @@ export function ResetPasswordConfirmPage() {
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       {...field}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        field.onChange(val);
+                      }}
                     />
                   </FormControl>
                   <FormMessage />
