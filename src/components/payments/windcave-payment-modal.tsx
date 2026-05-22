@@ -116,7 +116,7 @@ export function WindcavePaymentModal({
                   ref={iframeRef}
                   title="Windcave secure payment"
                   src={normalizePaymentReturnToAppOrigin(paymentUrl)}
-                  className="w-full h-[380px] sm:h-[460px] md:h-[520px] border-0"
+                  className="w-full h-[420px] sm:h-[460px] md:h-[520px] border-0"
                   onLoad={handleIframeLoad}
                   onError={() => setIframeBlocked(true)}
                   allow="payment *"
@@ -126,8 +126,8 @@ export function WindcavePaymentModal({
             </div>
           )}
 
-          <div className="flex justify-end pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <div className="flex justify-center w-full pt-2">
+            <Button type="button" className='w-full' variant="outline" size="sm" onClick={onClose}>
               Cancel
             </Button>
           </div>
