@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/context/auth-context';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,16 +13,34 @@ import { Phone } from 'lucide-react';
 import { submitSupportIssue } from '@/services/support';
 import { getFriendlyError } from '@/utils/api-error-handler';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function SupportPage() {
   const navigate = useNavigate();
+  const { user, auth } = useAuth();
+  const { profile, rcmProfile } = useDashboardData();
+  const isAuthed = Boolean(auth?.access_token);
+  const profileEmail = String(
+    rcmProfile?.email ?? profile.email ?? user?.email ?? '',
+  ).trim();
+  const emailFromProfile = isAuthed && Boolean(profileEmail);
+
   const [bookingNumber, setBookingNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [supportTitle, setSupportTitle] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isAuthed) {
+      setEmail(profileEmail);
+    }
+  }, [isAuthed, profileEmail]);
+
   const handleSubmit = async () => {
     const title = supportTitle.trim();
     const details = description.trim();
+    const contactEmail = (isAuthed ? profileEmail || email : email).trim();
     if (!title) {
       toast.error('Support title is required.');
       return;
@@ -37,15 +57,25 @@ export function SupportPage() {
       toast.error('Description must be at least 5 characters.');
       return;
     }
+    if (!contactEmail) {
+      toast.error('Email is required.');
+      return;
+    }
+    if (!EMAIL_PATTERN.test(contactEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
     try {
       setSubmitting(true);
       await submitSupportIssue({
         title,
         description: details,
+        email: contactEmail,
         reservation_ref: bookingNumber.trim() || undefined,
       });
       toast.success('Support request sent');
       setBookingNumber('');
+      if (!isAuthed) setEmail('');
       setSupportTitle('');
       setDescription('');
     } catch (e) {
@@ -89,6 +119,20 @@ export function SupportPage() {
               }}
               className="space-y-6"
             >
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your@email.com"
+                  className="w-full"
+                  value={email}
+                  readOnly={emailFromProfile}
+                  disabled={submitting || emailFromProfile}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="bookingNumber">Enter Booking Number</Label>
                 <Input

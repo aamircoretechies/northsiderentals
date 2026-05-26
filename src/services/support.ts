@@ -23,6 +23,7 @@ function assertOk(json: Record<string, unknown>): void {
 export type SupportIssuePayload = {
   title: string;
   description: string;
+  email: string;
   reservation_ref?: string;
 };
 
@@ -34,6 +35,7 @@ export async function submitSupportIssue(
   const body: Record<string, string> = {
     title: payload.title.trim(),
     description: payload.description.trim(),
+    email: payload.email.trim(),
   };
   const ref = payload.reservation_ref?.trim();
   if (ref) {
@@ -47,6 +49,7 @@ export async function submitSupportIssue(
       payload: {
         subject: body.title,
         message: body.description,
+        email: body.email,
         ...(body.reservation_ref ? { reservation_ref: body.reservation_ref } : {}),
       },
     },
@@ -55,6 +58,7 @@ export async function submitSupportIssue(
       payload: {
         title: body.title,
         message: body.description,
+        email: body.email,
         ...(body.reservation_ref ? { reservation_ref: body.reservation_ref } : {}),
       },
     },

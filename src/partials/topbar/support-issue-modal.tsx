@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/context/auth-context';
+import { useDashboardData } from '@/hooks/use-dashboard-data';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,6 +18,8 @@ import { getFriendlyError } from '@/utils/api-error-handler';
 const inputClass =
   'w-full bg-[#f2f4f8] border-0 rounded-[12px] px-5 py-4 text-[15px] text-[#2c3e50] placeholder:text-[#8692a6] focus:ring-1 focus:ring-[#0061e0] outline-none font-medium transition-shadow';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 type SupportIssueModalProps = {
   children: React.ReactNode;
   /** When opened from a booking, pre-fill the reservation reference. */
@@ -26,22 +30,39 @@ export function SupportIssueModal({
   children,
   defaultReservationRef = '',
 }: SupportIssueModalProps) {
+  const { user, auth } = useAuth();
+  const { profile, rcmProfile } = useDashboardData();
+  const isAuthed = Boolean(auth?.access_token);
+  const profileEmail = String(
+    rcmProfile?.email ?? profile.email ?? user?.email ?? '',
+  ).trim();
+  const emailFromProfile = isAuthed && Boolean(profileEmail);
+
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
+  const [email, setEmail] = useState('');
   const [description, setDescription] = useState('');
   const [reservationRef, setReservationRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open && isAuthed) {
+      setEmail(profileEmail);
+    }
+  }, [open, isAuthed, profileEmail]);
 
   const reset = () => {
     setTitle('');
     setDescription('');
     setReservationRef(defaultReservationRef.trim());
+    setEmail(isAuthed ? profileEmail : '');
   };
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
       setReservationRef(defaultReservationRef.trim());
+      if (isAuthed) setEmail(profileEmail);
     } else {
       reset();
     }
@@ -50,6 +71,7 @@ export function SupportIssueModal({
   const handleSubmit = async () => {
     const subject = title.trim();
     const details = description.trim();
+    const contactEmail = (isAuthed ? profileEmail || email : email).trim();
     if (!subject) {
       toast.error('Subject is required.');
       return;
@@ -66,12 +88,21 @@ export function SupportIssueModal({
       toast.error('Description must be at least 5 characters.');
       return;
     }
+    if (!contactEmail) {
+      toast.error('Email is required.');
+      return;
+    }
+    if (!EMAIL_PATTERN.test(contactEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
 
     try {
       setSubmitting(true);
       await submitSupportIssue({
         title: subject,
         description: details,
+        email: contactEmail,
         reservation_ref: reservationRef.trim() || undefined,
       });
       toast.success('Support request sent');
@@ -105,6 +136,15 @@ export function SupportIssueModal({
         </DialogDescription>
 
         <div className="px-5 pb-8 pt-4 overflow-y-auto max-h-[85vh] flex flex-col gap-4">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            readOnly={emailFromProfile}
+            disabled={submitting || emailFromProfile}
+            onChange={(e) => setEmail(e.target.value)}
+            className={inputClass}
+          />
           <div className="relative">
             <div className="flex justify-end mb-1 px-1">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
