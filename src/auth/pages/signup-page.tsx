@@ -1,0 +1,259 @@
+import { useState } from 'react';
+import { useAuth } from '@/auth/context/auth-context';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Eye, EyeOff } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { LoaderCircleIcon } from 'lucide-react';
+import { getSignupSchema, SignupSchemaType } from '../forms/signup-schema';
+import { mapAuthErrorToField } from '@/utils/inline-form-validation';
+
+export function SignUpPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { register } = useAuth();
+  const isClassic = location.pathname.includes('/classic/');
+  const verifyPath = isClassic ? '/auth/classic/signup/verify' : '/auth/signup/verify';
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const form = useForm<SignupSchemaType>({
+    resolver: zodResolver(getSignupSchema()),
+    mode: 'onTouched',
+    defaultValues: {
+      email: '',
+      country_code: '+61',
+      mobile: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
+
+  async function onSubmit(values: SignupSchemaType) {
+    try {
+      setIsProcessing(true);
+      form.clearErrors();
+
+      await register(values.email, values.password, values.country_code, values.mobile);
+      setSuccessMessage('OTP sent successfully. Please verify to complete signup.');
+      setTimeout(() => {
+        navigate(`${verifyPath}?email=${encodeURIComponent(values.email.trim())}`);
+      }, 500);
+    } catch (err) {
+      console.error('Registration error:', err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'An unexpected error occurred during registration. Please try again.';
+      const field = mapAuthErrorToField(msg);
+      form.setError(field, { type: 'server', message: msg });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="block w-full space-y-5"
+        autoComplete="off"
+      >
+        {/* Prevent browser autofill */}
+        <input type="text" name="prevent_autofill_email" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+        <input type="password" name="prevent_autofill_password" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+        <div className="flex justify-center pb-2">
+          <Link to="/">
+            <img
+              src="/media/app/logo-nsr.svg"
+              className="h-10 shrink-0"
+              alt="Logo"
+            />
+          </Link>
+        </div>
+        <div className="text-center space-y-1 pb-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Sign Up</h1>
+          <p className="text-sm text-muted-foreground">
+            Create your account to get started
+          </p>
+          {successMessage ? (
+            <p className="text-sm text-emerald-700 pt-2">{successMessage}</p>
+          ) : null}
+        </div>
+
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Your email address"
+                  type="email"
+                  autoComplete="off"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('email');
+                  }}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="country_code"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country Code</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="+61"
+                  autoComplete="tel-country-code"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('country_code');
+                  }}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="mobile"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Mobile</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="0430123456"
+                  autoComplete="tel"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('mobile');
+                  }}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Password</FormLabel>
+              <div className="relative">
+                <Input
+                  placeholder="Create a password"
+                  type={passwordVisible ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('password');
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  mode="icon"
+                  onClick={() => setPasswordVisible(!passwordVisible)}
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                >
+                  {passwordVisible ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Confirm Password</FormLabel>
+              <div className="relative">
+                <Input
+                  placeholder="Confirm your password"
+                  type={confirmPasswordVisible ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    form.clearErrors('confirmPassword');
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  mode="icon"
+                  onClick={() =>
+                    setConfirmPasswordVisible(!confirmPasswordVisible)
+                  }
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                >
+                  {confirmPasswordVisible ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" className="w-full" disabled={isProcessing}>
+          {isProcessing ? (
+            <span className="flex items-center gap-2">
+              <LoaderCircleIcon className="h-4 w-4 animate-spin" /> Creating account...
+            </span>
+          ) : (
+            'Create Account'
+          )}
+        </Button>
+
+        <div className="text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link
+            to="/auth/signin"
+            className="text-sm font-semibold text-foreground hover:text-primary"
+          >
+            Sign In
+          </Link>
+        </div>
+      </form>
+    </Form>
+  );
+}

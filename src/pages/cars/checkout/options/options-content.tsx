@@ -1,0 +1,476 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router';
+import { Button } from '@/components/ui/button';
+import { BookingOverview } from './components/booking-overview';
+import { OptionalExtras, OptionalExtraItem } from './components/optional-extras';
+import { DamageCoverOptions, DamageCoverItem } from './components/damage-cover-options';
+import { RentalFeeSummary } from './components/rental-fee-summary';
+import { EmailQuoteModal } from './components/email-quote-modal';
+import { carsService } from '@/services/cars';
+import { ScreenLoader } from '@/components/common/screen-loader';
+import { MAX_CHECKOUT_EXTRA_FEE_QTY } from '@/services/booking-payload';
+import {
+  type CheckoutAreaOfUseOption,
+  type CheckoutCountryOption,
+  extractCheckoutAreaOfUseOptions,
+  extractCheckoutCountriesFromVehicleDetails,
+  extractVehicleDetailsData,
+} from '@/lib/checkout-vehicle-details';
+
+export type CheckoutApiCountry = CheckoutCountryOption;
+
+function gstIncludedInTotal(total: number, taxRate: number): number {
+  if (total <= 0 || taxRate <= 0) return 0;
+  return (total * taxRate) / (1 + taxRate);
+}
+
+function concatFeeDescription(row: Record<string, unknown>): string {
+  const parts = [
+    row.feedescription,
+    row.feedescription1,
+    row.feedescription2,
+    row.feedescription3,
+  ]
+    .map((x) => String(x ?? '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).join('\n\n');
+}
+
+export function CarsCheckoutOptionsContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const carData = location.state?.car || location.state?.carData || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_car_data') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const searchParams = location.state?.searchParams || carData?.searchParams || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_search_params') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const locations = location.state?.locations || carData?.locations || (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_locations') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+
+  const formatDateTime = (dateStr?: string, timeStr?: string) => {
+    if (!dateStr || !timeStr) return undefined;
+    try {
+      const date = String(dateStr).trim();
+      const rawTime = String(timeStr).trim();
+      const m = rawTime.match(/^(\d{1,2}):(\d{2})/);
+      const time = m
+        ? (() => {
+          const hh = Number(m[1]);
+          const mm = m[2];
+          const hour24 = ((hh % 24) + 24) % 24;
+          const hour12 = hour24 % 12 || 12;
+          const ampm = hour24 >= 12 ? 'PM' : 'AM';
+          return `${String(hour12).padStart(2, '0')}:${mm} ${ampm}`;
+        })()
+        : rawTime;
+      // API may return YYYY-MM-DD or DD/MMM/YYYY; preserve provided day-month-year text.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-');
+        return `${day}/${month}/${year} ${time}`;
+      }
+      return `${date} ${time}`;
+    } catch (e) {
+      return undefined;
+    }
+  };
+
+  const getLocationName = (id?: number) => {
+    if (!id || !locations) return undefined;
+    const loc = locations.find((l: any) => String(l.id) === String(id));
+    return loc ? loc.location : undefined;
+  };
+
+  const pDateFormatted =
+    formatDateTime(searchParams?.pickup_date, searchParams?.pickup_time) ?? '—';
+  const pLocationFormatted =
+    getLocationName(searchParams?.pickup_location_id) ?? '—';
+  const rDateFormatted =
+    formatDateTime(searchParams?.dropoff_date, searchParams?.dropoff_time) ?? '—';
+  const rLocationFormatted =
+    getLocationName(searchParams?.dropoff_location_id) ?? '—';
+
+  const dailyRateCandidates = [
+    carData?.discount_price,
+    carData?.dailyrate,
+    carData?.daily_rate,
+    carData?.searchMeta?.dailyrate,
+    carData?.searchMeta?.daily_rate,
+  ];
+  const dailyRate =
+    dailyRateCandidates
+      .map((v) => Number(v ?? 0))
+      .find((n) => Number.isFinite(n) && n > 0) ?? 0;
+
+  const getDays = (pDate?: string, rDate?: string) => {
+    const apiDaysCandidates = [
+      carData?.numberofdays,
+      carData?.searchMeta?.numberofdays,
+      searchParams?.numberofdays,
+    ];
+    for (const candidate of apiDaysCandidates) {
+      const n = Number(candidate ?? 0);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+
+    if (!pDate || !rDate) return 0;
+    const d1 = new Date(pDate);
+    const d2 = new Date(rDate);
+    const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 3600 * 24));
+    return diff > 0 ? diff : 0;
+  };
+  const rentalDays = getDays(searchParams?.pickup_date, searchParams?.dropoff_date);
+
+  const [extras, setExtras] = useState<OptionalExtraItem[]>(() => {
+    if (location.state?.extras) return location.state.extras;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_extras') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [damageOptions, setDamageOptions] = useState<DamageCoverItem[]>(() => {
+    if (location.state?.damageOptions) return location.state.damageOptions;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_damage_options') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [selectedDamageOption, setSelectedDamageOption] = useState(() => {
+    if (location.state?.selectedDamageOption) return location.state.selectedDamageOption;
+    return sessionStorage.getItem('checkout_selected_damage_option') || 'std';
+  });
+  const [loadingDetails, setLoadingDetails] = useState(!extras.length);
+  const [countries, setCountries] = useState<CheckoutApiCountry[]>(() => {
+    if (location.state?.countries) return location.state.countries;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_countries') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [areaOfUseOptions, setAreaOfUseOptions] = useState<CheckoutAreaOfUseOption[]>(() => {
+    if (location.state?.areaOfUseOptions) return location.state.areaOfUseOptions;
+    try {
+      return JSON.parse(sessionStorage.getItem('checkout_area_of_use') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    let active = true;
+    async function fetchDetails() {
+      if (!carData || !searchParams) {
+        if (active) setLoadingDetails(false);
+        return;
+      }
+      try {
+        if (active) setLoadingDetails(true);
+        const requestData = {
+          vehicle_reference: carData.id,
+          category_id: searchParams.category_id || carData.vehiclecategorytypeid || 0,
+          pickup_location_id: searchParams.pickup_location_id,
+          dropoff_location_id: searchParams.dropoff_location_id,
+          pickup_date: searchParams.pickup_date,
+          pickup_time: searchParams.pickup_time,
+          dropoff_date: searchParams.dropoff_date,
+          dropoff_time: searchParams.dropoff_time,
+          age_id: searchParams.age_id || 0
+        };
+        const response = await carsService.getVehicleDetails(requestData);
+        if (active && response != null) {
+          const data = extractVehicleDetailsData(response);
+          const mappedCountries = extractCheckoutCountriesFromVehicleDetails(data);
+          setCountries(mappedCountries);
+          setAreaOfUseOptions(
+            extractCheckoutAreaOfUseOptions(
+              data,
+              Number(searchParams?.pickup_location_id),
+            ),
+          );
+
+          const previousExtras = location.state?.extras as OptionalExtraItem[] | undefined;
+          const fetchedExtras = (data.optionalfees as unknown[]) || [];
+
+          setExtras(fetchedExtras.map((feeUnknown) => {
+            const fee = feeUnknown as Record<string, unknown>;
+            const feeDays = Number(fee.numberofdays) || rentalDays || 1;
+            const dailyFees = Number(fee.fees) || 0;
+            const totalFromApi = fee.totalfeeamount != null ? Number(fee.totalfeeamount) : null;
+            const price =
+              String(fee.type ?? '').toLowerCase() === 'daily'
+                ? dailyFees * feeDays
+                : totalFromApi ?? dailyFees;
+            const isQuantity =
+              Boolean(fee.qtyapply) ||
+              String(fee.name ?? '')
+                .toLowerCase()
+                .includes('driver');
+            
+            const prev = previousExtras?.find(p => p.id === String(fee.id));
+
+            return {
+              id: String(fee.id ?? ''),
+              name: String(fee.name ?? ''),
+              price: Number.isFinite(price) ? price : 0,
+              type: isQuantity ? ('quantity' as const) : ('toggle' as const),
+              quantity: prev ? prev.quantity : 0,
+              selected: prev ? prev.selected : false,
+              description: concatFeeDescription(fee),
+              maxQty: Math.min(
+                MAX_CHECKOUT_EXTRA_FEE_QTY,
+                Math.max(
+                  1,
+                  Number(
+                    fee.maxqty ??
+                    fee.max_qty ??
+                    fee.MaxQty ??
+                    MAX_CHECKOUT_EXTRA_FEE_QTY,
+                  ) || MAX_CHECKOUT_EXTRA_FEE_QTY,
+                ),
+              ),
+            };
+          }));
+
+          const fetchedDamage = (data.insuranceoptions as unknown[]) || [];
+          const mappedDamage = fetchedDamage.map((ins: any) => {
+            const insDays = ins.numberofdays || rentalDays || 1;
+            const perDay = Number(ins.fees ?? ins.price ?? 0);
+            const totalFromApi = ins.totalinsuranceamount ?? ins.total_price;
+
+            const totalCost = totalFromApi != null ? Number(totalFromApi) : (ins.type === 'Daily' ? perDay * insDays : perDay);
+
+            return {
+              id: String(ins.id),
+              name: ins.name,
+              cost: totalCost,
+              description: concatFeeDescription(ins as Record<string, unknown>),
+            };
+          });
+          setDamageOptions(mappedDamage);
+          if (mappedDamage.length > 0) {
+            const prevDamage = location.state?.selectedDamageOption;
+            const isValidPrev = prevDamage && mappedDamage.some(d => d.id === prevDamage);
+            setSelectedDamageOption(isValidPrev ? prevDamage : mappedDamage[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load vehicle details', err);
+      } finally {
+        if (active) setLoadingDetails(false);
+      }
+    }
+    fetchDetails();
+    return () => { active = false; };
+  }, [carData, searchParams, rentalDays]);
+
+  // Persist state to sessionStorage
+  useEffect(() => {
+    if (carData) sessionStorage.setItem('checkout_car_data', JSON.stringify(carData));
+  }, [carData]);
+
+  useEffect(() => {
+    if (searchParams) sessionStorage.setItem('checkout_search_params', JSON.stringify(searchParams));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (locations) sessionStorage.setItem('checkout_locations', JSON.stringify(locations));
+  }, [locations]);
+
+  useEffect(() => {
+    if (extras.length > 0) sessionStorage.setItem('checkout_extras', JSON.stringify(extras));
+  }, [extras]);
+
+  useEffect(() => {
+    if (damageOptions.length > 0) sessionStorage.setItem('checkout_damage_options', JSON.stringify(damageOptions));
+  }, [damageOptions]);
+
+  useEffect(() => {
+    sessionStorage.setItem('checkout_selected_damage_option', selectedDamageOption);
+  }, [selectedDamageOption]);
+
+  useEffect(() => {
+    if (countries.length > 0) sessionStorage.setItem('checkout_countries', JSON.stringify(countries));
+  }, [countries]);
+
+  useEffect(() => {
+    if (areaOfUseOptions.length > 0) sessionStorage.setItem('checkout_area_of_use', JSON.stringify(areaOfUseOptions));
+  }, [areaOfUseOptions]);
+
+  const toggleExtra = (id: string, select: boolean) => {
+    setExtras((current) =>
+      current.map((e) => (e.id === id ? { ...e, selected: select } : e))
+    );
+  };
+
+  const updateQuantity = (id: string, qty: number) => {
+    setExtras((current) =>
+      current.map((e) => {
+        if (e.id !== id || e.type !== 'quantity') return e;
+        const cap = Math.min(
+          MAX_CHECKOUT_EXTRA_FEE_QTY,
+          Math.max(
+            1,
+            Number(e.maxQty ?? MAX_CHECKOUT_EXTRA_FEE_QTY) || MAX_CHECKOUT_EXTRA_FEE_QTY,
+          ),
+        );
+        const q = Math.max(0, Math.min(cap, Math.floor(Number(qty))));
+        return { ...e, quantity: q };
+      }),
+    );
+  };
+
+  // Calculate extras cost (quantity based + selected toggle-base)
+  const totalOptionalExtras = extras.reduce((sum, e) => {
+    if (e.type === 'quantity') return sum + e.price * (e.quantity || 0);
+    if (e.type === 'toggle' && e.selected) return sum + e.price;
+    return sum;
+  }, 0);
+
+  const selectedDamageOptionData = damageOptions.find(d => d.id === selectedDamageOption);
+  const totalDamageCover = selectedDamageOptionData ? selectedDamageOptionData.cost : 0;
+
+  const totalExtras = totalOptionalExtras + totalDamageCover;
+
+  const currencySymbol =
+    carData?.searchMeta?.currency_symbol ??
+    carData?.currency_symbol ??
+    carData?.currencysymbol ??
+    '';
+  const taxRate = Number(carData?.searchMeta?.taxrate ?? 0);
+  const taxInclusive = carData?.searchMeta?.taxinclusive !== false;
+  const rentalSubtotal = rentalDays * dailyRate;
+  const totalCostEstimate = rentalSubtotal + totalExtras;
+  const gstAmount =
+    taxInclusive && totalCostEstimate > 0
+      ? gstIncludedInTotal(totalCostEstimate, taxRate)
+      : 0;
+
+  const carSubtitle = [
+    carData?.transmission,
+    carData?.year ? `${carData.year} Model` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  if (loadingDetails) {
+    return <ScreenLoader />;
+  }
+
+  const actionButtons = (
+    <div className="grid grid-cols-2 gap-4 mt-4">
+      <EmailQuoteModal
+        carData={carData}
+        searchParams={searchParams}
+        extras={extras}
+        selectedDamageOption={selectedDamageOption}
+        trigger={
+          <Button
+            variant="outline"
+            className="w-full h-[48px] border-[#0061e0] text-[#0061e0] bg-white hover:bg-[#0061e0] hover:text-white font-bold text-[16px] py-3  rounded-full"
+          >
+            Email Quote
+          </Button>
+        }
+      />
+      <Button
+        className="w-full h-[48px] bg-[#ffc107] hover:bg-[#ffb000] text-black font-bold text-[16px] py-3  rounded-full shadow-md"
+        onClick={() =>
+          navigate('/cars/checkout/details', {
+            state: {
+              carData,
+              extras,
+              damageOptions,
+              selectedDamageOption,
+              searchParams,
+              locations,
+              countries,
+              areaOfUseOptions,
+            },
+          })
+        }
+      >
+        Make a Booking
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full pb-[250px] relative">
+      {/* Header */}
+
+
+      <div className="flex-1 w-full mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Small Grid: Booking & Fee Summary */}
+        <div className="col-span-1 flex flex-col lg:order-last">
+          <BookingOverview
+            carImage={carData?.image_url ?? ''}
+            carTitle={carData?.title ?? ''}
+            carSubtitle={carSubtitle}
+            categoryBadge={carData?.subtitle}
+            pickupDate={pDateFormatted}
+            pickupLocation={pLocationFormatted}
+            returnDate={rDateFormatted}
+            returnLocation={rLocationFormatted}
+          />
+
+          <div className="bg-white rounded-[16px] border border-gray-100 shadow-sm p-4 hidden lg:flex flex-col">
+            <RentalFeeSummary
+              days={rentalDays}
+              dailyRate={dailyRate}
+              totalExtras={totalExtras}
+              gstAmount={gstAmount}
+              currencySymbol={currencySymbol}
+            >
+              {actionButtons}
+            </RentalFeeSummary>
+          </div>
+
+          {/* Mobile version of RentalFeeSummary (floating) */}
+          <div className="lg:hidden">
+            <RentalFeeSummary
+              days={rentalDays}
+              dailyRate={dailyRate}
+              totalExtras={totalExtras}
+              gstAmount={gstAmount}
+              currencySymbol={currencySymbol}
+            >
+              {actionButtons}
+            </RentalFeeSummary>
+          </div>
+        </div>
+
+        {/* Large Grid: Options & Buttons */}
+        <div className="col-span-1 lg:col-span-2 flex flex-col ">
+          <OptionalExtras
+            extras={extras}
+            onToggle={toggleExtra}
+            onUpdateQuantity={updateQuantity}
+          />
+
+          <DamageCoverOptions
+            options={damageOptions}
+            selectedOptionId={selectedDamageOption}
+            onSelect={setSelectedDamageOption}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

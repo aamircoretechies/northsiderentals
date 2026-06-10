@@ -1,0 +1,104 @@
+import type { RcmSignatureListItem } from '@/services/rcm-documents';
+import {
+  applyCardBrandToAgreementHtml,
+  loadCheckoutCardBrand,
+} from '@/utils/card-brand';
+import { SignaturePad } from './signature-pad';
+
+export function signatureRowKey(item: RcmSignatureListItem): string {
+  return `${item.customerid || 0}-${item.signaturetemplateid}-${item.signingorder}`;
+}
+
+export function displayTitleForSignatureItem(item: RcmSignatureListItem): string {
+  const t = item.signaturetemplatetitle?.trim();
+  if (t) return t;
+  return 'Rental agreement';
+}
+
+export function displayCustomerNameForSignatureItem(item: RcmSignatureListItem): string {
+  const full = [item.customerfirstname, item.customerlastname]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+  if (full) return full;
+  if (item.customerid > 0) return `Customer #${item.customerid}`;
+  return 'Customer';
+}
+
+type SignatureAgreementSectionProps = {
+  item: RcmSignatureListItem;
+  onSignatureChange: (rowKey: string, pngBase64: string | null) => void;
+  errorMessage?: string | null;
+};
+
+export function SignatureAgreementSection({
+  item,
+  onSignatureChange,
+  errorMessage,
+}: SignatureAgreementSectionProps) {
+  const key = signatureRowKey(item);
+  const rawHtml = item.signaturetemplatetext?.trim();
+  const cardBrand = item.isccauth ? loadCheckoutCardBrand() : '';
+  const html =
+    rawHtml && cardBrand
+      ? applyCardBrandToAgreementHtml(rawHtml, cardBrand)
+      : rawHtml;
+  const link = item.linktoagreement?.trim();
+
+  if (item.issigned) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="text-[14px] font-semibold text-emerald-700">
+          Signed — no action required for this section.
+        </p>
+        {link ? (
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[14px] font-medium text-[#0061e0] hover:underline w-fit"
+          >
+            View agreement
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (item.overcounteronly) {
+    return (
+      <p className="text-[14px] text-[#6b7280]">
+        This document must be completed at the rental counter.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {link ? (
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[14px] font-medium text-[#0061e0] hover:underline w-fit"
+        >
+          View full agreement (opens in a new tab)
+        </a>
+      ) : null}
+
+      {html && html !== '<p></p>' && html !== '<p></p>\r\n' ? (
+        <div className="max-h-[280px] border border-gray-100 rounded-md p-3 overflow-y-auto custom-scrollbar bg-[#fdfdfd]">
+          <div
+            className="text-black text-[13px] leading-relaxed [&>p]:mb-3 [&>h2]:font-bold [&>h2]:text-[14px] [&>h2]:mb-2 [&>h2]:mt-4 [&>h3]:font-bold [&>h3]:text-[14px] [&>h3]:mb-2 [&>h3]:mt-4 [&>strong]:font-bold"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </div>
+      ) : null}
+
+      <SignaturePad onChange={(png) => onSignatureChange(key, png)} />
+      {errorMessage ? (
+        <p className="text-[12px] text-destructive mt-1">{errorMessage}</p>
+      ) : null}
+    </div>
+  );
+}
